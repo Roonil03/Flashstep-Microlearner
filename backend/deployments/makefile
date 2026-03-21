@@ -4,9 +4,10 @@ db:
 	set -a; \
 	. ../.env; \
 	set +a; \
+	echo "$$POSTGRES_PASSWORD" ; \
 	psql \
 	-h localhost \
-	-p $$DB_PORT \
+	-p 5433 \
 	-U $$POSTGRES_USER \
 	-d $$POSTGRES_DB \
 	-f ../migrations/init_scheme.sql
