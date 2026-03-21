@@ -15,3 +15,4 @@ clean:
 
 main:
 	bash ./modules.sh
+	
