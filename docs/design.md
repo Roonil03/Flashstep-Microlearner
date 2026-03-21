@@ -44,10 +44,41 @@ Each card exists in one of the following states:
     - SM-2 Scheduling
 #### Variables:
 Each card will store:
+- `id`
+- `deck_id`
 - `state`
 - `interval`
 - `ease_factor`
 - `repetition_count`
 - `due_timestamp`
 - `last_reviewed_at`
+- `updated_at`
+- `is_deleted`
 
+### Sync Stratergy Design:
+#### Sync Principles:
+- Local DB is source of truth during offline usage
+- Sync is eventual consistency-based
+- Operations are: 
+    - Logged locally
+    - Replayed to server
+
+#### Upload (Client -> Server):
+- Review Logs:
+    - All user interactions
+    - Used for analytics + state reconstruction
+- Updated Cards:
+    - Edited Cards
+    - Scheduling Updates
+- Deck Changes:
+    - Created/updated/deleted decks
+
+#### Download (Server -> Client):
+- New decks (public or collaborative [collaborative is editing already premade decks that are uploaded])
+- Updated Cards
+- Deleted Records
+
+#### Sync Trigger Condititions:
+- App Launch
+- Network Reconnect
+- Periodic Background Job
