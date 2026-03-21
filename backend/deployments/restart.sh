@@ -4,5 +4,8 @@ docker system prune -a -f
 docker ps -a
 docker images -a
 docker volume ls
-docker compose up --build -d
-    
+docker volume rm deployments_postgres_data
+set -a
+. ../.env
+set +a
+docker compose --env-file ../.env up --build -d
