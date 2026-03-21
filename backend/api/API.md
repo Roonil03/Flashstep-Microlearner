@@ -86,3 +86,42 @@ Response:
 ## AUTH HEADER
 
 Authorization: Bearer <JWT_TOKEN>
+
+---
+
+## ANALYTICS APIs
+
+### Daily Review Count
+GET /analytics/daily-reviews
+
+Returns number of reviews per day.
+
+---
+
+### Average Session Length
+GET /analytics/average-session
+
+Returns average study session duration.
+
+---
+
+### Accuracy Trends
+GET /analytics/accuracy
+
+Returns correctness percentage over time.
+
+---
+
+### Deck Performance
+GET /analytics/deck-performance
+
+Returns performance per deck (accuracy + total reviews).
+
+---
+
+### Streak Stats
+GET /analytics/streak
+
+Returns current and longest streak.
+
+---
