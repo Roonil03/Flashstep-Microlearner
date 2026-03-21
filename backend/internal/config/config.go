@@ -9,47 +9,49 @@ import (
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-
-	JWTSecret string
-
-	AppPort string
+	Port            string
+	DBHost          string
+	DBPort          string
+	DBUser          string
+	DBPassword      string
+	DBName          string
+	DBSSLMode       string
+	JWTSecret       string
+	JWTExpiryMinute int
 }
 
-func LoadConfig() *Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found, using system environment variables")
+func Load() *Config {
+	_ = godotenv.Load()
+
+	return &Config{
+		Port:            getEnv("PORT", "8080"),
+		DBHost:          getEnv("DB_HOST", "localhost"),
+		DBPort:          getEnv("DB_PORT", "5432"),
+		DBUser:          getEnv("DB_USER", "postgres"),
+		DBPassword:      getEnv("DB_PASSWORD", "postgres"),
+		DBName:          getEnv("DB_NAME", "flashcards"),
+		DBSSLMode:       getEnv("DB_SSLMODE", "disable"),
+		JWTSecret:       getEnv("JWT_SECRET", "change-this-in-real-use"),
+		JWTExpiryMinute: getEnvInt("JWT_EXPIRY_MINUTES", 120),
 	}
-	cfg := &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "postgres"),
-		DBPassword: getEnv("DB_PASSWORD", "postgres"),
-		DBName:     getEnv("DB_NAME", "flashcards"),
-		JWTSecret:  getEnv("JWT_SECRET", "supersecret"),
-		AppPort:    getEnv("PORT", "8080"),
-	}
-	return cfg
 }
 
-func getEnv(key, defaultVal string) string {
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
 	value := os.Getenv(key)
 	if value == "" {
-		return defaultVal
+		return fallback
 	}
-	return value
-}
-
-// Optional: convert string to int safely
-func GetInt(value string) int {
-	i, err := strconv.Atoi(value)
+	n, err := strconv.Atoi(value)
 	if err != nil {
-		return 0
+		log.Printf("invalid int for %s, using fallback %d", key, fallback)
+		return fallback
 	}
-	return i
+	return n
 }

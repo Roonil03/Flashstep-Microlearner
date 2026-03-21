@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -13,42 +12,33 @@ import (
 
 var DB *sql.DB
 
-func ConnectDB(cfg *config.Config) *sql.DB {
-	var err error
-
+func Connect(cfg *config.Config) (*sql.DB, error) {
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=UTC",
 		cfg.DBHost,
 		cfg.DBPort,
 		cfg.DBUser,
 		cfg.DBPassword,
 		cfg.DBName,
+		cfg.DBSSLMode,
 	)
-	maxRetries := 5
-
-	for i := 1; i <= maxRetries; i++ {
+	var err error
+	for attempt := 1; attempt <= 10; attempt++ {
 		DB, err = sql.Open("postgres", dsn)
-		if err != nil {
-			log.Printf("Attempt %d: Failed to open DB: %v\n", i, err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
-		err = DB.Ping()
 		if err == nil {
-			log.Println("✅ Connected to PostgreSQL")
-			break
+			if pingErr := DB.Ping(); pingErr == nil {
+				DB.SetMaxOpenConns(25)
+				DB.SetMaxIdleConns(10)
+				DB.SetConnMaxLifetime(5 * time.Minute)
+				return DB, nil
+			} else {
+				err = pingErr
+			}
 		}
-
-		log.Printf("Attempt %d: DB not ready yet...\n", i)
-		time.Sleep(2 * time.Second)
+		if DB != nil {
+			_ = DB.Close()
+		}
+		time.Sleep(time.Duration(attempt) * time.Second)
 	}
-
-	if err != nil {
-		log.Fatal("❌ Could not connect to database after retries:", err)
-	}
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(10)
-	DB.SetConnMaxLifetime(5 * time.Minute)
-	return DB
+	return nil, fmt.Errorf("failed to connect to postgres after retries: %w", err)
 }
