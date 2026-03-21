@@ -4,7 +4,6 @@ db:
 	set -a; \
 	. ../.env; \
 	set +a; \
-	echo "$$POSTGRES_PASSWORD" ; \
 	psql \
 	-h localhost \
 	-p 5433 \
