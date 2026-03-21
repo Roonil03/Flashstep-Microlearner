@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	v1 "backend/api/v1"
 	"backend/internal/config"
 	"backend/internal/db"
 	"backend/internal/handlers"
@@ -35,6 +36,20 @@ func main() {
 		protected := api.Group("")
 		protected.Use(middleware.Auth(cfg.JWTSecret))
 		protected.GET("/me", authHandler.Me)
+		{
+			protected.POST("/decks", v1.CreateDeck)
+			protected.GET("/decks", v1.GetDecks)
+			protected.PUT("/decks/:id", v1.UpdateDeck)
+			protected.DELETE("/decks/:id", v1.DeleteDeck)
+
+			protected.POST("/cards", v1.CreateCard)
+			protected.GET("/decks/:deck_id/cards", v1.GetDeckCards)
+			protected.PUT("/cards/:id", v1.UpdateCard)
+			protected.DELETE("/cards/:id", v1.DeleteCard)
+
+			protected.POST("/sync/upload", v1.SyncUpload)
+			protected.GET("/sync/download", v1.SyncDownload)
+		}
 	}
 	log.Printf("server listening on :%s", cfg.Port)
 	if err := router.Run(":" + cfg.Port); err != nil {
