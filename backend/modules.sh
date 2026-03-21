@@ -1,4 +1,3 @@
-
 go env -w GOPROXY=https://proxy.golang.org,direct
 go env -w GOSUMDB=sum.golang.org
 go get github.com/gin-gonic/gin@latest || true
