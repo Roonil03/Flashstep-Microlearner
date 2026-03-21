@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -21,9 +22,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	_ = godotenv.Load()
-
-	return &Config{
+	loadEnv()
+	cfg := &Config{
 		Port:            getEnv("PORT", "8080"),
 		DBHost:          getEnv("DB_HOST", "localhost"),
 		DBPort:          getEnv("DB_PORT", "5432"),
@@ -34,6 +34,27 @@ func Load() *Config {
 		JWTSecret:       getEnv("JWT_SECRET", "change-this-in-real-use"),
 		JWTExpiryMinute: getEnvInt("JWT_EXPIRY_MINUTES", 120),
 	}
+	log.Printf("DB CONFIG → host=%s port=%s user=%s db=%s",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBName)
+
+	return cfg
+}
+
+func loadEnv() {
+	paths := []string{
+		".env",
+		"../../.env",
+		"backend/.env",
+	}
+	for _, path := range paths {
+		absPath, _ := filepath.Abs(path)
+		err := godotenv.Load(absPath)
+		if err == nil {
+			// log.Println("Loaded .env from:", absPath)
+			return
+		}
+	}
+	log.Println("No .env file found, using system environment variables")
 }
 
 func getEnv(key, fallback string) string {
