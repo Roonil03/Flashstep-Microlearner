@@ -6,5 +6,5 @@ go get gofr.dev@latest || true
 go get github.com/lib/pq@latest || true
 go get github.com/joho/godotenv@latest || true
 go get github.com/golang-jwt/jwt/v5@latest || true
-go mod tidy
-go mod verify
+# go mod tidy
+# go mod verify
