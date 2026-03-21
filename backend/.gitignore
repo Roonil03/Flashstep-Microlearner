@@ -32,3 +32,4 @@ coverage.html
 tmp/
 temp/
 docker-compose.override.yml
+**/hidden.*

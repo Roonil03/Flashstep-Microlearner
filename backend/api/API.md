@@ -1,161 +1,88 @@
-# Flashcards Backend API Documentation
+# API Documentation
 
-Base URL:
+## Base URL
 http://localhost:8080/api/v1
 
 ---
 
-## Authentication APIs
+## AUTH
 
-### Register User
-
+### Register
 POST /auth/register
 
-Request:
-{
-  "username": "string",
-  "email": "string",
-  "password": "string (min 8 chars)"
-}
-
-Response:
-201 Created
-{
-  "user": {
-    "id": "uuid",
-    "username": "string",
-    "email": "string",
-    "created_at": "timestamp",
-    "updated_at": "timestamp"
-  },
-  "token": "jwt_token"
-}
-
-Errors:
-- 400 Bad Request
-- 409 Email already exists
-
----
-
-### Login User
-
+### Login
 POST /auth/login
 
-Request:
-{
-  "email": "string",
-  "password": "string"
-}
-
-Response:
-200 OK
-{
-  "user": {
-    "id": "uuid",
-    "username": "string",
-    "email": "string",
-    "created_at": "timestamp",
-    "updated_at": "timestamp"
-  },
-  "token": "jwt_token"
-}
-
-Errors:
-- 401 Invalid credentials
-
----
-
 ### Get Current User
-
 GET /me
 
-Headers:
-Authorization: Bearer <token>
-
-Response:
-200 OK
-{
-  "id": "uuid",
-  "username": "string",
-  "email": "string",
-  "created_at": "timestamp",
-  "updated_at": "timestamp"
-}
-
-Errors:
-- 401 Unauthorized
-
 ---
 
-## Deck APIs
+## DECK APIs
 
 ### Create Deck
 POST /decks
 
-### Get Decks
+### Get Decks (Private + Public)
 GET /decks
 
 ### Update Deck
 PUT /decks/:id
 
-### Delete Deck
+### Delete Deck (Soft Delete)
 DELETE /decks/:id
 
 ---
 
-## Card APIs
+## CARD APIs
 
 ### Create Card
 POST /cards
 
-### Get Cards
-GET /cards?deck_id=<id>
+### Get Cards of Deck
+GET /decks/:deck_id/cards
 
 ### Update Card
 PUT /cards/:id
 
-### Delete Card
+### Delete Card (Soft Delete)
 DELETE /cards/:id
 
 ---
 
-## Review APIs (Upcoming)
+## SYNC APIs (CRITICAL)
 
-POST /reviews
-- Submit review log
-- Update scheduling
-
----
-
-## Sync APIs (Upcoming)
-
+### Upload Changes (Client → Server)
 POST /sync/upload
-GET /sync/download?since=<timestamp>
+
+Payload:
+{
+  "decks": [],
+  "cards": []
+}
 
 ---
 
-## Analytics APIs (Upcoming)
+### Download Changes (Server → Client)
+GET /sync/download?since=2026-03-21T00:00:00Z
 
-GET /analytics/daily-reviews
-GET /analytics/accuracy
-GET /analytics/streaks
-
----
-
-## Authentication Notes
-
-- JWT required for all protected routes
-- Token format:
-  Authorization: Bearer <token>
+Response:
+{
+  "decks": [],
+  "cards": []
+}
 
 ---
 
-## Status Codes
+## SYNC RULES
 
-200 OK
-201 Created
-400 Bad Request
-401 Unauthorized
-404 Not Found
-409 Conflict
-500 Internal Server Error
+- Uses **updated_at** for conflict resolution
+- Last-write-wins
+- Supports soft delete (`is_deleted`)
+- Supports versioning
+
+---
+
+## AUTH HEADER
+
+Authorization: Bearer <JWT_TOKEN>
