@@ -22,8 +22,11 @@ func UpdateCard(c *gin.Context) {
 	}
 	query := `
 	UPDATE cards
-	SET front=$1, back=$2, version=version+1
+	SET front=$1, back=$2, updated_at=NOW(), version=version+1
 	WHERE id=$3 AND version=$4
+	AND deck_id IN (
+		SELECT id FROM decks WHERE user_id=$5
+	)
 	`
 	res, err := db.DB.Exec(query, req.Front, req.Back, id, req.Version)
 	if err != nil {

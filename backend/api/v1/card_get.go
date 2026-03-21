@@ -8,12 +8,17 @@ import (
 )
 
 func GetDeckCards(c *gin.Context) {
+	userID := c.GetString("user_id")
 	deckID := c.Param("deck_id")
 	rows, err := db.DB.Query(`
-	SELECT id, front, back, state, due_timestamp
-	FROM cards
-	WHERE deck_id=$1 AND is_deleted=false
-	`, deckID)
+	SELECT c.id, c.front, c.back, c.state, c.due_timestamp, c.updated_at, c.version
+	FROM cards c
+	JOIN decks d ON c.deck_id = d.id
+	WHERE c.deck_id=$1
+	AND c.is_deleted=false
+	AND d.is_deleted=false
+	AND (d.user_id=$2 OR d.is_public=true)
+	`, deckID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
