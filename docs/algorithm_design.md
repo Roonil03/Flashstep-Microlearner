@@ -82,3 +82,57 @@ Each card will store:
 - App Launch
 - Network Reconnect
 - Periodic Background Job
+
+### Conflict Resolution Strategy
+Due to offline-first design, conflicts may occur when the same data is modified on multiple devices.
+
+#### Selected Strategy: Hybrid Approach
+A combination of:
+1. Last-Write-Wins (Primary)
+    - Based on updated_at timestamp
+    - Fast and simple
+
+2. Versioning (Secondary Safety)
+    - Each record includes version
+    - Incremented on update
+
+3. Server-Assisted Merge (For Critical Data)
+    - Used for:
+        - Collaborative decks
+        - Shared edits
+
+#### Conflict Handling Rules:
+| Scenario                | Resolution       |
+| ----------------------- | ---------------- |
+| Local newer than server | Overwrite server |
+| Server newer than local | Overwrite local  |
+| Same timestamp          | Prefer server    |
+| Deleted vs updated      | Deletion wins    |
+
+#### Soft Delete Strategy
+Instead of removing records:
+```JSON
+"is_deleted": true
+```
+Ensures:
+- Sync consistency
+- Recovery capability
+
+### Sync Data Model
+#### Metadata Fields (Required)
+Each record must include:
+- `id`
+- `updated_at`
+- `version`
+- `is_deleted`
+#### Sync Queue (Client-Side)
+Local table:
+```JSON
+{
+  "operation_id": "uuid",
+  "type": "create | update | delete | review",
+  "payload": {},
+  "created_at": timestamp,
+  "synced": false
+}
+```
