@@ -16,7 +16,11 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header missing"})
 			return
 		}
-		parts := strings.SplitN(header, "Bearer ", 2)
+		if !strings.HasPrefix(header, "Bearer ") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
+			return
+		}
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		if len(parts) != 2 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
 			return

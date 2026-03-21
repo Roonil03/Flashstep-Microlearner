@@ -50,9 +50,12 @@ func NewAuthService(users *repositories.UserRepository, jwtSecret string, ttl ti
 }
 
 func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthResponse, error) {
-	input.Username = strings.TrimSpace(input.Username)
+	input.Username = strings.ToLower(strings.TrimSpace(input.Username))
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
 	input.Password = strings.TrimSpace(input.Password)
+	if len(input.Password) < 8 {
+		return AuthResponse{}, errors.New("password must be at least 8 characters")
+	}
 	if input.Username == "" || input.Email == "" || input.Password == "" {
 		return AuthResponse{}, errors.New("username, email and password are required")
 	}
@@ -77,6 +80,9 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthRe
 		IsDeleted:    false,
 	}
 	if err := s.users.Create(ctx, user); err != nil {
+		if strings.Contains(err.Error(), "duplicate") {
+			return AuthResponse{}, ErrEmailAlreadyExists
+		}
 		return AuthResponse{}, err
 	}
 	token, err := utils.GenerateJWT(s.jwtSecret, user.ID, user.Email, s.jwtTTL)
