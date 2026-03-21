@@ -1,4 +1,4 @@
-.PHONY: deps tidy verify clean
+.PHONY: deps tidy verify clean main
 
 deps:
 	go mod download
@@ -12,3 +12,6 @@ verify: tidy
 
 clean:
 	go clean -modcache
+
+main:
+	bash ./modules.sh
