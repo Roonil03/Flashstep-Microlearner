@@ -12,8 +12,8 @@ func DeleteDeck(c *gin.Context) {
 	id := c.Param("id")
 	query := `
 	UPDATE decks
-	SET is_deleted = true, updated_at=$1, version=version+1
-	WHERE id=$2
+	SET is_deleted=true, updated_at=NOW(), version=version+1
+	WHERE id=$1 AND user_id=$2
 	`
 	_, err := db.DB.Exec(query, time.Now(), id)
 	if err != nil {

@@ -15,6 +15,7 @@ type UpdateDeckRequest struct {
 }
 
 func UpdateDeck(c *gin.Context) {
+	userID := c.GetString("user_id")
 	id := c.Param("id")
 	var req UpdateDeckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -23,10 +24,10 @@ func UpdateDeck(c *gin.Context) {
 	}
 	query := `
 	UPDATE decks
-	SET title=$1, description=$2, is_public=$3, version=version+1
-	WHERE id=$4 AND version=$5
+	SET title=$1, description=$2, is_public=$3, updated_at=NOW(), version=version+1
+	WHERE id=$4 AND version=$5 AND user_id=$6
 	`
-	res, err := db.DB.Exec(query, req.Title, req.Description, req.IsPublic, id, req.Version)
+	res, err := db.DB.Exec(query, req.Title, req.Description, req.IsPublic, id, req.Version, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

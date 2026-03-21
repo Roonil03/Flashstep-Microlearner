@@ -16,6 +16,7 @@ type CreateDeckRequest struct {
 }
 
 func CreateDeck(c *gin.Context) {
+	userID := c.GetString("user_id")
 	var req CreateDeckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -23,10 +24,10 @@ func CreateDeck(c *gin.Context) {
 	}
 	id := uuid.New().String()
 	query := `
-	INSERT INTO decks (id, user_id, title, description, is_public)
-	VALUES ($1, $2, $3, $4, $5)
+	INSERT INTO decks (id, user_id, title, description, is_public, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 	`
-	_, err := db.DB.Exec(query, id, req.UserID, req.Title, req.Description, req.IsPublic)
+	_, err := db.DB.Exec(query, id, userID, req.Title, req.Description, req.IsPublic)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
