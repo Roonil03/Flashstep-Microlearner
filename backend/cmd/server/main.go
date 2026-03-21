@@ -25,7 +25,15 @@ func main() {
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)
-	router := gin.Default()
+	analyticsRepo := repositories.NewAnalyticsRepository(conn)
+	analyticsService := services.NewAnalyticsService(analyticsRepo)
+	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
+	// router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatal(err)
+	}
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
@@ -49,6 +57,12 @@ func main() {
 
 			protected.POST("/sync/upload", v1.SyncUpload)
 			protected.GET("/sync/download", v1.SyncDownload)
+		}
+		{
+			protected.GET("/analytics/daily-review-count", analyticsHandler.DailyReviewCount)
+			protected.GET("/analytics/average-session-length", analyticsHandler.AverageSessionLength)
+			protected.GET("/analytics/accuracy-trends", analyticsHandler.AccuracyTrends)
+			protected.GET("/analytics/deck-performance", analyticsHandler.DeckPerformance)
 		}
 	}
 	log.Printf("server listening on :%s", cfg.Port)
