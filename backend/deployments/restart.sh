@@ -4,3 +4,4 @@ docker system prune -a -f
 docker ps -a
 docker images -a
 docker volume ls
+docker compose up --build

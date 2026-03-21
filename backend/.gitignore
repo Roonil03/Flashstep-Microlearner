@@ -11,8 +11,8 @@ go.work.buildlist
 *.log
 logs/
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 .DS_Store
 .DS_Store?
 ._*
@@ -31,3 +31,4 @@ coverage.html
 **/Dockerfile.*
 tmp/
 temp/
+docker-compose.override.yml
