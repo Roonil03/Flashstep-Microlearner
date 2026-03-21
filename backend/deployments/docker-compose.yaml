@@ -12,11 +12,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../migrations/init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-flashcards}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-flashcards}"]
+    #   interval: 10s
+    #   timeout: 10s
+    #   retries: 20
+    #   start_period: 30s
 
   app:
     build:
@@ -28,9 +29,9 @@ services:
       - ../.env
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # depends_on:
+      # postgres:
+      #   condition: service_healthy
 
 volumes:
   postgres_data:
