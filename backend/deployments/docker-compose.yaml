@@ -1,21 +1,8 @@
-version: '3.8'
-
 services:
-  app:
-    build: .
-    container_name: flashcards_backend
-    ports:
-      - "8080:8080"
-      - "8081:8081"
-    env_file:
-      - .env
-    depends_on:
-      - postgres
-
   postgres:
-    image: postgres:15
-    container_name: flashcards_db
-    restart: always
+    image: postgres:16-alpine
+    container_name: flashcards_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -24,6 +11,26 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../migrations/0001_init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flashcards"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    container_name: flashcards_backend
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
