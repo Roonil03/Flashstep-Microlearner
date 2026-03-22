@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/presentation/login_page.dart';
 import '../features/splash/presentation/splash_screen.dart';
+import '../features/auth/presentation/register_page.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -24,7 +25,7 @@ class App extends ConsumerWidget {
       routes: {
         AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.login: (_) => const LoginPage(),
-        AppRoutes.register: (_) => const _PlaceholderPage(title: 'Register Page'),
+        AppRoutes.register: (_) => const RegisterPage(),
         AppRoutes.home: (_) => const _PlaceholderPage(title: 'Home Dashboard'),
         AppRoutes.analytics: (_) => const _PlaceholderPage(title: 'Analytics Page'),
         AppRoutes.settings: (_) => const _PlaceholderPage(title: 'Settings Page'),

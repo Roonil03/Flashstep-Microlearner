@@ -29,13 +29,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
   }
 
   Future<void> _verifyAuth() async {
-    if (_redirecting) return;
+    if (_redirecting){
+      return;
+    }
     _redirecting = true;
-    await Future<void>.delayed(const Duration(seconds: 2));
     final authRepository = ref.read(authRepositoryProvider);
-    final valid = await authRepository.hasValidSession();
+    bool valid = false;
+    try {
+      valid = await authRepository.hasValidSession();
+    } catch (_) {
+      valid = false;
+    }
+    await Future<void>.delayed(const Duration(seconds: 5));
     if (!mounted){
-        return;
+      return;
     }
     Navigator.of(context).pushReplacementNamed(
       valid ? AppRoutes.home : AppRoutes.login,
