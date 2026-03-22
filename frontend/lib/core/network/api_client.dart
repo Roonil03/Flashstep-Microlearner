@@ -1,3 +1,5 @@
+import '../config/api_config.dart';
+
 class ApiClient {
   final String baseUrl;
 
@@ -6,8 +8,17 @@ class ApiClient {
   }) : baseUrl = baseUrl ??
             const String.fromEnvironment(
               'API_BASE_URL',
-              defaultValue: 'http://10.86.4.177:8080',
+              // if no build-time environment variable is provided, use ApiConfig.baseUrl
+              defaultValue: '',
             );
 
-  Uri uri(String path) => Uri.parse('$baseUrl$path');
+  ApiClient._withDefault() : baseUrl = ApiConfig.baseUrl;
+
+  /// Factory that returns an ApiClient using the runtime `ApiConfig.baseUrl`
+  factory ApiClient.withConfig() => ApiClient._withDefault();
+
+  Uri uri(String path) {
+    final resolved = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
+    return Uri.parse('$resolved$path');
+  }
 }

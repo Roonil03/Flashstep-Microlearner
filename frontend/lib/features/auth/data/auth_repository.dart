@@ -23,6 +23,18 @@ class AuthRepository {
     return session;
   }
 
+  Future<void> register({
+    required String email,
+    required String username,
+    required String password,
+  }) async {
+    await api.register(
+      email: email,
+      username: username,
+      password: password,
+    );
+  }
+
   Future<bool> hasValidSession() async {
     final token = await storage.readToken();
     if (token == null || token.isEmpty) return false;

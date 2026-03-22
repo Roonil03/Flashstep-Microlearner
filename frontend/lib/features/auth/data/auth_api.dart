@@ -41,6 +41,26 @@ class AuthSession {
 class AuthApi {
   final ApiClient _client;
   AuthApi(this._client);
+  Future<void> register({
+    required String email,
+    required String username,
+    required String password,
+  }) async {
+    final response = await http.post(
+      _client.uri('/auth/register'),
+      headers: const {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'email': email,
+        'username': username,
+        'password': password,
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Register failed: ${response.body}');
+    }
+  }
   Future<AuthSession> login({
     required String identifier,
     required String password,
