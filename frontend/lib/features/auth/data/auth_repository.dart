@@ -20,6 +20,7 @@ class AuthRepository {
     );
 
     await storage.saveToken(session.token);
+    await storage.writeUsername(session.username);
     return session;
   }
 

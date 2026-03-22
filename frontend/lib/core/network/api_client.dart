@@ -8,7 +8,6 @@ class ApiClient {
   }) : baseUrl = baseUrl ??
             const String.fromEnvironment(
               'API_BASE_URL',
-              // if no build-time environment variable is provided, use ApiConfig.baseUrl
               defaultValue: '',
             );
 

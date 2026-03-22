@@ -61,6 +61,7 @@ class AuthApi {
       throw Exception('Register failed: ${response.body}');
     }
   }
+
   Future<AuthSession> login({
     required String email,
     required String password,
@@ -93,5 +94,22 @@ class AuthApi {
       },
     );
     return response.statusCode >= 200 && response.statusCode < 300;
+  }
+
+  Future<AuthSession> getMe(String token) async {
+    final response = await http.get(
+      _client.uri('/auth/me'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to fetch user: ${response.body}');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected response format');
+    }
+    return AuthSession.fromJson(decoded);
   }
 }

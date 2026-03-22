@@ -1,7 +1,7 @@
 class ApiEndpoints {
   static const String register = '/auth/register';
   static const String login = '/auth/login';
-  static const String me = '/auth/me';
+  static const String me = '/me';
 
   static const String createDeck = '/decks';
   static const String getDecks = '/decks';
