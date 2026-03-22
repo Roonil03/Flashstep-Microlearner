@@ -26,7 +26,7 @@ class App extends ConsumerWidget {
         AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.login: (_) => const LoginPage(),
         AppRoutes.register: (_) => const RegisterPage(),
-        AppRoutes.home: (_) => const _PlaceholderPage(title: 'Home Dashboard'),
+        AppRoutes.home: (_) => const HomeDashboardPage(),
         AppRoutes.analytics: (_) => const _PlaceholderPage(title: 'Analytics Page'),
         AppRoutes.settings: (_) => const _PlaceholderPage(title: 'Settings Page'),
         AppRoutes.createDeck: (_) => const _PlaceholderPage(title: 'Create Deck Page'),

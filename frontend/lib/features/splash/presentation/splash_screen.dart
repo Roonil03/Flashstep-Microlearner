@@ -29,7 +29,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
   }
 
   Future<void> _verifyAuth() async {
-    if (_redirecting){
+    if (_redirecting) {
       return;
     }
     _redirecting = true;
@@ -40,8 +40,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     } catch (_) {
       valid = false;
     }
-    await Future<void>.delayed(const Duration(seconds: 5));
-    if (!mounted){
+    if (!mounted) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) {
       return;
     }
     Navigator.of(context).pushReplacementNamed(
