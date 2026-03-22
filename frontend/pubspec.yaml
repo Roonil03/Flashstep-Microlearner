@@ -35,3 +35,5 @@ flutter:
 
   assets:
     - assets/LogoWIthoutText_WithoutBG.png
+    - assets/LogoWithoutText_WhiteBackground.png
+    - assets/LogoWithTest.png
