@@ -32,7 +32,7 @@ class HomeDashboardData {
   final bool isOffline;
   final bool isSyncing;
   final DateTime? lastSyncedAt;
-  final DeckSummary deckOfTheDay;
+  final DeckSummary? deckOfTheDay;
   final List<DeckSummary> decks;
 
   const HomeDashboardData({

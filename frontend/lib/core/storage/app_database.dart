@@ -37,7 +37,45 @@ class SyncQueueItems extends Table {
   Set<Column> get primaryKey => {operationId};
 }
 
-@DriftDatabase(tables: [ReviewLogs, SyncQueueItems])
+class Users extends Table {
+  TextColumn get userId => text()();
+  TextColumn get username => text()();
+  TextColumn get email => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  
+  @override
+  Set<Column> get primaryKey => {userId};
+}
+
+class Decks extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text()();
+  TextColumn get title => text()();
+  TextColumn get description => text().nullable()();
+  IntColumn get totalCards => integer().withDefault(const Constant(0))();
+  RealColumn get progress => real().withDefault(const Constant(0.0))();
+  BoolColumn get isPublic => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get nextDueAt => dateTime().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Cards extends Table {
+  TextColumn get id => text()();
+  TextColumn get deckId => text()();
+  TextColumn get front => text()();
+  TextColumn get back => text()();
+  DateTimeColumn get dueAt => dateTime().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+  
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [ReviewLogs, SyncQueueItems, Users, Decks, Cards])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 

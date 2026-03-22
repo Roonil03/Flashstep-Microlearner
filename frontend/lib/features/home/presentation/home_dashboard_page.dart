@@ -2,69 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import '../../../core/network/providers.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../core/storage/database_provider.dart';
+import '../../../core/storage/session_storage.dart';
 import '../domain/home_dashboard_models.dart';
 
-final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
-  await Future<void>.delayed(const Duration(milliseconds: 450));
+final homeRepositoryProvider = Provider((ref) {
+  final database = ref.watch(appDatabaseProvider);
+  final sessionStorage = const SessionStorage();
+  return HomeRepository(database, sessionStorage);
+});
 
-  final decks = <DeckSummary>[
-    DeckSummary(
-      id: 'd1',
-      title: 'Frontend System Design',
-      description: 'Flutter architecture, state management, UI patterns, and app flow.',
-      totalCards: 184,
-      dueCards: 24,
-      progress: 0.72,
-      isPublic: false,
-      nextDueAt: DateTime.now().add(const Duration(hours: 2)),
-      updatedAt: DateTime.now().subtract(const Duration(minutes: 12)),
-    ),
-    DeckSummary(
-      id: 'd2',
-      title: 'Go Backend APIs',
-      description: 'JWT auth, REST endpoints, sync, and database integration.',
-      totalCards: 96,
-      dueCards: 10,
-      progress: 0.48,
-      isPublic: false,
-      nextDueAt: DateTime.now().add(const Duration(hours: 5)),
-      updatedAt: DateTime.now().subtract(const Duration(hours: 1)),
-    ),
-    DeckSummary(
-      id: 'd3',
-      title: 'Spaced Repetition Core',
-      description: 'SM-2, FSRS concepts, review rules, and scheduling logic.',
-      totalCards: 128,
-      dueCards: 33,
-      progress: 0.81,
-      isPublic: true,
-      nextDueAt: DateTime.now().add(const Duration(minutes: 35)),
-      updatedAt: DateTime.now().subtract(const Duration(minutes: 28)),
-    ),
-    DeckSummary(
-      id: 'd4',
-      title: 'Database & Sync',
-      description: 'Isar, Drift, sync queue, conflict handling, and offline-first flow.',
-      totalCards: 112,
-      dueCards: 8,
-      progress: 0.62,
-      isPublic: false,
-      nextDueAt: DateTime.now().add(const Duration(hours: 8)),
-      updatedAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-  ];
+final usernameProvider = FutureProvider<String>((ref) async {
+  final repository = ref.watch(homeRepositoryProvider);
+  final username = await repository.getUsername();
+  return username?.isNotEmpty == true ? username! : 'User';
+});
+
+final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
+  final repository = ref.watch(homeRepositoryProvider);
+  return repository.getDecks();
+});
+
+final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
+  final username = await ref.watch(usernameProvider.future);
+  final decks = await ref.watch(userDecksProvider.future);
+
+  final dueToday = decks.fold<int>(0, (sum, deck) => sum + deck.dueCards);
+  final deckOfTheDay = decks.isNotEmpty ? decks.first : null;
 
   return HomeDashboardData(
-    displayName: 'Ru',
+    displayName: username,
     decksCount: decks.length,
-    dueToday: decks.fold<int>(0, (sum, deck) => sum + deck.dueCards),
-    reviewedToday: 38,
-    streak: 12,
-    retentionRate: 86.4,
+    dueToday: dueToday,
+    reviewedToday: 0, // Will fetch from ReviewLogs table if needed
+    streak: 0, // Will calculate from ReviewLogs if needed
+    retentionRate: 0.0, // Will calculate from ReviewLogs if needed
     isOffline: false,
     isSyncing: false,
-    lastSyncedAt: DateTime.now().subtract(const Duration(minutes: 6)),
-    deckOfTheDay: decks[2],
+    lastSyncedAt: DateTime.now(),
+    deckOfTheDay: deckOfTheDay,
     decks: decks,
   );
 });
@@ -78,6 +56,8 @@ class HomeDashboardPage extends ConsumerStatefulWidget {
 
 class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   Future<void> _refreshDashboard() async {
+    ref.invalidate(usernameProvider);
+    ref.invalidate(userDecksProvider);
     ref.invalidate(homeDashboardProvider);
     await ref.read(homeDashboardProvider.future);
   }
@@ -146,7 +126,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                       error: (error, stack) => SliverFillRemaining(
                         hasScrollBody: false,
                         child: _ErrorState(
-                          message: error.toString(),
+                          message: 'Error loading dashboard: $error',
                           onRetry: _refreshDashboard,
                         ),
                       ),
@@ -165,18 +145,23 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 streak: data.streak,
                               ),
                               const SizedBox(height: 16),
-                              _DeckOfTheDayCard(
-                                deck: data.deckOfTheDay,
-                                timeLabel: _timeLabel(data.deckOfTheDay.nextDueAt),
-                                onStartReview: () => Navigator.of(context).pushNamed(
-                                  AppRoutes.review,
-                                  arguments: data.deckOfTheDay.id,
+                              if (data.deckOfTheDay != null)
+                                Column(
+                                  children: [
+                                    _DeckOfTheDayCard(
+                                      deck: data.deckOfTheDay!,
+                                      timeLabel: _timeLabel(data.deckOfTheDay!.nextDueAt),
+                                      onStartReview: () => Navigator.of(context).pushNamed(
+                                        AppRoutes.review,
+                                        arguments: data.deckOfTheDay!.id,
+                                      ),
+                                      onOpenDeck: () => Navigator.of(context).pushNamed(
+                                        AppRoutes.browseDecks,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                  ],
                                 ),
-                                onOpenDeck: () => Navigator.of(context).pushNamed(
-                                  AppRoutes.browseDecks,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
                               _QuickActionsGrid(
                                 onCreateDeck: () => Navigator.of(context).pushNamed(AppRoutes.createDeck),
                                 onStartReview: () => Navigator.of(context).pushNamed(AppRoutes.review),
@@ -206,18 +191,33 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              ...data.decks.map(
-                                (deck) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _DeckCard(
-                                    deck: deck,
-                                    onTap: () => Navigator.of(context).pushNamed(
-                                      AppRoutes.review,
-                                      arguments: deck.id,
+                              if (data.decks.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 24),
+                                  child: Center(
+                                    child: Text(
+                                      'Damn, this place looks empty. Where are the cards?',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontStyle: FontStyle.italic,
+                                        color: theme.textTheme.bodySmall?.color,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ...data.decks.map(
+                                  (deck) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _DeckCard(
+                                      deck: deck,
+                                      onTap: () => Navigator.of(context).pushNamed(
+                                        AppRoutes.review,
+                                        arguments: deck.id,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
                               const SizedBox(height: 24),
                               _SyncFooterCard(
                                 isOffline: data.isOffline,
@@ -299,94 +299,165 @@ class _TopGreetingCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-            color: Colors.black.withOpacity(isDark ? 0.28 : 0.08),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back,',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayName,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: isDark ? const Color(0xFF1A3A52) : const Color(0xFFD5EEFF),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isSyncing ? Icons.sync : Icons.check_circle,
+                      size: 14,
+                      color: isOffline
+                          ? Colors.orange
+                          : isSyncing
+                              ? Colors.blue
+                              : Colors.green,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _syncText(),
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _lastSyncTime(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.calendar_today,
+                  label: 'Due Today',
+                  value: '$dueToday cards',
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.layers,
+                  label: 'Your Decks',
+                  value: '$decksCount total',
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.done_all,
+                  label: 'Reviewed',
+                  value: '$reviewedToday today',
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.local_fire_department,
+                  label: 'Streak',
+                  value: '$streak days',
+                  isDark: isDark,
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _StatTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF1F3D54) : Colors.white.withOpacity(0.6),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: isDark ? Colors.white12 : Colors.white,
-                child: Icon(
-                  Icons.school_rounded,
-                  color: isDark ? Colors.white : const Color(0xFF003153),
-                ),
-              ),
-              const SizedBox(width: 12),
+              Icon(icon, size: 14, color: Colors.blue),
+              const SizedBox(width: 6),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome back, $displayName',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _syncText(),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _SyncChip(
-                label: _syncText(),
-                value: isOffline ? 'No internet' : _lastSyncTime(),
-                icon: isOffline ? Icons.wifi_off_rounded : Icons.sync_rounded,
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: 'Due today',
-                  value: '$dueToday',
-                  icon: Icons.today_outlined,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricTile(
-                  label: 'Decks',
-                  value: '$decksCount',
-                  icon: Icons.layers_outlined,
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: 'Reviewed',
-                  value: '$reviewedToday',
-                  icon: Icons.fact_check_outlined,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricTile(
-                  label: 'Streak',
-                  value: '$streak days',
-                  icon: Icons.local_fire_department_outlined,
-                ),
-              ),
-            ],
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -413,109 +484,129 @@ class _DeckOfTheDayCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111827) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF1C2E3F) : const Color(0xFFEFF8FF),
         border: Border.all(
-          color: isDark ? Colors.white10 : const Color(0xFFE7E7E7),
+          color: isDark ? const Color(0xFF2A4060) : const Color(0xFFB8E0FF),
         ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(isDark ? 0.28 : 0.06),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: const Color(0xFF003153).withOpacity(isDark ? 0.32 : 0.08),
-                ),
+              Expanded(
                 child: Text(
                   'Deck of the day',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF003153),
-                  ),
+                  style: theme.textTheme.labelLarge,
                 ),
               ),
-              const Spacer(),
-              Text(
-                timeLabel,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.8),
-                ),
-              ),
+              Icon(Icons.star, size: 18, color: Colors.amber),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Text(
             deck.title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Text(
             deck.description,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withOpacity(0.85),
-              height: 1.35,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LinearProgressIndicator(
-              value: deck.progress,
-              minHeight: 10,
-              backgroundColor: isDark ? Colors.white10 : const Color(0xFFEDEDED),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${(deck.progress * 100).round()}% complete',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${deck.dueCards} cards due',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                '${deck.dueCards} due — $timeLabel',
+                style: theme.textTheme.labelSmall,
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilledButton.icon(
-                onPressed: onStartReview,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('Start review'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onOpenDeck,
-                icon: const Icon(Icons.folder_open_outlined),
-                label: const Text('Open deck'),
-              ),
-            ],
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: onStartReview,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(40),
+            ),
+            child: const Text('Start review'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DeckCard extends StatelessWidget {
+  final DeckSummary deck;
+  final VoidCallback onTap;
+
+  const _DeckCard({
+    required this.deck,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2E4556) : const Color(0xFFE0E0E0),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    deck.title,
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (deck.isPublic)
+                  Icon(Icons.public, size: 16, color: Colors.blue),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${deck.totalCards} cards • ${deck.dueCards} due',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: deck.progress,
+                minHeight: 6,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -536,86 +627,85 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = <_QuickAction>[
-      _QuickAction(
-        icon: Icons.add_circle_outline,
-        title: 'Create deck',
-        subtitle: 'Build new study material',
-        onTap: onCreateDeck,
-      ),
-      _QuickAction(
-        icon: Icons.play_circle_outline,
-        title: 'Start review',
-        subtitle: 'Continue your session',
-        onTap: onStartReview,
-      ),
-      _QuickAction(
-        icon: Icons.search_rounded,
-        title: 'Browse decks',
-        subtitle: 'Find public decks',
-        onTap: onBrowseDecks,
-      ),
-      _QuickAction(
-        icon: Icons.insights_outlined,
-        title: 'Analytics',
-        subtitle: 'Track retention and streaks',
-        onTap: onAnalytics,
-      ),
-    ];
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 500 ? 4 : 2;
-        return GridView.builder(
-          itemCount: actions.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.2,
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _QuickActionButton(
+          icon: Icons.add_circle_outline,
+          label: 'New Deck',
+          onTap: onCreateDeck,
+          isDark: isDark,
+        ),
+        _QuickActionButton(
+          icon: Icons.play_circle_outline,
+          label: 'Start Review',
+          onTap: onStartReview,
+          isDark: isDark,
+        ),
+        _QuickActionButton(
+          icon: Icons.explore_outlined,
+          label: 'Browse',
+          onTap: onBrowseDecks,
+          isDark: isDark,
+        ),
+        _QuickActionButton(
+          icon: Icons.bar_chart_outlined,
+          label: 'Analytics',
+          onTap: onAnalytics,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2E4556) : const Color(0xFFE0E0E0),
           ),
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: action.onTap,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.4)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Icon(action.icon, size: 28),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          action.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          action.subtitle,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: Colors.blue),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -633,116 +723,81 @@ class _MiniStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Row(
       children: [
         Expanded(
-          child: _StatCard(
-            title: 'Due today',
-            value: '$dueToday',
-            subtitle: 'Cards waiting',
-            icon: Icons.schedule_outlined,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Due Today',
+                  style: theme.textTheme.labelSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$dueToday',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
-          child: _StatCard(
-            title: 'Reviewed',
-            value: '$reviewedToday',
-            subtitle: 'Today',
-            icon: Icons.check_circle_outline,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Reviewed',
+                  style: theme.textTheme.labelSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$reviewedToday',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
-          child: _StatCard(
-            title: 'Retention',
-            value: '${retentionRate.toStringAsFixed(1)}%',
-            subtitle: 'Average',
-            icon: Icons.verified_outlined,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Retention',
+                  style: theme.textTheme.labelSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${retentionRate.toStringAsFixed(1)}%',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
-  }
-}
-
-class _DeckCard extends StatelessWidget {
-  final DeckSummary deck;
-  final VoidCallback onTap;
-
-  const _DeckCard({
-    required this.deck,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.45)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    deck.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                if (deck.isPublic)
-                  const Icon(Icons.public, size: 18)
-                else
-                  const Icon(Icons.lock_outline, size: 18),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              deck.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: deck.progress,
-                minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _SmallPill(text: '${deck.totalCards} cards'),
-                const SizedBox(width: 8),
-                _SmallPill(text: '${deck.dueCards} due'),
-                const SizedBox(width: 8),
-                _SmallPill(text: deck.nextDueAt == null ? 'No due time' : 'Next: ${_formatTime(deck.nextDueAt!)}'),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 }
 
@@ -759,237 +814,46 @@ class _SyncFooterCard extends StatelessWidget {
     required this.onForceSync,
   });
 
-  String _label() {
-    if (isOffline) return 'You are offline. Local DB is the source of truth.';
-    if (isSyncing) return 'Syncing changes with the server...';
-    if (lastSyncedAt == null) return 'No sync history yet.';
-    final diff = DateTime.now().difference(lastSyncedAt!);
-    if (diff.inMinutes < 1) return 'Last synced just now.';
-    if (diff.inHours < 1) return 'Last synced ${diff.inMinutes} min ago.';
-    return 'Last synced ${diff.inHours} h ago.';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: theme.cardColor,
-        border: Border.all(color: theme.dividerColor.withOpacity(0.45)),
+        borderRadius: BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(
-            isOffline
-                ? Icons.wifi_off_rounded
-                : isSyncing
-                    ? Icons.sync_rounded
-                    : Icons.cloud_done_outlined,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isOffline ? 'Offline mode' : isSyncing ? 'Syncing...' : 'All synced',
+                style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                lastSyncedAt == null
+                    ? 'Not synced yet'
+                    : 'Last sync: ${lastSyncedAt!.hour}:${lastSyncedAt!.minute}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _label(),
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-          TextButton(
+          IconButton(
+            icon: const Icon(Icons.sync),
             onPressed: onForceSync,
-            child: const Text('Sync now'),
           ),
         ],
       ),
     );
   }
-}
-
-class _MetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _MetricTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SmallPill extends StatelessWidget {
-  final String text;
-
-  const _SmallPill({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Theme.of(context).dividerColor.withOpacity(0.10),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-      ),
-    );
-  }
-}
-
-class _SyncChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _SyncChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 130),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.20),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickAction {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  _QuickAction({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
 }
 
 class _LoadingCard extends StatelessWidget {
@@ -1004,10 +868,10 @@ class _LoadingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: short ? 120 : 220,
+      height: short ? 60 : 120,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.black12,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
       ),
     );
   }
@@ -1024,34 +888,67 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 52),
-            const SizedBox(height: 14),
-            Text(
-              'Could not load your dashboard',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Try again'),
-            ),
-          ],
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.error_outline, size: 48, color: Colors.red),
+        const SizedBox(height: 16),
+        Text(
+          'Error loading dashboard',
+          style: theme.textTheme.titleMedium,
+          textAlign: TextAlign.center,
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          message,
+          style: theme.textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+        ),
+      ],
     );
+  }
+}
+
+class HomeRepository {
+  final AppDatabase _database;
+  final SessionStorage _sessionStorage;
+
+  HomeRepository(this._database, this._sessionStorage);
+
+  Future<String?> getUsername() async {
+    return _sessionStorage.readUsername();
+  }
+
+  Future<List<DeckSummary>> getDecks() async {
+    try {
+      final decks = await _database.select(_database.decks).get();
+
+      return decks
+          .map((deck) {
+            return DeckSummary(
+              id: deck.id,
+              title: deck.title,
+              description: deck.description ?? 'No description',
+              totalCards: deck.totalCards,
+              dueCards: 0,
+              progress: deck.progress,
+              isPublic: deck.isPublic,
+              nextDueAt: deck.nextDueAt,
+              updatedAt: deck.updatedAt,
+            );
+          })
+          .toList()
+          .cast<DeckSummary>();
+    } catch (e) {
+      return [];
+    }
   }
 }

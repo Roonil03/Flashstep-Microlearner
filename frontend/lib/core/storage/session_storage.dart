@@ -20,4 +20,18 @@ class SessionStorage {
   Future<void> clearToken() async {
     await _storage.delete(key: _tokenKey);
   }
+
+  static const String _usernameKey = 'username';
+
+  Future<void> writeUsername(String username) async {
+  await _storage.write(key: _usernameKey, value: username);
+  }
+
+  Future<String?> readUsername() async {
+    return _storage.read(key: _usernameKey);
+  }
+
+  Future<void> clearUsername() async {
+    await _storage.delete(key: _usernameKey);
+  }
 }
