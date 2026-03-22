@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-
 class ReviewLogs extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
@@ -28,7 +27,9 @@ class ReviewLogs extends Table {
 class SyncQueueItems extends Table {
   TextColumn get operationId => text()();
   TextColumn get type => text()();
-  TextColumn get payload => text()();
+
+  TextColumn get payload => text()(); // JSON
+
   DateTimeColumn get createdAt => dateTime()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 
@@ -42,24 +43,6 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   int get schemaVersion => 1;
-
-  Future<void> insertReviewLog(ReviewLogsCompanion entry) =>
-      into(reviewLogs).insert(entry);
-
-  Future<List<ReviewLog>> getAllReviewLogs() =>
-      select(reviewLogs).get();
-
-  Future<void> insertSyncItem(SyncQueueItemsCompanion entry) =>
-      into(syncQueueItems).insert(entry);
-
-  Future<List<SyncQueueItem>> getPendingSyncItems() =>
-      (select(syncQueueItems)..where((tbl) => tbl.synced.equals(false))).get();
-
-  Future<void> markSynced(String id) {
-    return (update(syncQueueItems)
-          ..where((tbl) => tbl.operationId.equals(id)))
-        .write(const SyncQueueItemsCompanion(synced: Value(true)));
-  }
 }
 
 LazyDatabase _openConnection() {
