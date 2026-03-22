@@ -16,9 +16,28 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
-    project.evaluationDependsOn(":app")
-}
+    afterEvaluate {
+        if (plugins.hasPlugin("com.android.library") ||
+            plugins.hasPlugin("com.android.application")) {
 
+            extensions.findByName("android")?.let { ext ->
+                try {
+                    val namespaceField = ext::class.java.getMethod("getNamespace")
+                    val currentNamespace = namespaceField.invoke(ext) as String?
+
+                    if (currentNamespace == null) {
+                        val setNamespace = ext::class.java.getMethod(
+                            "setNamespace",
+                            String::class.java
+                        )
+                        setNamespace.invoke(ext, project.group.toString())
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+}
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
