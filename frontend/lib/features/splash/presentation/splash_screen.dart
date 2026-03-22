@@ -69,10 +69,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(appThemeModeProvider).maybeWhen(
-          data: (mode) => mode,
-          orElse: () => ThemeMode.light,
-        );
+    final themeMode = ref.watch(appThemeModeProvider);
 
     final isDark = themeMode == ThemeMode.dark;
 

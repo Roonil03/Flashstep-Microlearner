@@ -3,12 +3,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/storage/theme_storage.dart';
 
-final themeStorageProvider = Provider<ThemeStorage>((ref) => const ThemeStorage());
+final themeStorageProvider =
+    Provider<ThemeStorage>((ref) => const ThemeStorage());
 
-final appThemeModeProvider = FutureProvider<ThemeMode>((ref) async {
+final appThemeModeProvider =
+    StateNotifierProvider<ThemeNotifier, ThemeMode>((ref) {
   final storage = ref.read(themeStorageProvider);
-  return storage.readThemeMode();
+  return ThemeNotifier(storage);
 });
+
+class ThemeNotifier extends StateNotifier<ThemeMode> {
+  final ThemeStorage _storage;
+
+  ThemeNotifier(this._storage) : super(ThemeMode.light) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final mode = await _storage.readThemeMode();
+    state = mode;
+  }
+
+  Future<void> setTheme(ThemeMode mode) async {
+    state = mode;
+    await _storage.writeThemeMode(mode);
+  }
+}
 
 class AppTheme {
   static ThemeData light() {

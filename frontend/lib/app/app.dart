@@ -5,6 +5,7 @@ import '../features/auth/presentation/login_page.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/auth/presentation/register_page.dart';
 import '../features/home/presentation/home_dashboard_page.dart';
+import '../features/settings/presentation/settings_page.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -13,10 +14,11 @@ class App extends ConsumerWidget {
   
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(appThemeModeProvider).maybeWhen(
-          data: (mode) => mode,
-          orElse: () => ThemeMode.light,
-        );
+    // final themeMode = ref.watch(appThemeModeProvider).maybeWhen(
+    //       data: (mode) => mode,
+    //       orElse: () => ThemeMode.light,
+    //     );
+    final themeMode = ref.watch(appThemeModeProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
@@ -29,7 +31,7 @@ class App extends ConsumerWidget {
         AppRoutes.register: (_) => const RegisterPage(),
         AppRoutes.home: (_) => const HomeDashboardPage(),
         AppRoutes.analytics: (_) => const _PlaceholderPage(title: 'Analytics Page'),
-        AppRoutes.settings: (_) => const _PlaceholderPage(title: 'Settings Page'),
+        AppRoutes.settings: (_) => const SettingsPage(),
         AppRoutes.createDeck: (_) => const _PlaceholderPage(title: 'Create Deck Page'),
         AppRoutes.browseDecks: (_) => const _PlaceholderPage(title: 'Browse Decks Page'),
         AppRoutes.review: (_) => const _PlaceholderPage(title: 'Start Review Page'),

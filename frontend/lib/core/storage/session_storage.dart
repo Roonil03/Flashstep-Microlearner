@@ -34,4 +34,8 @@ class SessionStorage {
   Future<void> clearUsername() async {
     await _storage.delete(key: _usernameKey);
   }
+
+  Future<void> clearAll() async {
+    await _storage.deleteAll();
+  }
 }
