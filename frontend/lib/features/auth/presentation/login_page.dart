@@ -73,19 +73,41 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return;
     }
     final authRepository = ref.read(authRepositoryProvider);
-    final username = await context.read<LoginCubit>().login(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-    if (!mounted){
+    try{
+      final username = await context.read<LoginCubit>().login(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
+      if (!mounted){
+          return;
+      }
+      _showTopSnackBar(context, username);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted){
+          return;
+      }
+      Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+    } catch (e) {
+      if (!mounted){
         return;
+      }
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(
+            top: 16,
+            left: 16,
+            right: 16,
+          ),
+          backgroundColor: isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
+          content: const Text(
+            'Wrong email or password',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
     }
-    _showTopSnackBar(context, username);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted){
-        return;
-    }
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
   }
 
   @override
