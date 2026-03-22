@@ -116,7 +116,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                   Transform.rotate(
                     angle: _controller.value * 2 * math.pi,
                     child: Image.asset(
-                      'assets/LogoWithoutText_WhiteBackground.png',
+                      'assets/LogoWIthoutText_WithoutBG.png',
                       width: 150,
                       height: 150,
                       fit: BoxFit.contain,
