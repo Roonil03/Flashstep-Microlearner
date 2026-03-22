@@ -11,11 +11,11 @@ class AuthRepository {
   });
 
   Future<AuthSession> login({
-    required String identifier,
+    required String email,
     required String password,
   }) async {
     final session = await api.login(
-      identifier: identifier,
+      email: email,
       password: password,
     );
 

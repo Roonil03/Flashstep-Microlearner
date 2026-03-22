@@ -12,17 +12,17 @@ class LoginCubit extends Cubit<bool> {
   LoginCubit(this._authRepository) : super(false);
 
   Future<String> login({
-    required String identifier,
+    required String email,
     required String password,
   }) async {
     emit(true);
     try {
       final session = await _authRepository.login(
-        identifier: identifier,
+        email: email,
         password: password,
       );
       emit(false);
-      return session.username.isNotEmpty ? session.username : identifier;
+      return session.username.isNotEmpty ? session.username : email;
     } catch (e) {
       emit(false);
       rethrow;
@@ -74,7 +74,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
     final authRepository = ref.read(authRepositoryProvider);
     final username = await context.read<LoginCubit>().login(
-          identifier: _emailController.text.trim(),
+          email: _emailController.text.trim(),
           password: _passwordController.text,
         );
     if (!mounted){

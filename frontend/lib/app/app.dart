@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/auth/presentation/register_page.dart';
+import '../features/home/presentation/home_dashboard_page.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 

@@ -62,7 +62,7 @@ class AuthApi {
     }
   }
   Future<AuthSession> login({
-    required String identifier,
+    required String email,
     required String password,
   }) async {
     final response = await http.post(
@@ -71,7 +71,7 @@ class AuthApi {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'identifier': identifier,
+        'email': email,
         'password': password,
       }),
     );
