@@ -160,4 +160,43 @@ CREATE TRIGGER trg_user_progress_updated_at
 BEFORE UPDATE ON user_progress
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE OR REPLACE FUNCTION enforce_max_50_cards_per_deck()
+RETURNS TRIGGER AS $$
+DECLARE
+    active_cards_count INT;
+BEGIN
+    IF NEW.is_deleted = TRUE THEN
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'UPDATE'
+       AND OLD.deck_id = NEW.deck_id
+       AND OLD.is_deleted = FALSE
+       AND NEW.is_deleted = FALSE THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT COUNT(*)
+    INTO active_cards_count
+    FROM cards
+    WHERE deck_id = NEW.deck_id
+      AND is_deleted = FALSE
+      AND id <> NEW.id;
+
+    IF active_cards_count >= 50 THEN
+        RAISE EXCEPTION 'a deck can contain at most 50 cards';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_cards_max_50_per_deck ON cards;
+
+CREATE TRIGGER trg_cards_max_50_per_deck
+BEFORE INSERT OR UPDATE OF deck_id, is_deleted
+ON cards
+FOR EACH ROW
+EXECUTE FUNCTION enforce_max_50_cards_per_deck();
+
 COMMIT;

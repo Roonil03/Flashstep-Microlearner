@@ -1196,30 +1196,6 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
   late final GeneratedColumn<String> description = GeneratedColumn<String>(
       'description', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _totalCardsMeta =
-      const VerificationMeta('totalCards');
-  @override
-  late final GeneratedColumn<int> totalCards = GeneratedColumn<int>(
-      'total_cards', aliasedName, false,
-      type: DriftSqlType.int,
-      requiredDuringInsert: false,
-      defaultValue: const Constant(0));
-  static const VerificationMeta _dueCardsMeta =
-      const VerificationMeta('dueCards');
-  @override
-  late final GeneratedColumn<int> dueCards = GeneratedColumn<int>(
-      'due_cards', aliasedName, false,
-      type: DriftSqlType.int,
-      requiredDuringInsert: false,
-      defaultValue: const Constant(0));
-  static const VerificationMeta _progressMeta =
-      const VerificationMeta('progress');
-  @override
-  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
-      'progress', aliasedName, false,
-      type: DriftSqlType.double,
-      requiredDuringInsert: false,
-      defaultValue: const Constant(0));
   static const VerificationMeta _isPublicMeta =
       const VerificationMeta('isPublic');
   @override
@@ -1230,12 +1206,6 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_public" IN (0, 1))'),
       defaultValue: const Constant(false));
-  static const VerificationMeta _nextDueAtMeta =
-      const VerificationMeta('nextDueAt');
-  @override
-  late final GeneratedColumn<DateTime> nextDueAt = GeneratedColumn<DateTime>(
-      'next_due_at', aliasedName, true,
-      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1272,11 +1242,7 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
         userId,
         title,
         description,
-        totalCards,
-        dueCards,
-        progress,
         isPublic,
-        nextDueAt,
         createdAt,
         updatedAt,
         version,
@@ -1315,29 +1281,9 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
           description.isAcceptableOrUnknown(
               data['description']!, _descriptionMeta));
     }
-    if (data.containsKey('total_cards')) {
-      context.handle(
-          _totalCardsMeta,
-          totalCards.isAcceptableOrUnknown(
-              data['total_cards']!, _totalCardsMeta));
-    }
-    if (data.containsKey('due_cards')) {
-      context.handle(_dueCardsMeta,
-          dueCards.isAcceptableOrUnknown(data['due_cards']!, _dueCardsMeta));
-    }
-    if (data.containsKey('progress')) {
-      context.handle(_progressMeta,
-          progress.isAcceptableOrUnknown(data['progress']!, _progressMeta));
-    }
     if (data.containsKey('is_public')) {
       context.handle(_isPublicMeta,
           isPublic.isAcceptableOrUnknown(data['is_public']!, _isPublicMeta));
-    }
-    if (data.containsKey('next_due_at')) {
-      context.handle(
-          _nextDueAtMeta,
-          nextDueAt.isAcceptableOrUnknown(
-              data['next_due_at']!, _nextDueAtMeta));
     }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
@@ -1376,16 +1322,8 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
           .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
       description: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}description']),
-      totalCards: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}total_cards'])!,
-      dueCards: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}due_cards'])!,
-      progress: attachedDatabase.typeMapping
-          .read(DriftSqlType.double, data['${effectivePrefix}progress'])!,
       isPublic: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_public'])!,
-      nextDueAt: attachedDatabase.typeMapping
-          .read(DriftSqlType.dateTime, data['${effectivePrefix}next_due_at']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
@@ -1408,11 +1346,7 @@ class Deck extends DataClass implements Insertable<Deck> {
   final String userId;
   final String title;
   final String? description;
-  final int totalCards;
-  final int dueCards;
-  final double progress;
   final bool isPublic;
-  final DateTime? nextDueAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
@@ -1422,11 +1356,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       required this.userId,
       required this.title,
       this.description,
-      required this.totalCards,
-      required this.dueCards,
-      required this.progress,
       required this.isPublic,
-      this.nextDueAt,
       required this.createdAt,
       required this.updatedAt,
       required this.version,
@@ -1440,13 +1370,7 @@ class Deck extends DataClass implements Insertable<Deck> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
-    map['total_cards'] = Variable<int>(totalCards);
-    map['due_cards'] = Variable<int>(dueCards);
-    map['progress'] = Variable<double>(progress);
     map['is_public'] = Variable<bool>(isPublic);
-    if (!nullToAbsent || nextDueAt != null) {
-      map['next_due_at'] = Variable<DateTime>(nextDueAt);
-    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['version'] = Variable<int>(version);
@@ -1462,13 +1386,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
-      totalCards: Value(totalCards),
-      dueCards: Value(dueCards),
-      progress: Value(progress),
       isPublic: Value(isPublic),
-      nextDueAt: nextDueAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(nextDueAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       version: Value(version),
@@ -1484,11 +1402,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       userId: serializer.fromJson<String>(json['userId']),
       title: serializer.fromJson<String>(json['title']),
       description: serializer.fromJson<String?>(json['description']),
-      totalCards: serializer.fromJson<int>(json['totalCards']),
-      dueCards: serializer.fromJson<int>(json['dueCards']),
-      progress: serializer.fromJson<double>(json['progress']),
       isPublic: serializer.fromJson<bool>(json['isPublic']),
-      nextDueAt: serializer.fromJson<DateTime?>(json['nextDueAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
@@ -1503,11 +1417,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       'userId': serializer.toJson<String>(userId),
       'title': serializer.toJson<String>(title),
       'description': serializer.toJson<String?>(description),
-      'totalCards': serializer.toJson<int>(totalCards),
-      'dueCards': serializer.toJson<int>(dueCards),
-      'progress': serializer.toJson<double>(progress),
       'isPublic': serializer.toJson<bool>(isPublic),
-      'nextDueAt': serializer.toJson<DateTime?>(nextDueAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'version': serializer.toJson<int>(version),
@@ -1520,11 +1430,7 @@ class Deck extends DataClass implements Insertable<Deck> {
           String? userId,
           String? title,
           Value<String?> description = const Value.absent(),
-          int? totalCards,
-          int? dueCards,
-          double? progress,
           bool? isPublic,
-          Value<DateTime?> nextDueAt = const Value.absent(),
           DateTime? createdAt,
           DateTime? updatedAt,
           int? version,
@@ -1534,11 +1440,7 @@ class Deck extends DataClass implements Insertable<Deck> {
         userId: userId ?? this.userId,
         title: title ?? this.title,
         description: description.present ? description.value : this.description,
-        totalCards: totalCards ?? this.totalCards,
-        dueCards: dueCards ?? this.dueCards,
-        progress: progress ?? this.progress,
         isPublic: isPublic ?? this.isPublic,
-        nextDueAt: nextDueAt.present ? nextDueAt.value : this.nextDueAt,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         version: version ?? this.version,
@@ -1551,11 +1453,7 @@ class Deck extends DataClass implements Insertable<Deck> {
           ..write('userId: $userId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('dueCards: $dueCards, ')
-          ..write('progress: $progress, ')
           ..write('isPublic: $isPublic, ')
-          ..write('nextDueAt: $nextDueAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
@@ -1565,20 +1463,8 @@ class Deck extends DataClass implements Insertable<Deck> {
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      userId,
-      title,
-      description,
-      totalCards,
-      dueCards,
-      progress,
-      isPublic,
-      nextDueAt,
-      createdAt,
-      updatedAt,
-      version,
-      isDeleted);
+  int get hashCode => Object.hash(id, userId, title, description, isPublic,
+      createdAt, updatedAt, version, isDeleted);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1587,11 +1473,7 @@ class Deck extends DataClass implements Insertable<Deck> {
           other.userId == this.userId &&
           other.title == this.title &&
           other.description == this.description &&
-          other.totalCards == this.totalCards &&
-          other.dueCards == this.dueCards &&
-          other.progress == this.progress &&
           other.isPublic == this.isPublic &&
-          other.nextDueAt == this.nextDueAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
@@ -1603,11 +1485,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
   final Value<String> userId;
   final Value<String> title;
   final Value<String?> description;
-  final Value<int> totalCards;
-  final Value<int> dueCards;
-  final Value<double> progress;
   final Value<bool> isPublic;
-  final Value<DateTime?> nextDueAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> version;
@@ -1618,11 +1496,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     this.userId = const Value.absent(),
     this.title = const Value.absent(),
     this.description = const Value.absent(),
-    this.totalCards = const Value.absent(),
-    this.dueCards = const Value.absent(),
-    this.progress = const Value.absent(),
     this.isPublic = const Value.absent(),
-    this.nextDueAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
@@ -1634,11 +1508,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     required String userId,
     required String title,
     this.description = const Value.absent(),
-    this.totalCards = const Value.absent(),
-    this.dueCards = const Value.absent(),
-    this.progress = const Value.absent(),
     this.isPublic = const Value.absent(),
-    this.nextDueAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.version = const Value.absent(),
@@ -1654,11 +1524,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     Expression<String>? userId,
     Expression<String>? title,
     Expression<String>? description,
-    Expression<int>? totalCards,
-    Expression<int>? dueCards,
-    Expression<double>? progress,
     Expression<bool>? isPublic,
-    Expression<DateTime>? nextDueAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? version,
@@ -1670,11 +1536,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
       if (userId != null) 'user_id': userId,
       if (title != null) 'title': title,
       if (description != null) 'description': description,
-      if (totalCards != null) 'total_cards': totalCards,
-      if (dueCards != null) 'due_cards': dueCards,
-      if (progress != null) 'progress': progress,
       if (isPublic != null) 'is_public': isPublic,
-      if (nextDueAt != null) 'next_due_at': nextDueAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
@@ -1688,11 +1550,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
       Value<String>? userId,
       Value<String>? title,
       Value<String?>? description,
-      Value<int>? totalCards,
-      Value<int>? dueCards,
-      Value<double>? progress,
       Value<bool>? isPublic,
-      Value<DateTime?>? nextDueAt,
       Value<DateTime>? createdAt,
       Value<DateTime>? updatedAt,
       Value<int>? version,
@@ -1703,11 +1561,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
       userId: userId ?? this.userId,
       title: title ?? this.title,
       description: description ?? this.description,
-      totalCards: totalCards ?? this.totalCards,
-      dueCards: dueCards ?? this.dueCards,
-      progress: progress ?? this.progress,
       isPublic: isPublic ?? this.isPublic,
-      nextDueAt: nextDueAt ?? this.nextDueAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -1731,20 +1585,8 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     if (description.present) {
       map['description'] = Variable<String>(description.value);
     }
-    if (totalCards.present) {
-      map['total_cards'] = Variable<int>(totalCards.value);
-    }
-    if (dueCards.present) {
-      map['due_cards'] = Variable<int>(dueCards.value);
-    }
-    if (progress.present) {
-      map['progress'] = Variable<double>(progress.value);
-    }
     if (isPublic.present) {
       map['is_public'] = Variable<bool>(isPublic.value);
-    }
-    if (nextDueAt.present) {
-      map['next_due_at'] = Variable<DateTime>(nextDueAt.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1771,11 +1613,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
           ..write('userId: $userId, ')
           ..write('title: $title, ')
           ..write('description: $description, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('dueCards: $dueCards, ')
-          ..write('progress: $progress, ')
           ..write('isPublic: $isPublic, ')
-          ..write('nextDueAt: $nextDueAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
@@ -2998,11 +2836,7 @@ typedef $$DecksTableInsertCompanionBuilder = DecksCompanion Function({
   required String userId,
   required String title,
   Value<String?> description,
-  Value<int> totalCards,
-  Value<int> dueCards,
-  Value<double> progress,
   Value<bool> isPublic,
-  Value<DateTime?> nextDueAt,
   required DateTime createdAt,
   required DateTime updatedAt,
   Value<int> version,
@@ -3014,11 +2848,7 @@ typedef $$DecksTableUpdateCompanionBuilder = DecksCompanion Function({
   Value<String> userId,
   Value<String> title,
   Value<String?> description,
-  Value<int> totalCards,
-  Value<int> dueCards,
-  Value<double> progress,
   Value<bool> isPublic,
-  Value<DateTime?> nextDueAt,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
   Value<int> version,
@@ -3049,11 +2879,7 @@ class $$DecksTableTableManager extends RootTableManager<
             Value<String> userId = const Value.absent(),
             Value<String> title = const Value.absent(),
             Value<String?> description = const Value.absent(),
-            Value<int> totalCards = const Value.absent(),
-            Value<int> dueCards = const Value.absent(),
-            Value<double> progress = const Value.absent(),
             Value<bool> isPublic = const Value.absent(),
-            Value<DateTime?> nextDueAt = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
             Value<int> version = const Value.absent(),
@@ -3065,11 +2891,7 @@ class $$DecksTableTableManager extends RootTableManager<
             userId: userId,
             title: title,
             description: description,
-            totalCards: totalCards,
-            dueCards: dueCards,
-            progress: progress,
             isPublic: isPublic,
-            nextDueAt: nextDueAt,
             createdAt: createdAt,
             updatedAt: updatedAt,
             version: version,
@@ -3081,11 +2903,7 @@ class $$DecksTableTableManager extends RootTableManager<
             required String userId,
             required String title,
             Value<String?> description = const Value.absent(),
-            Value<int> totalCards = const Value.absent(),
-            Value<int> dueCards = const Value.absent(),
-            Value<double> progress = const Value.absent(),
             Value<bool> isPublic = const Value.absent(),
-            Value<DateTime?> nextDueAt = const Value.absent(),
             required DateTime createdAt,
             required DateTime updatedAt,
             Value<int> version = const Value.absent(),
@@ -3097,11 +2915,7 @@ class $$DecksTableTableManager extends RootTableManager<
             userId: userId,
             title: title,
             description: description,
-            totalCards: totalCards,
-            dueCards: dueCards,
-            progress: progress,
             isPublic: isPublic,
-            nextDueAt: nextDueAt,
             createdAt: createdAt,
             updatedAt: updatedAt,
             version: version,
@@ -3146,28 +2960,8 @@ class $$DecksTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
-  ColumnFilters<int> get totalCards => $state.composableBuilder(
-      column: $state.table.totalCards,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
-
-  ColumnFilters<int> get dueCards => $state.composableBuilder(
-      column: $state.table.dueCards,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
-
-  ColumnFilters<double> get progress => $state.composableBuilder(
-      column: $state.table.progress,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
-
   ColumnFilters<bool> get isPublic => $state.composableBuilder(
       column: $state.table.isPublic,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
-
-  ColumnFilters<DateTime> get nextDueAt => $state.composableBuilder(
-      column: $state.table.nextDueAt,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
@@ -3215,28 +3009,8 @@ class $$DecksTableOrderingComposer
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
-  ColumnOrderings<int> get totalCards => $state.composableBuilder(
-      column: $state.table.totalCards,
-      builder: (column, joinBuilders) =>
-          ColumnOrderings(column, joinBuilders: joinBuilders));
-
-  ColumnOrderings<int> get dueCards => $state.composableBuilder(
-      column: $state.table.dueCards,
-      builder: (column, joinBuilders) =>
-          ColumnOrderings(column, joinBuilders: joinBuilders));
-
-  ColumnOrderings<double> get progress => $state.composableBuilder(
-      column: $state.table.progress,
-      builder: (column, joinBuilders) =>
-          ColumnOrderings(column, joinBuilders: joinBuilders));
-
   ColumnOrderings<bool> get isPublic => $state.composableBuilder(
       column: $state.table.isPublic,
-      builder: (column, joinBuilders) =>
-          ColumnOrderings(column, joinBuilders: joinBuilders));
-
-  ColumnOrderings<DateTime> get nextDueAt => $state.composableBuilder(
-      column: $state.table.nextDueAt,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 

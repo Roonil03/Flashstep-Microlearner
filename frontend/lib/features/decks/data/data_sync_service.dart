@@ -1,8 +1,8 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:drift/drift.dart';
 
 import '../../../core/config/api_config.dart';
 import '../../../core/storage/app_database.dart' as db;
@@ -45,8 +45,7 @@ class DeckSyncService {
         },
       );
 
-      if (downloadResponse.statusCode >= 200 &&
-          downloadResponse.statusCode < 300) {
+      if (downloadResponse.statusCode >= 200 && downloadResponse.statusCode < 300) {
         await _mergeDownloadedData(downloadResponse.body);
       }
 
@@ -59,10 +58,12 @@ class DeckSyncService {
 
       for (final item in pending) {
         final decoded = jsonDecode(item.payload);
-        if (decoded['entity'] == 'deck') {
-          decksPayload.add(Map<String, dynamic>.from(decoded as Map));
-        } else if (decoded['entity'] == 'card') {
-          cardsPayload.add(Map<String, dynamic>.from(decoded as Map));
+        if (decoded is! Map<String, dynamic>) continue;
+
+        if (item.entity == 'deck') {
+          decksPayload.add(decoded);
+        } else if (item.entity == 'card') {
+          cardsPayload.add(decoded);
         }
       }
 
@@ -79,8 +80,7 @@ class DeckSyncService {
           }),
         );
 
-        if (uploadResponse.statusCode >= 200 &&
-            uploadResponse.statusCode < 300) {
+        if (uploadResponse.statusCode >= 200 && uploadResponse.statusCode < 300) {
           final ids = pending.map((e) => e.operationId).toList();
           await (_database.delete(_database.syncQueueItems)
                 ..where((tbl) => tbl.operationId.isIn(ids)))
@@ -99,7 +99,6 @@ class DeckSyncService {
     if (decoded is! Map<String, dynamic>) return;
 
     final userId = await _storage.readUserId() ?? '';
-
     final remoteDecks = (decoded['decks'] as List<dynamic>? ?? const []);
     final remoteCards = (decoded['cards'] as List<dynamic>? ?? const []);
 
@@ -114,6 +113,10 @@ class DeckSyncService {
             DateTime.tryParse(rawDeck['updated_at']?.toString() ?? '') ??
                 DateTime.now().toUtc();
 
+        final remoteCreatedAt =
+            DateTime.tryParse(rawDeck['created_at']?.toString() ?? '') ??
+                remoteUpdatedAt;
+
         final local = await (_database.select(_database.decks)
               ..where((tbl) => tbl.id.equals(remoteId)))
             .getSingleOrNull();
@@ -125,17 +128,13 @@ class DeckSyncService {
         await _database.into(_database.decks).insertOnConflictUpdate(
               db.DecksCompanion.insert(
                 id: remoteId,
-                userId: local?.userId ?? userId,
+                userId: rawDeck['user_id']?.toString() ?? local?.userId ?? userId,
                 title: rawDeck['title']?.toString() ?? '',
                 description: Value(rawDeck['description']?.toString()),
-                totalCards: Value(local?.totalCards ?? 0),
-                dueCards: Value(local?.dueCards ?? 0),
-                progress: Value(local?.progress ?? 0),
                 isPublic: Value(rawDeck['is_public'] as bool? ?? false),
-                nextDueAt: Value(local?.nextDueAt),
-                createdAt: local?.createdAt ?? remoteUpdatedAt,
+                createdAt: local?.createdAt ?? remoteCreatedAt,
                 updatedAt: remoteUpdatedAt,
-                version: Value(rawDeck['version'] as int? ?? 1),
+                version: Value((rawDeck['version'] as num?)?.toInt() ?? 1),
                 isDeleted: Value(rawDeck['is_deleted'] as bool? ?? false),
               ),
             );
@@ -151,6 +150,18 @@ class DeckSyncService {
             DateTime.tryParse(rawCard['updated_at']?.toString() ?? '') ??
                 DateTime.now().toUtc();
 
+        final remoteCreatedAt =
+            DateTime.tryParse(rawCard['created_at']?.toString() ?? '') ??
+                remoteUpdatedAt;
+
+        final dueTimestamp = rawCard['due_timestamp'] != null
+            ? DateTime.tryParse(rawCard['due_timestamp'].toString())
+            : null;
+
+        final lastReviewedAt = rawCard['last_reviewed_at'] != null
+            ? DateTime.tryParse(rawCard['last_reviewed_at'].toString())
+            : null;
+
         final local = await (_database.select(_database.cards)
               ..where((tbl) => tbl.id.equals(remoteId)))
             .getSingleOrNull();
@@ -158,10 +169,6 @@ class DeckSyncService {
         if (local != null && local.updatedAt.isAfter(remoteUpdatedAt)) {
           continue;
         }
-
-        final dueTimestamp = rawCard['due_timestamp'] != null
-            ? DateTime.tryParse(rawCard['due_timestamp'].toString())
-            : null;
 
         await _database.into(_database.cards).insertOnConflictUpdate(
               db.CardsCompanion.insert(
@@ -171,15 +178,13 @@ class DeckSyncService {
                 back: rawCard['back']?.toString() ?? '',
                 state: Value(rawCard['state']?.toString() ?? 'new'),
                 interval: Value((rawCard['interval'] as num?)?.toDouble() ?? 0),
-                easeFactor:
-                    Value((rawCard['ease_factor'] as num?)?.toDouble() ?? 2.5),
-                repetitionCount:
-                    Value(rawCard['repetition_count'] as int? ?? 0),
+                easeFactor: Value((rawCard['ease_factor'] as num?)?.toDouble() ?? 2.5),
+                repetitionCount: Value((rawCard['repetition_count'] as num?)?.toInt() ?? 0),
                 dueTimestamp: Value(dueTimestamp),
-                lastReviewedAt: Value(local?.lastReviewedAt),
-                createdAt: local?.createdAt ?? remoteUpdatedAt,
+                lastReviewedAt: Value(lastReviewedAt),
+                createdAt: local?.createdAt ?? remoteCreatedAt,
                 updatedAt: remoteUpdatedAt,
-                version: Value(rawCard['version'] as int? ?? 1),
+                version: Value((rawCard['version'] as num?)?.toInt() ?? 1),
                 isDeleted: Value(rawCard['is_deleted'] as bool? ?? false),
               ),
             );

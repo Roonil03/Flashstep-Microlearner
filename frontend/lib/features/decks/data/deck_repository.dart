@@ -16,6 +16,8 @@ final deckRepositoryProvider = Provider<DeckRepository>((ref) {
 });
 
 class DeckRepository {
+  static const int maxCardsPerDeck = 50;
+
   final db.AppDatabase _database;
   final SessionStorage _storage;
 
@@ -42,6 +44,11 @@ class DeckRepository {
       throw StateError('No signed-in user found.');
     }
 
+    final trimmedTitle = title.trim();
+    if (trimmedTitle.isEmpty) {
+      throw StateError('Deck title cannot be empty.');
+    }
+
     final now = DateTime.now().toUtc();
     final deckId = _generateId();
     final normalizedDescription =
@@ -49,46 +56,49 @@ class DeckRepository {
             ? null
             : description.trim();
 
-    await _database.into(_database.decks).insert(
-          db.DecksCompanion.insert(
-            id: deckId,
-            userId: userId,
-            title: title.trim(),
-            description: Value(normalizedDescription),
-            totalCards: const Value(0),
-            dueCards: const Value(0),
-            progress: const Value(0),
-            isPublic: Value(isPublic),
-            nextDueAt: const Value(null),
-            createdAt: now,
-            updatedAt: now,
-            version: const Value(1),
-            isDeleted: const Value(false),
-          ),
-        );
+    await _database.transaction(() async {
+      await _database.into(_database.decks).insert(
+            db.DecksCompanion.insert(
+              id: deckId,
+              userId: userId,
+              title: trimmedTitle,
+              description: Value(normalizedDescription),
+              isPublic: Value(isPublic),
+              createdAt: now,
+              updatedAt: now,
+              version: const Value(1),
+              isDeleted: const Value(false),
+            ),
+          );
 
-    await _database.into(_database.syncQueueItems).insert(
-          db.SyncQueueItemsCompanion.insert(
-            operationId: deckId,
-            type: 'create',
-            entity: 'deck',
-            payload: 
-              jsonEncode({
+      await _database.into(_database.syncQueueItems).insert(
+            db.SyncQueueItemsCompanion.insert(
+              operationId: deckId,
+              type: 'create',
+              entity: 'deck',
+              payload: jsonEncode({
                 'id': deckId,
-                'title': title.trim(),
+                'title': trimmedTitle,
                 'description': normalizedDescription,
                 'is_public': isPublic,
                 'updated_at': now.toIso8601String(),
                 'version': 1,
                 'is_deleted': false,
               }),
-            
-            createdAt: now,
-            synced: const Value(false),
-          ),
-        );
+              createdAt: now,
+              synced: const Value(false),
+            ),
+          );
+    });
 
     return deckId;
+  }
+
+  Future<int> getCardCountForDeck(String deckId) async {
+    final cards = await (_database.select(_database.cards)
+          ..where((tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false)))
+        .get();
+    return cards.length;
   }
 
   Future<String> createCardOffline({
@@ -96,8 +106,12 @@ class DeckRepository {
     required String front,
     required String back,
   }) async {
-    final now = DateTime.now().toUtc();
-    final cardId = _generateId();
+    final trimmedFront = front.trim();
+    final trimmedBack = back.trim();
+
+    if (trimmedFront.isEmpty || trimmedBack.isEmpty) {
+      throw StateError('Card front and back are required.');
+    }
 
     final deck = await (_database.select(_database.decks)
           ..where((tbl) => tbl.id.equals(deckId) & tbl.isDeleted.equals(false)))
@@ -107,46 +121,53 @@ class DeckRepository {
       throw StateError('Deck not found.');
     }
 
-    await _database.into(_database.cards).insert(
-          db.CardsCompanion.insert(
-            id: cardId,
-            deckId: deckId,
-            front: front.trim(),
-            back: back.trim(),
-            state: const Value('new'),
-            interval: const Value(0),
-            easeFactor: const Value(2.5),
-            repetitionCount: const Value(0),
-            dueTimestamp: Value(now),
-            lastReviewedAt: const Value(null),
-            createdAt: now,
-            updatedAt: now,
-            version: const Value(1),
-            isDeleted: const Value(false),
-          ),
-        );
+    final existingCount = await getCardCountForDeck(deckId);
+    if (existingCount >= maxCardsPerDeck) {
+      throw StateError('A deck can contain at most $maxCardsPerDeck cards.');
+    }
 
-    await (_database.update(_database.decks)..where((tbl) => tbl.id.equals(deckId))).write(
-      db.DecksCompanion(
-        totalCards: Value(deck.totalCards + 1),
-        dueCards: Value(deck.dueCards + 1),
-        nextDueAt: Value(now),
-        updatedAt: Value(now),
-        version: Value(deck.version + 1),
-      ),
-    );
+    final now = DateTime.now().toUtc();
+    final cardId = _generateId();
 
-    await _database.into(_database.syncQueueItems).insert(
-          db.SyncQueueItemsCompanion.insert(
-            operationId: cardId,
-            type: 'create',
-            entity: 'card',
-            payload: 
-              jsonEncode({
+    await _database.transaction(() async {
+      await _database.into(_database.cards).insert(
+            db.CardsCompanion.insert(
+              id: cardId,
+              deckId: deckId,
+              front: trimmedFront,
+              back: trimmedBack,
+              state: const Value('new'),
+              interval: const Value(0),
+              easeFactor: const Value(2.5),
+              repetitionCount: const Value(0),
+              dueTimestamp: Value(now),
+              lastReviewedAt: const Value(null),
+              createdAt: now,
+              updatedAt: now,
+              version: const Value(1),
+              isDeleted: const Value(false),
+            ),
+          );
+
+      await (_database.update(_database.decks)
+            ..where((tbl) => tbl.id.equals(deckId)))
+          .write(
+        db.DecksCompanion(
+          updatedAt: Value(now),
+          version: Value(deck.version + 1),
+        ),
+      );
+
+      await _database.into(_database.syncQueueItems).insert(
+            db.SyncQueueItemsCompanion.insert(
+              operationId: cardId,
+              type: 'create',
+              entity: 'card',
+              payload: jsonEncode({
                 'id': cardId,
                 'deck_id': deckId,
-                'front': front.trim(),
-                'back': back.trim(),
+                'front': trimmedFront,
+                'back': trimmedBack,
                 'state': 'new',
                 'interval': 0,
                 'ease_factor': 2.5,
@@ -156,11 +177,11 @@ class DeckRepository {
                 'version': 1,
                 'is_deleted': false,
               }),
-            
-            createdAt: now,
-            synced: const Value(false),
-          ),
-        );
+              createdAt: now,
+              synced: const Value(false),
+            ),
+          );
+    });
 
     return cardId;
   }

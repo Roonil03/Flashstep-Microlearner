@@ -27,9 +27,39 @@ class AuthRepository {
       password: password,
     );
 
+    if (session.token.isEmpty) {
+      throw StateError('Login succeeded but no token was returned.');
+    }
+
     await storage.saveToken(session.token);
-    await storage.writeUsername(session.username);
-    return session;
+
+    if (session.username.isNotEmpty) {
+      await storage.writeUsername(session.username);
+    }
+
+    if (session.userId.isNotEmpty) {
+      await storage.writeUserId(session.userId);
+      return session;
+    }
+
+    final me = await api.getMe(session.token);
+
+    if (me.userId.isEmpty) {
+      throw StateError('Login succeeded but user id could not be resolved.');
+    }
+
+    if (me.username.isNotEmpty) {
+      await storage.writeUsername(me.username);
+    }
+
+    await storage.writeUserId(me.userId);
+
+    return AuthSession(
+      token: session.token,
+      userId: me.userId,
+      email: me.email.isNotEmpty ? me.email : session.email,
+      username: me.username.isNotEmpty ? me.username : session.username,
+    );
   }
 
   Future<void> register({
@@ -47,7 +77,24 @@ class AuthRepository {
   Future<bool> hasValidSession() async {
     final token = await storage.readToken();
     if (token == null || token.isEmpty) return false;
-    return api.validateToken(token);
+
+    try {
+      final me = await api.getMe(token);
+
+      if (me.userId.isEmpty) {
+        return false;
+      }
+
+      await storage.writeUserId(me.userId);
+
+      if (me.username.isNotEmpty) {
+        await storage.writeUsername(me.username);
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> logout() async {
