@@ -8,4 +8,5 @@ class AppRoutes {
   static const String createDeck = '/deck/create';
   static const String browseDecks = '/decks';
   static const String review = '/review';
+  static const deckDetail = '/deck-detail';
 }

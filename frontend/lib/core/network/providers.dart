@@ -5,6 +5,8 @@ import '../storage/session_storage.dart';
 import 'api_client.dart';
 import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
+import '../../features/decks/data/deck_repository.dart';
+import '../storage/database_provider.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 final sessionStorageProvider =
@@ -20,3 +22,7 @@ final authRepositoryProvider = Provider<AuthRepository>(
     storage: ref.read(sessionStorageProvider),
   ),
 );
+
+// final deckRepositoryProvider = Provider<DeckRepository>((ref) {
+//   return DeckRepository();
+// });

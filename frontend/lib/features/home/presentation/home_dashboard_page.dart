@@ -156,7 +156,8 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                         arguments: data.deckOfTheDay!.id,
                                       ),
                                       onOpenDeck: () => Navigator.of(context).pushNamed(
-                                        AppRoutes.browseDecks,
+                                        AppRoutes.deckDetail,
+                                        arguments: data.deckOfTheDay!.id,
                                       ),
                                     ),
                                     const SizedBox(height: 16),
@@ -212,7 +213,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                     child: _DeckCard(
                                       deck: deck,
                                       onTap: () => Navigator.of(context).pushNamed(
-                                        AppRoutes.review,
+                                        AppRoutes.deckDetail,
                                         arguments: deck.id,
                                       ),
                                     ),

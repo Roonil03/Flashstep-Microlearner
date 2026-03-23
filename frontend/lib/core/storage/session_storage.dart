@@ -35,7 +35,54 @@ class SessionStorage {
     await _storage.delete(key: _usernameKey);
   }
 
+   Future<void> writeLastSyncAt(DateTime time) async {
+    await _storage.write(
+      key: _lastSyncAtKey,
+      value: time.toIso8601String(),
+    );
+  }
+
+  Future<DateTime?> readLastSyncAt() async {
+    final value = await _storage.read(key: _lastSyncAtKey);
+    if (value == null) return null;
+    return DateTime.tryParse(value);
+  }
+
+  Future<void> clearLastSyncAt() async {
+    await _storage.delete(key: _lastSyncAtKey);
+  }
+
   Future<void> clearAll() async {
-    await _storage.deleteAll();
+    await clearToken();
+    await clearUsername();
+    await clearUserId();
+    await clearLastSyncAt();
+  }  
+
+  static const _userIdKey = 'user_id';
+  static const _lastSyncAtKey = 'last_sync_at';
+
+  // Future<void> writeUserId(String userId) async {
+  //   await _storage.write(key: _userIdKey, value: userId);
+  // }
+
+  // Future<String?> readUserId() async {
+  //   return _storage.read(key: _userIdKey);
+  // }
+
+  // Future<void> clearUserId() async {
+  //   await _storage.delete(key: _userIdKey);
+  // }
+
+  Future<void> writeUserId(String userId) async {
+    await _storage.write(key: _userIdKey, value: userId);
+  }
+
+  Future<String?> readUserId() async {
+    return _storage.read(key: _userIdKey);
+  }
+
+  Future<void> clearUserId() async {
+    await _storage.delete(key: _userIdKey);
   }
 }

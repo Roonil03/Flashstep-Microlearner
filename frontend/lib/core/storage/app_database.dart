@@ -27,7 +27,7 @@ class ReviewLogs extends Table {
 class SyncQueueItems extends Table {
   TextColumn get operationId => text()();
   TextColumn get type => text()();
-
+  TextColumn get entity => text()(); // 'deck' or 'card'
   TextColumn get payload => text()(); // JSON
 
   DateTimeColumn get createdAt => dateTime()();
@@ -43,7 +43,8 @@ class Users extends Table {
   TextColumn get email => text()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
-  
+  IntColumn get version => integer().withDefault(const Constant(1))();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   @override
   Set<Column> get primaryKey => {userId};
 }
@@ -54,11 +55,14 @@ class Decks extends Table {
   TextColumn get title => text()();
   TextColumn get description => text().nullable()();
   IntColumn get totalCards => integer().withDefault(const Constant(0))();
-  RealColumn get progress => real().withDefault(const Constant(0.0))();
+  IntColumn get dueCards => integer().withDefault(const Constant(0))();
+  RealColumn get progress => real().withDefault(const Constant(0))();
   BoolColumn get isPublic => boolean().withDefault(const Constant(false))();
   DateTimeColumn get nextDueAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
-  
+  IntColumn get version => integer().withDefault(const Constant(1))();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -68,12 +72,20 @@ class Cards extends Table {
   TextColumn get deckId => text()();
   TextColumn get front => text()();
   TextColumn get back => text()();
-  DateTimeColumn get dueAt => dateTime().nullable()();
+  TextColumn get state => text().withDefault(const Constant('new'))();
+  RealColumn get interval => real().withDefault(const Constant(0))();
+  RealColumn get easeFactor => real().withDefault(const Constant(2.5))();
+  IntColumn get repetitionCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get dueTimestamp => dateTime().nullable()();
+  DateTimeColumn get lastReviewedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
-  
+  IntColumn get version => integer().withDefault(const Constant(1))();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   @override
   Set<Column> get primaryKey => {id};
 }
+
 
 @DriftDatabase(tables: [ReviewLogs, SyncQueueItems, Users, Decks, Cards])
 class AppDatabase extends _$AppDatabase {
