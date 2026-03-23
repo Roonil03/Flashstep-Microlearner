@@ -17,8 +17,9 @@ import (
 const maxCardsPerDeck = 50
 
 type SyncUploadPayload struct {
-	Decks []map[string]interface{} `json:"decks"`
-	Cards []map[string]interface{} `json:"cards"`
+	Decks      []map[string]any `json:"decks"`
+	Cards      []map[string]any `json:"cards"`
+	ReviewLogs []map[string]any `json:"review_logs"`
 }
 
 type syncDeck struct {
@@ -47,6 +48,18 @@ type syncCard struct {
 	UpdatedAt       time.Time
 	Version         int
 	IsDeleted       bool
+}
+
+type syncReviewLog struct {
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	CardID           uuid.UUID
+	Rating           string
+	PreviousInterval float64
+	NewInterval      float64
+	ReviewedAt       time.Time
+	DeviceID         *uuid.UUID
+	CreatedAt        time.Time
 }
 
 func asString(v interface{}) string {
@@ -232,6 +245,60 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 	}, nil
 }
 
+func parseOptionalUUID(v interface{}) (*uuid.UUID, error) {
+	s := asString(v)
+	if s == "" {
+		return nil, nil
+	}
+	parsed, err := uuid.Parse(s)
+	if err != nil {
+		return nil, errors.New("invalid UUID")
+	}
+	return &parsed, nil
+}
+
+func normalizeReviewLog(raw map[string]interface{}, defaultUserID uuid.UUID) (syncReviewLog, error) {
+	id, err := parseRequiredUUID("review_log.id", raw["id"])
+	if err != nil {
+		return syncReviewLog{}, err
+	}
+	cardID, err := parseRequiredUUID("review_log.card_id", raw["card_id"])
+	if err != nil {
+		return syncReviewLog{}, err
+	}
+
+	userID := defaultUserID
+	if rawUserID := asString(raw["user_id"]); rawUserID != "" {
+		parsedUserID, err := uuid.Parse(rawUserID)
+		if err != nil {
+			return syncReviewLog{}, errors.New("review_log.user_id must be a valid UUID")
+		}
+		userID = parsedUserID
+	}
+
+	deviceID, err := parseOptionalUUID(raw["device_id"])
+	if err != nil {
+		return syncReviewLog{}, errors.New("review_log.device_id must be a valid UUID")
+	}
+
+	rating := asString(raw["rating"])
+	if rating == "" {
+		return syncReviewLog{}, errors.New("review_log.rating is required")
+	}
+
+	return syncReviewLog{
+		ID:               id,
+		UserID:           userID,
+		CardID:           cardID,
+		Rating:           rating,
+		PreviousInterval: asFloat64(raw["previous_interval"]),
+		NewInterval:      asFloat64(raw["new_interval"]),
+		ReviewedAt:       parseTimeOrZero(raw["reviewed_at"]),
+		DeviceID:         deviceID,
+		CreatedAt:        parseTimeOrZero(raw["created_at"]),
+	}, nil
+}
+
 func SyncUpload(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(strings.TrimSpace(userIDStr))
@@ -274,6 +341,16 @@ func SyncUpload(c *gin.Context) {
 			}
 		}
 		cards = append(cards, card)
+	}
+
+	reviewLogs := make([]syncReviewLog, 0, len(payload.ReviewLogs))
+	for _, raw := range payload.ReviewLogs {
+		reviewLog, err := normalizeReviewLog(raw, userID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		reviewLogs = append(reviewLogs, reviewLog)
 	}
 
 	sort.SliceStable(decks, func(i, j int) bool {
@@ -420,14 +497,60 @@ func SyncUpload(c *gin.Context) {
 		}
 	}
 
+	for _, logItem := range reviewLogs {
+		var cardBelongsToUser bool
+		err := tx.QueryRow(`
+        SELECT EXISTS(
+            SELECT 1
+            FROM cards c
+            JOIN decks d ON d.id = c.deck_id
+            WHERE c.id=$1 AND d.user_id=$2
+        )
+    `, logItem.CardID, userID).Scan(&cardBelongsToUser)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !cardBelongsToUser {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "review log references a missing or unauthorized card"})
+			return
+		}
+
+		_, err = tx.Exec(`
+        INSERT INTO review_logs (
+            id, user_id, card_id, rating,
+            previous_interval, new_interval,
+            reviewed_at, device_id, created_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (id) DO NOTHING
+    `,
+			logItem.ID,
+			userID,
+			logItem.CardID,
+			logItem.Rating,
+			logItem.PreviousInterval,
+			logItem.NewInterval,
+			logItem.ReviewedAt,
+			logItem.DeviceID,
+			logItem.CreatedAt,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":          "synced",
-		"decks_processed": len(decks),
-		"cards_processed": len(cards),
+		"status":                "synced",
+		"decks_processed":       len(decks),
+		"cards_processed":       len(cards),
+		"review_logs_processed": len(reviewLogs),
+		"server_time":           time.Now().UTC().Format(time.RFC3339),
 	})
 }

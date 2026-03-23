@@ -55,33 +55,119 @@ DELETE /cards/:id
 ### Upload Changes (Client → Server)
 POST /sync/upload
 
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+
 Payload:
 {
-  "decks": [],
-  "cards": []
+  "decks": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "title": "Operating Systems",
+      "description": "Short OS review deck",
+      "is_public": false,
+      "created_at": "2026-03-24T10:00:00Z",
+      "updated_at": "2026-03-24T10:00:00Z",
+      "version": 1,
+      "is_deleted": false
+    }
+  ],
+  "cards": [
+    {
+      "id": "uuid",
+      "deck_id": "uuid",
+      "front": "What does a mutex do?",
+      "back": "It provides mutual exclusion for critical sections.",
+      "state": "review",
+      "interval": 6,
+      "ease_factor": 2.5,
+      "repetition_count": 3,
+      "due_timestamp": "2026-03-30T10:00:00Z",
+      "last_reviewed_at": "2026-03-24T10:00:00Z",
+      "created_at": "2026-03-21T10:00:00Z",
+      "updated_at": "2026-03-24T10:00:00Z",
+      "version": 4,
+      "is_deleted": false
+    }
+  ],
+  "review_logs": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "card_id": "uuid",
+      "rating": "good",
+      "previous_interval": 2,
+      "new_interval": 6,
+      "reviewed_at": "2026-03-24T10:00:00Z",
+      "device_id": null,
+      "created_at": "2026-03-24T10:00:00Z"
+    }
+  ]
 }
 
----
+Response (200):
+{
+  "status": "synced",
+  "decks_processed": 1,
+  "cards_processed": 1,
+  "review_logs_processed": 1,
+  "server_time": "2026-03-24T10:00:01Z"
+}
+
+Errors:
+- 400 Bad Request: invalid payload, invalid UUID, missing required fields, missing deck/card references, or deck exceeds 50-card limit
+- 401 Unauthorized: invalid or missing JWT
+- 500 Internal Server Error: server/database error while applying sync
 
 ### Download Changes (Server → Client)
 GET /sync/download?since=2026-03-21T00:00:00Z
 
-Response:
+Authorization: Bearer <JWT_TOKEN>
+
+Response (200):
 {
-  "decks": [],
-  "cards": []
+  "decks": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "title": "Operating Systems",
+      "description": "Short OS review deck",
+      "is_public": false,
+      "created_at": "2026-03-21T10:00:00Z",
+      "updated_at": "2026-03-24T10:00:00Z",
+      "version": 3,
+      "is_deleted": false
+    }
+  ],
+  "cards": [
+    {
+      "id": "uuid",
+      "deck_id": "uuid",
+      "front": "What does a mutex do?",
+      "back": "It provides mutual exclusion for critical sections.",
+      "state": "review",
+      "interval": 6,
+      "ease_factor": 2.5,
+      "repetition_count": 3,
+      "due_timestamp": "2026-03-30T10:00:00Z",
+      "last_reviewed_at": "2026-03-24T10:00:00Z",
+      "created_at": "2026-03-21T10:00:00Z",
+      "updated_at": "2026-03-24T10:00:00Z",
+      "version": 4,
+      "is_deleted": false
+    }
+  ],
+  "server_time": "2026-03-24T10:00:01Z"
 }
 
----
-
-## SYNC RULES
-
-- Uses **updated_at** for conflict resolution
-- Last-write-wins
-- Supports soft delete (`is_deleted`)
-- Supports versioning
-
----
+Rules:
+- local database is the source of truth while offline
+- the client uploads queued mutations first, then downloads server updates
+- conflict resolution is last-write-wins using `updated_at`
+- if timestamps are equal, server data wins
+- soft delete is respected through `is_deleted`
+- version numbers must increment on every logical update
 
 ## AUTH HEADER
 

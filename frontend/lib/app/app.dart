@@ -8,6 +8,7 @@ import '../features/decks/presentation/deck_detail_page.dart';
 import '../features/home/presentation/home_dashboard_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/splash/presentation/splash_screen.dart';
+import '../features/review/presentation/start_review_page.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -32,7 +33,7 @@ class App extends ConsumerWidget {
         AppRoutes.analytics: (_) => const _PlaceholderPage(title: 'Analytics Page'),
         AppRoutes.settings: (_) => const SettingsPage(),
         AppRoutes.browseDecks: (_) => const _PlaceholderPage(title: 'Browse Decks Page'),
-        AppRoutes.review: (_) => const _PlaceholderPage(title: 'Start Review Page'),
+        AppRoutes.review: (_) => const StartReviewPage(),
         AppRoutes.createDeck: (_) => const CreateDeckPage(),
         AppRoutes.deckDetail: (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
