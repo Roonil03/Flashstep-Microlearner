@@ -2,16 +2,51 @@ package v1
 
 import (
 	"backend/internal/db"
+	"database/sql"
+	"errors"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+const maxCardsPerDeck = 50
 
 type SyncUploadPayload struct {
 	Decks []map[string]interface{} `json:"decks"`
 	Cards []map[string]interface{} `json:"cards"`
+}
+
+type syncDeck struct {
+	ID          uuid.UUID
+	Title       string
+	Description *string
+	IsPublic    bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int
+	IsDeleted   bool
+}
+
+type syncCard struct {
+	ID              uuid.UUID
+	DeckID          uuid.UUID
+	Front           string
+	Back            string
+	State           string
+	Interval        float64
+	EaseFactor      float64
+	RepetitionCount int
+	DueTimestamp    *time.Time
+	LastReviewedAt  *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Version         int
+	IsDeleted       bool
 }
 
 func asString(v interface{}) string {
@@ -20,7 +55,7 @@ func asString(v interface{}) string {
 	}
 	switch t := v.(type) {
 	case string:
-		return t
+		return strings.TrimSpace(t)
 	default:
 		return ""
 	}
@@ -54,7 +89,7 @@ func asInt(v interface{}) int {
 	case float64:
 		return int(t)
 	case string:
-		n, _ := strconv.Atoi(t)
+		n, _ := strconv.Atoi(strings.TrimSpace(t))
 		return n
 	default:
 		return 0
@@ -77,14 +112,26 @@ func asFloat64(v interface{}) float64 {
 	case int64:
 		return float64(t)
 	case string:
-		n, _ := strconv.ParseFloat(t, 64)
+		n, _ := strconv.ParseFloat(strings.TrimSpace(t), 64)
 		return n
 	default:
 		return 0
 	}
 }
 
-func asTimePtr(v interface{}) *time.Time {
+func parseTimeOrZero(v interface{}) time.Time {
+	s := asString(v)
+	if s == "" {
+		return time.Now().UTC()
+	}
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Now().UTC()
+	}
+	return parsed.UTC()
+}
+
+func parseOptionalTime(v interface{}) *time.Time {
 	s := asString(v)
 	if s == "" {
 		return nil
@@ -93,28 +140,165 @@ func asTimePtr(v interface{}) *time.Time {
 	if err != nil {
 		return nil
 	}
-	return &parsed
+	t := parsed.UTC()
+	return &t
+}
+
+func parseRequiredUUID(field string, v interface{}) (uuid.UUID, error) {
+	s := asString(v)
+	if s == "" {
+		return uuid.Nil, errors.New(field + " is required")
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil, errors.New(field + " must be a valid UUID")
+	}
+	return id, nil
+}
+
+func normalizeNullableString(v interface{}) *string {
+	s := asString(v)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func normalizeDeck(raw map[string]interface{}) (syncDeck, error) {
+	id, err := parseRequiredUUID("deck.id", raw["id"])
+	if err != nil {
+		return syncDeck{}, err
+	}
+
+	createdAt := parseTimeOrZero(raw["created_at"])
+	updatedAt := parseTimeOrZero(raw["updated_at"])
+	if createdAt.After(updatedAt) {
+		createdAt = updatedAt
+	}
+
+	return syncDeck{
+		ID:          id,
+		Title:       asString(raw["title"]),
+		Description: normalizeNullableString(raw["description"]),
+		IsPublic:    asBool(raw["is_public"]),
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+		Version:     asInt(raw["version"]),
+		IsDeleted:   asBool(raw["is_deleted"]),
+	}, nil
+}
+
+func normalizeCard(raw map[string]interface{}) (syncCard, error) {
+	id, err := parseRequiredUUID("card.id", raw["id"])
+	if err != nil {
+		return syncCard{}, err
+	}
+	deckID, err := parseRequiredUUID("card.deck_id", raw["deck_id"])
+	if err != nil {
+		return syncCard{}, err
+	}
+
+	createdAt := parseTimeOrZero(raw["created_at"])
+	updatedAt := parseTimeOrZero(raw["updated_at"])
+	if createdAt.After(updatedAt) {
+		createdAt = updatedAt
+	}
+
+	state := asString(raw["state"])
+	if state == "" {
+		state = "new"
+	}
+
+	easeFactor := asFloat64(raw["ease_factor"])
+	if easeFactor == 0 {
+		easeFactor = 2.5
+	}
+
+	return syncCard{
+		ID:              id,
+		DeckID:          deckID,
+		Front:           asString(raw["front"]),
+		Back:            asString(raw["back"]),
+		State:           state,
+		Interval:        asFloat64(raw["interval"]),
+		EaseFactor:      easeFactor,
+		RepetitionCount: asInt(raw["repetition_count"]),
+		DueTimestamp:    parseOptionalTime(raw["due_timestamp"]),
+		LastReviewedAt:  parseOptionalTime(raw["last_reviewed_at"]),
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
+		Version:         asInt(raw["version"]),
+		IsDeleted:       asBool(raw["is_deleted"]),
+	}, nil
 }
 
 func SyncUpload(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userIDStr := c.GetString("user_id")
+	userID, err := uuid.Parse(strings.TrimSpace(userIDStr))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id in auth context"})
+		return
+	}
+
 	var payload SyncUploadPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	decks := make([]syncDeck, 0, len(payload.Decks))
+	for _, raw := range payload.Decks {
+		deck, err := normalizeDeck(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if strings.TrimSpace(deck.Title) == "" && !deck.IsDeleted {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "deck.title is required"})
+			return
+		}
+		decks = append(decks, deck)
+	}
+
+	cards := make([]syncCard, 0, len(payload.Cards))
+	for _, raw := range payload.Cards {
+		card, err := normalizeCard(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !card.IsDeleted {
+			if strings.TrimSpace(card.Front) == "" || strings.TrimSpace(card.Back) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "card front and back are required"})
+				return
+			}
+		}
+		cards = append(cards, card)
+	}
+
+	sort.SliceStable(decks, func(i, j int) bool {
+		return decks[i].UpdatedAt.Before(decks[j].UpdatedAt)
+	})
+	sort.SliceStable(cards, func(i, j int) bool {
+		return cards[i].UpdatedAt.Before(cards[j].UpdatedAt)
+	})
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	for _, d := range payload.Decks {
-		id := asString(d["id"])
-		updatedAtStr := asString(d["updated_at"])
-		updatedAt, _ := time.Parse(time.RFC3339, updatedAtStr)
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	for _, d := range decks {
 		_, err := tx.Exec(`
-			INSERT INTO decks (id, user_id, title, description, is_public, updated_at, version, is_deleted)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO decks (
+				id, user_id, title, description, is_public,
+				created_at, updated_at, version, is_deleted
+			)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 			ON CONFLICT (id) DO UPDATE
 			SET title=EXCLUDED.title,
 			    description=EXCLUDED.description,
@@ -122,90 +306,87 @@ func SyncUpload(c *gin.Context) {
 			    updated_at=EXCLUDED.updated_at,
 			    version=EXCLUDED.version,
 			    is_deleted=EXCLUDED.is_deleted
-			WHERE decks.updated_at < EXCLUDED.updated_at
+			WHERE decks.user_id = $2
+			  AND decks.updated_at < EXCLUDED.updated_at
 		`,
-			id,
+			d.ID,
 			userID,
-			asString(d["title"]),
-			asString(d["description"]),
-			asBool(d["is_public"]),
-			updatedAt,
-			asInt(d["version"]),
-			asBool(d["is_deleted"]),
+			d.Title,
+			d.Description,
+			d.IsPublic,
+			d.CreatedAt,
+			d.UpdatedAt,
+			d.Version,
+			d.IsDeleted,
 		)
 		if err != nil {
-			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	}
-	for _, card := range payload.Cards {
-		id := asString(card["id"])
-		deckID := asString(card["deck_id"])
-		updatedAtStr := asString(card["updated_at"])
-		updatedAt, _ := time.Parse(time.RFC3339, updatedAtStr)
-		isDeleted := asBool(card["is_deleted"])
+
+	for _, card := range cards {
 		var deckExists bool
 		err := tx.QueryRow(`
 			SELECT EXISTS(
 				SELECT 1
 				FROM decks
-				WHERE id=$1 AND user_id=$2 AND is_deleted=false
+				WHERE id=$1 AND user_id=$2
 			)
-		`, deckID, userID).Scan(&deckExists)
+		`, card.DeckID, userID).Scan(&deckExists)
 		if err != nil {
-			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		if !deckExists {
-			_ = tx.Rollback()
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid deck in sync payload"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "card references a missing or unauthorized deck"})
 			return
 		}
-		if !isDeleted {
-			var cardAlreadyExists bool
+
+		var existingUpdatedAt sql.NullTime
+		var existingDeleted sql.NullBool
+		err = tx.QueryRow(`
+			SELECT updated_at, is_deleted
+			FROM cards
+			WHERE id=$1
+		`, card.ID).Scan(&existingUpdatedAt, &existingDeleted)
+
+		cardExists := true
+		if err == sql.ErrNoRows {
+			cardExists = false
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if !cardExists && !card.IsDeleted {
+			var activeCount int
 			err = tx.QueryRow(`
-				SELECT EXISTS(
-					SELECT 1
-					FROM cards
-					WHERE id=$1
-				)
-			`, id).Scan(&cardAlreadyExists)
+				SELECT COUNT(*)
+				FROM cards
+				WHERE deck_id=$1 AND is_deleted=false
+			`, card.DeckID).Scan(&activeCount)
 			if err != nil {
-				_ = tx.Rollback()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			if !cardAlreadyExists {
-				var cardCount int
-				err = tx.QueryRow(`
-					SELECT COUNT(*)
-					FROM cards
-					WHERE deck_id=$1 AND is_deleted=false
-				`, deckID).Scan(&cardCount)
-				if err != nil {
-					_ = tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
-				if cardCount >= maxCardsPerDeck {
-					_ = tx.Rollback()
-					c.JSON(http.StatusBadRequest, gin.H{"error": "a deck can contain at most 50 cards"})
-					return
-				}
+			if activeCount >= maxCardsPerDeck {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "a deck can contain at most 50 cards"})
+				return
 			}
 		}
+
 		_, err = tx.Exec(`
 			INSERT INTO cards (
 				id, deck_id, front, back, state,
 				interval, ease_factor, repetition_count,
 				due_timestamp, last_reviewed_at,
-				updated_at, version, is_deleted
+				created_at, updated_at, version, is_deleted
 			)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 			ON CONFLICT (id) DO UPDATE
-			SET front=EXCLUDED.front,
+			SET deck_id=EXCLUDED.deck_id,
+			    front=EXCLUDED.front,
 			    back=EXCLUDED.back,
 			    state=EXCLUDED.state,
 			    interval=EXCLUDED.interval,
@@ -218,31 +399,35 @@ func SyncUpload(c *gin.Context) {
 			    is_deleted=EXCLUDED.is_deleted
 			WHERE cards.updated_at < EXCLUDED.updated_at
 		`,
-			id,
-			deckID,
-			asString(card["front"]),
-			asString(card["back"]),
-			asString(card["state"]),
-			asFloat64(card["interval"]),
-			asFloat64(card["ease_factor"]),
-			asInt(card["repetition_count"]),
-			asTimePtr(card["due_timestamp"]),
-			asTimePtr(card["last_reviewed_at"]),
-			updatedAt,
-			asInt(card["version"]),
-			isDeleted,
+			card.ID,
+			card.DeckID,
+			card.Front,
+			card.Back,
+			card.State,
+			card.Interval,
+			card.EaseFactor,
+			card.RepetitionCount,
+			card.DueTimestamp,
+			card.LastReviewedAt,
+			card.CreatedAt,
+			card.UpdatedAt,
+			card.Version,
+			card.IsDeleted,
 		)
 		if err != nil {
-			_ = tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "synced",
+		"status":          "synced",
+		"decks_processed": len(decks),
+		"cards_processed": len(cards),
 	})
 }

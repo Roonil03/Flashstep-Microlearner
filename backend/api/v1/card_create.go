@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxCardsPerDeck = 50
-
 type CreateCardRequest struct {
 	DeckID string `json:"deck_id"`
 	Front  string `json:"front"`
@@ -18,27 +16,41 @@ type CreateCardRequest struct {
 }
 
 func CreateCard(c *gin.Context) {
-	userID := c.GetString("user_id")
+	userIDStr := c.GetString("user_id")
+	userID, err := uuid.Parse(strings.TrimSpace(userIDStr))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id in auth context"})
+		return
+	}
+
 	var req CreateCardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	req.DeckID = strings.TrimSpace(req.DeckID)
-	req.Front = strings.TrimSpace(req.Front)
-	req.Back = strings.TrimSpace(req.Back)
-	if req.DeckID == "" || req.Front == "" || req.Back == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deck_id, front and back are required"})
+
+	deckID, err := uuid.Parse(strings.TrimSpace(req.DeckID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "deck_id must be a valid UUID"})
 		return
 	}
+
+	req.Front = strings.TrimSpace(req.Front)
+	req.Back = strings.TrimSpace(req.Back)
+
+	if req.Front == "" || req.Back == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "front and back are required"})
+		return
+	}
+
 	var exists bool
-	err := db.DB.QueryRow(`
+	err = db.DB.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1
 			FROM decks
 			WHERE id=$1 AND user_id=$2 AND is_deleted=false
 		)
-	`, req.DeckID, userID).Scan(&exists)
+	`, deckID, userID).Scan(&exists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -47,12 +59,13 @@ func CreateCard(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "invalid deck"})
 		return
 	}
+
 	var cardCount int
 	err = db.DB.QueryRow(`
 		SELECT COUNT(*)
 		FROM cards
 		WHERE deck_id=$1 AND is_deleted=false
-	`, req.DeckID).Scan(&cardCount)
+	`, deckID).Scan(&cardCount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -61,15 +74,21 @@ func CreateCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "a deck can contain at most 50 cards"})
 		return
 	}
-	id := uuid.New().String()
-	query := `
-		INSERT INTO cards (id, deck_id, front, back, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-	`
-	_, err = db.DB.Exec(query, id, req.DeckID, req.Front, req.Back)
+
+	id := uuid.New()
+	_, err = db.DB.Exec(`
+		INSERT INTO cards (
+			id, deck_id, front, back, state,
+			interval, ease_factor, repetition_count,
+			due_timestamp, last_reviewed_at,
+			created_at, updated_at, version, is_deleted
+		)
+		VALUES ($1,$2,$3,$4,'new',0,2.5,0,NOW(),NULL,NOW(),NOW(),1,false)
+	`, id, deckID, req.Front, req.Back)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": id})
+
+	c.JSON(http.StatusCreated, gin.H{"id": id.String()})
 }

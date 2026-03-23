@@ -5,6 +5,7 @@ import '../../../app/router.dart';
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
 import '../data/home_repository.dart';
+import '../../decks/data/data_sync_service.dart';
 import '../domain/home_dashboard_models.dart';
 
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
@@ -53,6 +54,7 @@ class HomeDashboardPage extends ConsumerStatefulWidget {
 
 class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   Future<void> _refreshDashboard() async {
+    await ref.read(deckSyncServiceProvider).syncNow();
     ref.invalidate(usernameProvider);
     ref.invalidate(userDecksProvider);
     ref.invalidate(homeDashboardProvider);

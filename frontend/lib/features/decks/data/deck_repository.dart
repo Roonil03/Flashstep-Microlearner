@@ -7,11 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
+import 'package:uuid/uuid.dart';
+
+final _uuid = Uuid();
 
 final deckRepositoryProvider = Provider<DeckRepository>((ref) {
   return DeckRepository(
     database: ref.read(appDatabaseProvider),
-    storage: const SessionStorage(),
+    storage: SessionStorage(),
   );
 });
 
@@ -27,11 +30,15 @@ class DeckRepository {
   })  : _database = database,
         _storage = storage;
 
+  // String _generateId() {
+  //   final random = Random();
+  //   final millis = DateTime.now().microsecondsSinceEpoch;
+  //   final suffix = random.nextInt(1 << 32);
+  //   return '$millis$suffix';
+  // }
+
   String _generateId() {
-    final random = Random();
-    final millis = DateTime.now().microsecondsSinceEpoch;
-    final suffix = random.nextInt(1 << 32);
-    return '$millis$suffix';
+    return _uuid.v4();
   }
 
   Future<String> createDeckOffline({
