@@ -18,7 +18,7 @@
 
 
 ## System Architecture Flow:
-User    ->      Flutter App     ->      State Management (Riverpod & Bloc)      ->      Local Database (Isar/Drift)     ->      Sync Engine (Background Worker)     ->      REST API(Go Backend using GoFr, Gin and Fiber)      ->     PostgreSQL Database
+User    ->      Flutter App     ->      State Management (Riverpod & Bloc)      ->      Local Database (Drift)     ->      Sync Engine (Background Worker)     ->      REST API(Go Backend using GoFr, Gin and Fiber)      ->     PostgreSQL Database
 
 
 ## Functional Requirements:
