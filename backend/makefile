@@ -42,21 +42,21 @@ install-linux: main
 	printf "\n"; \
 	\
 	rm -f .env; \
-	printf "POSTGRES_USER=%s\n" "$POSTGRES_USER" >> .env; \
-	printf "POSTGRES_PASSWORD=%s\n" "$POSTGRES_PASSWORD" >> .env; \
-	printf "POSTGRES_DB=%s\n" "$POSTGRES_DB" >> .env; \
-	printf "JWT_SECRECY=%s\n\n" "$JWT_SECRECY" >> .env; \
+	printf "POSTGRES_USER=%s\n" "$$POSTGRES_USER" >> .env; \
+	printf "POSTGRES_PASSWORD=%s\n" "$$POSTGRES_PASSWORD" >> .env; \
+	printf "POSTGRES_DB=%s\n" "$$POSTGRES_DB" >> .env; \
+	printf "JWT_SECRECY=%s\n\n" "$$JWT_SECRECY" >> .env; \
 	printf "PORT=8080\n\n" >> .env; \
 	printf "DB_HOST=flashcards_postgres\n" >> .env; \
 	printf "DB_PORT=5433\n" >> .env; \
 	printf "GO_PORT=5432\n" >> .env; \
-	printf "DB_USER=%s\n" "$POSTGRES_USER" >> .env; \
-	printf "DB_PASSWORD=%s\n" "$POSTGRES_PASSWORD" >> .env; \
-	printf "DB_NAME=%s\n" "$POSTGRES_DB" >> .env; \
+	printf "DB_USER=%s\n" "$$POSTGRES_USER" >> .env; \
+	printf "DB_PASSWORD=%s\n" "$$POSTGRES_PASSWORD" >> .env; \
+	printf "DB_NAME=%s\n" "$$POSTGRES_DB" >> .env; \
 	printf "DB_SSLMODE=disable\n\n" >> .env; \
-	printf "JWT_SECRET=%s\n" "$JWT_SECRECY" >> .env; \
-	printf "JWT_EXPIRY_MINUTES=120\n" >> .env; \
-	sudo bash ./do.sh
+	printf "JWT_SECRET=%s\n" "$$JWT_SECRECY" >> .env; \
+	printf "JWT_EXPIRY_MINUTES=120\n" >> .env;
+	sudo bash ./deployments/do.sh
 
 install-win: main
 	cd deployments

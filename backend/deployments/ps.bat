@@ -139,7 +139,6 @@ if ($migrationFile) {
     # Read migration file and execute
     $migrationContent = Get-Content $migrationFile -Raw
     $migrationContent | docker exec -i flashcards_postgres psql -U $postgresUser -d $postgresDB
-    $migrationContent | docker exec -i flashcards_postgres psql -U $postgresUser -d $postgresDB
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Migrations completed!" -ForegroundColor Green
