@@ -40,7 +40,8 @@ POSTGRES_DB=$postgresDB
 PORT=8080
 
 DB_HOST=postgres
-DB_PORT=5432
+DB_PORT=5433
+GO_POST=5432
 DB_USER=$postgresUser
 DB_PASSWORD=$plainPassword
 DB_NAME=$postgresDB

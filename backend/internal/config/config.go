@@ -26,7 +26,7 @@ func Load() *Config {
 	cfg := &Config{
 		Port:            getEnv("PORT", "8080"),
 		DBHost:          getEnv("DB_HOST", "localhost"),
-		DBPort:          getEnv("DB_PORT", "5432"),
+		DBPort:          getEnv("GO_PORT", "5432"),
 		DBUser:          getEnv("DB_USER", "postgres"),
 		DBPassword:      getEnv("DB_PASSWORD", "postgres"),
 		DBName:          getEnv("DB_NAME", "flashcards"),

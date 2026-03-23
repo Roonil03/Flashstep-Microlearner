@@ -76,3 +76,38 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (models.User, 
 	}
 	return u, err
 }
+
+func (r *UserRepository) GetByID(id string) (*models.User, error) {
+	var user models.User
+	err := r.DB.QueryRow(`
+		SELECT id, username, email, password_hash, is_deleted
+		FROM users
+		WHERE id = $1
+	`, id).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.IsDeleted)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) UpdatePassword(userID, newHash string) error {
+	_, err := r.DB.Exec(`
+		UPDATE users
+		SET password_hash = $1,
+		    updated_at = NOW(),
+		    version = version + 1
+		WHERE id = $2 AND is_deleted = FALSE
+	`, newHash, userID)
+	return err
+}
+
+func (r *UserRepository) SoftDeleteUser(userID string) error {
+	_, err := r.DB.Exec(`
+		UPDATE users
+		SET is_deleted = TRUE,
+		    updated_at = NOW(),
+		    version = version + 1
+		WHERE id = $1
+	`, userID)
+	return err
+}

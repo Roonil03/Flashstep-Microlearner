@@ -102,6 +102,9 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthResponse
 	if err != nil {
 		return AuthResponse{}, ErrInvalidCredentials
 	}
+	if user.IsDeleted {
+		return AuthResponse{}, ErrInvalidCredentials
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
 		return AuthResponse{}, ErrInvalidCredentials
 	}

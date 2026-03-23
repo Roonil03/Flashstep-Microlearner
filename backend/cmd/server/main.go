@@ -28,6 +28,8 @@ func main() {
 	analyticsRepo := repositories.NewAnalyticsRepository(conn)
 	analyticsService := services.NewAnalyticsService(analyticsRepo)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
+	userService := services.NewUserService(userRepo)
+	userHandler := handlers.NewUserHandler(userService)
 	// router := gin.Default()
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
@@ -63,6 +65,10 @@ func main() {
 			protected.GET("/analytics/average-session-length", analyticsHandler.AverageSessionLength)
 			protected.GET("/analytics/accuracy-trends", analyticsHandler.AccuracyTrends)
 			protected.GET("/analytics/deck-performance", analyticsHandler.DeckPerformance)
+		}
+		{
+			protected.PUT("/auth/change-password", userHandler.ChangePassword)
+			protected.DELETE("/auth/delete-account", userHandler.DeleteAccount)
 		}
 	}
 	log.Printf("server listening on :%s", cfg.Port)
