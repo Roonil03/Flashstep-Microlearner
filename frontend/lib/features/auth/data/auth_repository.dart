@@ -45,4 +45,22 @@ class AuthRepository {
   Future<void> logout() async {
     await storage.clearAll();
   }
+
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final token = await _requireToken();
+    await api.changePassword(
+      token: token,
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  Future<void> deleteAccount() async {
+    final token = await _requireToken();
+    await api.deleteAccount(token: token);
+    await storage.clearAll();
+  }
 }

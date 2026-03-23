@@ -138,11 +138,344 @@ class _MainSettings extends StatelessWidget {
   }
 }
 
-class _AccountSettings extends StatelessWidget {
+class _AccountSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   const _AccountSettings({required this.onBack});
 
+  @override
+  ConsumerState<_AccountSettings> createState() => _AccountSettingsState();
+}
+
+class _AccountSettingsState extends ConsumerState<_AccountSettings> {
+  Future<void> _showChangePasswordDialog() async {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    bool isSubmitting = false;
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    String? errorText;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: !isSubmitting,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              Future<void> submit() async {
+                if (isSubmitting) return;
+
+                final oldPassword = oldPasswordController.text.trim();
+                final newPassword = newPasswordController.text.trim();
+                final confirmPassword = confirmPasswordController.text.trim();
+
+                if (oldPassword.isEmpty ||
+                    newPassword.isEmpty ||
+                    confirmPassword.isEmpty) {
+                  setStateDialog(() {
+                    errorText = 'All fields are required.';
+                  });
+                  return;
+                }
+
+                if (newPassword.length < 8) {
+                  setStateDialog(() {
+                    errorText = 'New password must be at least 8 characters.';
+                  });
+                  return;
+                }
+
+                if (newPassword != confirmPassword) {
+                  setStateDialog(() {
+                    errorText = 'New passwords do not match.';
+                  });
+                  return;
+                }
+
+                setStateDialog(() {
+                  isSubmitting = true;
+                  errorText = null;
+                });
+
+                try {
+                  await ref.read(authRepositoryProvider).changePassword(
+                        oldPassword: oldPassword,
+                        newPassword: newPassword,
+                      );
+
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password updated successfully')),
+                  );
+                } catch (e) {
+                  if (!dialogContext.mounted) return;
+                  setStateDialog(() {
+                    errorText = _messageFromError(e);
+                  });
+                } finally {
+                  if (dialogContext.mounted) {
+                    setStateDialog(() {
+                      isSubmitting = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: const Text('Change Password'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (errorText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                      TextField(
+                        controller: oldPasswordController,
+                        obscureText: obscureOld,
+                        enabled: !isSubmitting,
+                        decoration: InputDecoration(
+                          labelText: 'Current Password',
+                          suffixIcon: IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () {
+                                    setStateDialog(() {
+                                      obscureOld = !obscureOld;
+                                    });
+                                  },
+                            icon: Icon(
+                              obscureOld ? Icons.visibility_off : Icons.visibility,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: newPasswordController,
+                        obscureText: obscureNew,
+                        enabled: !isSubmitting,
+                        decoration: InputDecoration(
+                          labelText: 'New Password',
+                          suffixIcon: IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () {
+                                    setStateDialog(() {
+                                      obscureNew = !obscureNew;
+                                    });
+                                  },
+                            icon: Icon(
+                              obscureNew ? Icons.visibility_off : Icons.visibility,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: confirmPasswordController,
+                        obscureText: obscureConfirm,
+                        enabled: !isSubmitting,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm New Password',
+                          suffixIcon: IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () {
+                                    setStateDialog(() {
+                                      obscureConfirm = !obscureConfirm;
+                                    });
+                                  },
+                            icon: Icon(
+                              obscureConfirm ? Icons.visibility_off : Icons.visibility,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSubmitting
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: isSubmitting ? null : submit,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Update'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      oldPasswordController.dispose();
+      newPasswordController.dispose();
+      confirmPasswordController.dispose();
+    }
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    final confirmController = TextEditingController();
+    bool isDeleting = false;
+    String? errorText;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: !isDeleting,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              Future<void> submit() async {
+                if (isDeleting) return;
+
+                final confirmation = confirmController.text.trim().toUpperCase();
+                if (confirmation != 'DELETE') {
+                  setStateDialog(() {
+                    errorText = 'Type DELETE to confirm.';
+                  });
+                  return;
+                }
+
+                setStateDialog(() {
+                  isDeleting = true;
+                  errorText = null;
+                });
+
+                try {
+                  await ref.read(authRepositoryProvider).deleteAccount();
+
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+
+                  if (!mounted) return;
+
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    AppRoutes.login,
+                    (route) => false,
+                  );
+                } catch (e) {
+                  if (!dialogContext.mounted) return;
+                  setStateDialog(() {
+                    errorText = _messageFromError(e);
+                  });
+                } finally {
+                  if (dialogContext.mounted) {
+                    setStateDialog(() {
+                      isDeleting = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: const Text('Delete Account'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This action permanently deletes your account. '
+                        'All account data will be removed from the server.',
+                      ),
+                      const SizedBox(height: 16),
+                      if (errorText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                      TextField(
+                        controller: confirmController,
+                        enabled: !isDeleting,
+                        decoration: const InputDecoration(
+                          labelText: 'Type DELETE to confirm',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isDeleting
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: isDeleting ? null : submit,
+                    child: isDeleting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Delete'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      confirmController.dispose();
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

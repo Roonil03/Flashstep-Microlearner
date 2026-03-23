@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_endpoints.dart';
 
 class AuthSession {
   final String token;
@@ -41,6 +42,60 @@ class AuthSession {
 class AuthApi {
   final ApiClient _client;
   AuthApi(this._client);
+
+   Map<String, String> _jsonHeaders([String? token]) {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
+  Map<String, String> _authHeaders(String token) {
+    return {
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  String _extractErrorMessage(http.Response response, {String fallback = 'Request failed'}) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final error = decoded['error'];
+        if (error is String && error.trim().isNotEmpty) {
+          return error.trim();
+        }
+      }
+    } catch (_) {
+    }
+
+    final body = response.body.trim();
+    if (body.isNotEmpty) {
+      return body;
+    }
+    return fallback;
+  }
+
+  Future<http.Response> _fetchMeResponse(String token) async {
+    http.Response? lastResponse;
+
+    for (final path in <String>[ApiEndpoints.me, ApiEndpoints.authMe]) {
+      final response = await http.get(
+        _client.uri(path),
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response;
+      }
+      lastResponse = response;
+    }
+
+    return lastResponse!;
+  }
+
   Future<void> register({
     required String email,
     required String username,
@@ -111,5 +166,41 @@ class AuthApi {
       throw Exception('Unexpected response format');
     }
     return AuthSession.fromJson(decoded);
+  }
+
+  Future<void> changePassword({
+    required String token,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final response = await http.put(
+      _client.uri(ApiEndpoints.changePassword),
+      headers: _jsonHeaders(token),
+      body: jsonEncode({
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      }),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _extractErrorMessage(response, fallback: 'Password update failed'),
+      );
+    }
+  }
+
+  Future<void> deleteAccount({
+    required String token,
+  }) async {
+    final response = await http.delete(
+      _client.uri(ApiEndpoints.deleteAccount),
+      headers: _jsonHeaders(token),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _extractErrorMessage(response, fallback: 'Account deletion failed'),
+      );
+    }
   }
 }

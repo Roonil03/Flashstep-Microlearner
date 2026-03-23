@@ -3,6 +3,9 @@ class ApiEndpoints {
   static const String login = '/auth/login';
   static const String me = '/me';
 
+  static const String changePassword = '/auth/change-password';
+  static const String deleteAccount = '/auth/delete-account';
+
   static const String createDeck = '/decks';
   static const String getDecks = '/decks';
   static const String updateDeck = '/decks';
