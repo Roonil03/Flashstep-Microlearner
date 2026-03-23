@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../core/storage/session_storage.dart';
+import '../../../core/network/providers.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -18,10 +18,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   _SettingsView _view = _SettingsView.main;
 
   Future<void> _logout() async {
-    const storage = SessionStorage();
-    await storage.clearAll();
+    try {
+      await ref.read(authRepositoryProvider).logout();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_messageFromError(e))),
+      );
+      return;
+    }
 
     if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Signed out successfully')),
+    );
 
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.login,
@@ -43,7 +54,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       case _SettingsView.system:
         return _SystemSettings(onBack: _goBack);
       case _SettingsView.main:
-      default:
         return _MainSettings(
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
@@ -92,9 +102,7 @@ class _MainSettings extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           Column(
             children: [
               Image.asset(
@@ -115,9 +123,7 @@ class _MainSettings extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           SizedBox(
             height: 50,
             child: ElevatedButton.icon(
@@ -148,89 +154,86 @@ class _AccountSettings extends ConsumerStatefulWidget {
 }
 
 class _AccountSettingsState extends ConsumerState<_AccountSettings> {
+  String _messageFromError(Object error) {
+    final text = error.toString();
+    return text
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('StateError: ', '')
+        .trim();
+  }
+
   Future<void> _showChangePasswordDialog() async {
-    final oldPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final oldPasswordController = TextEditingController();
+        final newPasswordController = TextEditingController();
+        final confirmPasswordController = TextEditingController();
 
-    bool isSubmitting = false;
-    bool obscureOld = true;
-    bool obscureNew = true;
-    bool obscureConfirm = true;
-    String? errorText;
+        bool isSubmitting = false;
+        bool obscureOld = true;
+        bool obscureNew = true;
+        bool obscureConfirm = true;
+        String? errorText;
 
-    try {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: !isSubmitting,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setStateDialog) {
-              Future<void> submit() async {
-                if (isSubmitting) return;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            Future<void> submit() async {
+              if (isSubmitting) return;
 
-                final oldPassword = oldPasswordController.text.trim();
-                final newPassword = newPasswordController.text.trim();
-                final confirmPassword = confirmPasswordController.text.trim();
+              final oldPassword = oldPasswordController.text.trim();
+              final newPassword = newPasswordController.text.trim();
+              final confirmPassword = confirmPasswordController.text.trim();
 
-                if (oldPassword.isEmpty ||
-                    newPassword.isEmpty ||
-                    confirmPassword.isEmpty) {
-                  setStateDialog(() {
-                    errorText = 'All fields are required.';
-                  });
-                  return;
-                }
-
-                if (newPassword.length < 8) {
-                  setStateDialog(() {
-                    errorText = 'New password must be at least 8 characters.';
-                  });
-                  return;
-                }
-
-                if (newPassword != confirmPassword) {
-                  setStateDialog(() {
-                    errorText = 'New passwords do not match.';
-                  });
-                  return;
-                }
-
+              if (oldPassword.isEmpty ||
+                  newPassword.isEmpty ||
+                  confirmPassword.isEmpty) {
                 setStateDialog(() {
-                  isSubmitting = true;
-                  errorText = null;
+                  errorText = 'All fields are required.';
                 });
-
-                try {
-                  await ref.read(authRepositoryProvider).changePassword(
-                        oldPassword: oldPassword,
-                        newPassword: newPassword,
-                      );
-
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-
-                  if (!mounted) return;
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password updated successfully')),
-                  );
-                } catch (e) {
-                  if (!dialogContext.mounted) return;
-                  setStateDialog(() {
-                    errorText = _messageFromError(e);
-                  });
-                } finally {
-                  if (dialogContext.mounted) {
-                    setStateDialog(() {
-                      isSubmitting = false;
-                    });
-                  }
-                }
+                return;
               }
 
-              return AlertDialog(
+              if (newPassword.length < 8) {
+                setStateDialog(() {
+                  errorText = 'New password must be at least 8 characters.';
+                });
+                return;
+              }
+
+              if (newPassword != confirmPassword) {
+                setStateDialog(() {
+                  errorText = 'New passwords do not match.';
+                });
+                return;
+              }
+
+              setStateDialog(() {
+                isSubmitting = true;
+                errorText = null;
+              });
+
+              try {
+                await ref.read(authRepositoryProvider).changePassword(
+                      oldPassword: oldPassword,
+                      newPassword: newPassword,
+                    );
+
+                if (!dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop(true);
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setStateDialog(() {
+                  errorText = _messageFromError(e);
+                  isSubmitting = false;
+                });
+              }
+            }
+
+            return PopScope(
+              canPop: !isSubmitting,
+              child: AlertDialog(
                 title: const Text('Change Password'),
                 content: SingleChildScrollView(
                   child: Column(
@@ -269,7 +272,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                                     });
                                   },
                             icon: Icon(
-                              obscureOld ? Icons.visibility_off : Icons.visibility,
+                              obscureOld
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                           ),
                         ),
@@ -290,7 +295,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                                     });
                                   },
                             icon: Icon(
-                              obscureNew ? Icons.visibility_off : Icons.visibility,
+                              obscureNew
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                           ),
                         ),
@@ -311,7 +318,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                                     });
                                   },
                             icon: Icon(
-                              obscureConfirm ? Icons.visibility_off : Icons.visibility,
+                              obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                           ),
                         ),
@@ -323,7 +332,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                   TextButton(
                     onPressed: isSubmitting
                         ? null
-                        : () => Navigator.of(dialogContext).pop(),
+                        : () => Navigator.of(dialogContext).pop(false),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
@@ -337,74 +346,68 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         : const Text('Update'),
                   ),
                 ],
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated successfully')),
       );
-    } finally {
-      oldPasswordController.dispose();
-      newPasswordController.dispose();
-      confirmPasswordController.dispose();
     }
   }
 
   Future<void> _showDeleteAccountDialog() async {
-    final confirmController = TextEditingController();
-    bool isDeleting = false;
-    String? errorText;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final confirmController = TextEditingController();
 
-    try {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: !isDeleting,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setStateDialog) {
-              Future<void> submit() async {
-                if (isDeleting) return;
+        bool isDeleting = false;
+        String? errorText;
 
-                final confirmation = confirmController.text.trim().toUpperCase();
-                if (confirmation != 'DELETE') {
-                  setStateDialog(() {
-                    errorText = 'Type DELETE to confirm.';
-                  });
-                  return;
-                }
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            Future<void> submit() async {
+              if (isDeleting) return;
 
+              final confirmation = confirmController.text.trim().toUpperCase();
+
+              if (confirmation != 'DELETE') {
                 setStateDialog(() {
-                  isDeleting = true;
-                  errorText = null;
+                  errorText = 'Type DELETE to confirm.';
                 });
-
-                try {
-                  await ref.read(authRepositoryProvider).deleteAccount();
-
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-
-                  if (!mounted) return;
-
-                  Navigator.of(context).pushNamedAndRemoveUntil(
-                    AppRoutes.login,
-                    (route) => false,
-                  );
-                } catch (e) {
-                  if (!dialogContext.mounted) return;
-                  setStateDialog(() {
-                    errorText = _messageFromError(e);
-                  });
-                } finally {
-                  if (dialogContext.mounted) {
-                    setStateDialog(() {
-                      isDeleting = false;
-                    });
-                  }
-                }
+                return;
               }
 
-              return AlertDialog(
+              setStateDialog(() {
+                isDeleting = true;
+                errorText = null;
+              });
+
+              try {
+                await ref.read(authRepositoryProvider).deleteAccount();
+
+                if (!dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop(true);
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setStateDialog(() {
+                  errorText = _messageFromError(e);
+                  isDeleting = false;
+                });
+              }
+            }
+
+            return PopScope(
+              canPop: !isDeleting,
+              child: AlertDialog(
                 title: const Text('Delete Account'),
                 content: SingleChildScrollView(
                   child: Column(
@@ -448,7 +451,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                   TextButton(
                     onPressed: isDeleting
                         ? null
-                        : () => Navigator.of(dialogContext).pop(),
+                        : () => Navigator.of(dialogContext).pop(false),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
@@ -466,16 +469,32 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         : const Text('Delete'),
                   ),
                 ],
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Account deleted successfully')),
       );
-    } finally {
-      confirmController.dispose();
+
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (route) => false,
+      );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -485,7 +504,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: onBack,
+          onPressed: widget.onBack,
         ),
         title: const Text('Account Settings'),
       ),
@@ -505,27 +524,18 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                   ),
                 ),
               ),
-
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.lock_outline),
                 title: const Text('Change Password'),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('API not implemented')),
-                  );
-                },
+                onTap: _showChangePasswordDialog,
               ),
               const Divider(height: 1),
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('Delete Account'),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('API not implemented')),
-                  );
-                },
+                onTap: _showDeleteAccountDialog,
               ),
             ],
           ),
@@ -613,4 +623,12 @@ Widget _sectionCard(bool isDark, {required List<Widget> children}) {
     ),
     child: Column(children: children),
   );
+}
+
+String _messageFromError(Object error) {
+  final text = error.toString();
+  return text
+      .replaceFirst('Exception: ', '')
+      .replaceFirst('StateError: ', '')
+      .trim();
 }

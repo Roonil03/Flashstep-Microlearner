@@ -23,11 +23,13 @@ class AuthSession {
     String nestedUsername = '';
     String nestedUserId = '';
     String nestedEmail = '';
+
     if (user is Map<String, dynamic>) {
       nestedUsername = user['username'] as String? ?? '';
       nestedUserId = user['userId'] as String? ?? user['id'] as String? ?? '';
       nestedEmail = user['email'] as String? ?? '';
     }
+
     return AuthSession(
       token: json['token'] as String? ?? '',
       userId: json['userId'] as String? ??
@@ -41,25 +43,25 @@ class AuthSession {
 
 class AuthApi {
   final ApiClient _client;
+
   AuthApi(this._client);
 
-   Map<String, String> _jsonHeaders([String? token]) {
+  Map<String, String> _jsonHeaders([String? token]) {
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
+
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
+
     return headers;
   }
 
-  Map<String, String> _authHeaders(String token) {
-    return {
-      'Authorization': 'Bearer $token',
-    };
-  }
-
-  String _extractErrorMessage(http.Response response, {String fallback = 'Request failed'}) {
+  String _extractErrorMessage(
+    http.Response response, {
+    String fallback = 'Request failed',
+  }) {
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
@@ -68,32 +70,14 @@ class AuthApi {
           return error.trim();
         }
       }
-    } catch (_) {
-    }
+    } catch (_) {}
 
     final body = response.body.trim();
     if (body.isNotEmpty) {
       return body;
     }
+
     return fallback;
-  }
-
-  Future<http.Response> _fetchMeResponse(String token) async {
-    http.Response? lastResponse;
-
-    for (final path in <String>[ApiEndpoints.me, ApiEndpoints.authMe]) {
-      final response = await http.get(
-        _client.uri(path),
-        headers: _authHeaders(token),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return response;
-      }
-      lastResponse = response;
-    }
-
-    return lastResponse!;
   }
 
   Future<void> register({
@@ -102,18 +86,19 @@ class AuthApi {
     required String password,
   }) async {
     final response = await http.post(
-      _client.uri('/auth/register'),
-      headers: const {
-        'Content-Type': 'application/json',
-      },
+      _client.uri(ApiEndpoints.register),
+      headers: _jsonHeaders(),
       body: jsonEncode({
         'email': email,
         'username': username,
         'password': password,
       }),
     );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Register failed: ${response.body}');
+      throw Exception(
+        _extractErrorMessage(response, fallback: 'Register failed'),
+      );
     }
   }
 
@@ -122,49 +107,58 @@ class AuthApi {
     required String password,
   }) async {
     final response = await http.post(
-      _client.uri('/auth/login'),
-      headers: const {
-        'Content-Type': 'application/json',
-      },
+      _client.uri(ApiEndpoints.login),
+      headers: _jsonHeaders(),
       body: jsonEncode({
         'email': email,
         'password': password,
       }),
     );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Login failed: ${response.body}');
+      throw Exception(
+        _extractErrorMessage(response, fallback: 'Login failed'),
+      );
     }
+
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
       throw Exception('Unexpected login response');
     }
+
     return AuthSession.fromJson(decoded);
   }
 
   Future<bool> validateToken(String token) async {
     final response = await http.get(
-      _client.uri('/auth/me'),
+      _client.uri(ApiEndpoints.me),
       headers: {
         'Authorization': 'Bearer $token',
       },
     );
+
     return response.statusCode >= 200 && response.statusCode < 300;
   }
 
   Future<AuthSession> getMe(String token) async {
     final response = await http.get(
-      _client.uri('/auth/me'),
+      _client.uri(ApiEndpoints.me),
       headers: {
         'Authorization': 'Bearer $token',
       },
     );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to fetch user: ${response.body}');
+      throw Exception(
+        _extractErrorMessage(response, fallback: 'Failed to fetch user'),
+      );
     }
+
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
       throw Exception('Unexpected response format');
     }
+
     return AuthSession.fromJson(decoded);
   }
 

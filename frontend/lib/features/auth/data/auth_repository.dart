@@ -10,6 +10,14 @@ class AuthRepository {
     required this.storage,
   });
 
+  Future<String> _requireToken() async {
+    final token = await storage.readToken();
+    if (token == null || token.isEmpty) {
+      throw StateError('No active session found. Please sign in again.');
+    }
+    return token;
+  }
+
   Future<AuthSession> login({
     required String email,
     required String password,
