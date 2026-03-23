@@ -125,3 +125,43 @@ GET /analytics/streak
 Returns current and longest streak.
 
 ---
+
+---
+
+## AUTH
+
+### Change Password
+PUT /auth/change-password
+
+- Protected route (requires JWT)
+- Request body must include old and new passwords
+
+Payload:
+{
+  "old_password": "current_password",
+  "new_password": "new_secure_password"
+}
+
+Response (200):
+{
+  "message": "password updated"
+}
+
+Errors:
+- 400 Bad Request: invalid request (missing fields)
+- 401 Unauthorized: old password incorrect
+
+---
+
+### Delete Account
+DELETE /auth/delete-account
+
+- Protected route (requires JWT)
+
+Response (200):
+{
+  "message": "account deleted"
+}
+
+Errors:
+- 500 Internal Server Error: could not delete account
