@@ -59,5 +59,4 @@ install-linux: main
 	sudo bash ./deployments/do.sh
 
 install-win: main
-	cd deployments
-	./ps.bat
+	
