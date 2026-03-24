@@ -17,6 +17,9 @@
 - Frontend
 - Documentation (Who it is maintained by, what all documentation is present here)
 
+## 6. Work on the splash screen to ensure that /me runs to ensure that I don't need to keep logging in on the same device when I am starting the application
+- mainly frontend related work on drift
+
 ## 7. CI/CD and upload the backend to supabase and run tests:
 - very heavily backend related
 
