@@ -7,6 +7,7 @@ import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/decks/data/deck_repository.dart';
 import '../storage/database_provider.dart';
+import '../storage/app_database.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 final sessionStorageProvider =
@@ -20,6 +21,7 @@ final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
     api: ref.read(authApiProvider),
     storage: ref.read(sessionStorageProvider),
+    database: ref.read(appDatabaseProvider),
   ),
 );
 

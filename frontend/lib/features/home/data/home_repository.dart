@@ -15,8 +15,15 @@ class HomeRepository {
 
   Future<List<DeckSummary>> getDecks() async {
     try {
+      final currentUserId = await _sessionStorage.readUserId();
+      if (currentUserId == null || currentUserId.isEmpty) {
+        return [];
+      }
+
       final decks = await (_database.select(_database.decks)
-            ..where((tbl) => tbl.isDeleted.equals(false))
+            ..where((tbl) =>
+                tbl.userId.equals(currentUserId) &
+                tbl.isDeleted.equals(false))
             ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)]))
           .get();
 

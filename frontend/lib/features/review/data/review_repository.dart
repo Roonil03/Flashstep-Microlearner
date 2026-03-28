@@ -43,8 +43,15 @@ class ReviewRepository {
 
   Future<List<ReviewDeckSummary>> getReviewableDecks() async {
     final now = DateTime.now().toUtc();
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return [];
+    }
+
     final decks = await (_database.select(_database.decks)
-          ..where((tbl) => tbl.isDeleted.equals(false))
+          ..where((tbl) =>
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false))
           ..orderBy([(tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc)]))
         .get();
 

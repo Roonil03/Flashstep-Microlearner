@@ -54,6 +54,7 @@ Get-Content .env
 
 Write-Host "Stopping old containers and DELETING old volumes..." -ForegroundColor Yellow
 docker compose  down -v --remove-orphans
+docker system prune -a -f
 
 Write-Host "Building and starting fresh containers..." -ForegroundColor Yellow
 docker compose up --build -d

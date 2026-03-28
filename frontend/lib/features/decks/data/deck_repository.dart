@@ -154,9 +154,16 @@ class DeckRepository {
       throw StateError('Card front and back are required.');
     }
 
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      throw StateError('No signed-in user found.');
+    }
+
     final deck = await (_database.select(_database.decks)
           ..where((tbl) =>
-              tbl.id.equals(deckId) & tbl.isDeleted.equals(false)))
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false)))
         .getSingleOrNull();
 
     if (deck == null) {
@@ -373,22 +380,56 @@ class DeckRepository {
     return deckId;
   }
 
-  Stream<List<db.Deck>> watchDecks() {
-    return (_database.select(_database.decks)
-          ..where((tbl) => tbl.isDeleted.equals(false))
+  Stream<List<db.Deck>> watchDecks() async* {
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      yield const <db.Deck>[];
+      return;
+    }
+
+    yield* (_database.select(_database.decks)
+          ..where((tbl) =>
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false))
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)]))
         .watch();
   }
 
-  Stream<db.Deck?> watchDeckById(String deckId) {
-    return (_database.select(_database.decks)
+  Stream<db.Deck?> watchDeckById(String deckId) async* {
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      yield null;
+      return;
+    }
+
+    yield* (_database.select(_database.decks)
           ..where((tbl) =>
-              tbl.id.equals(deckId) & tbl.isDeleted.equals(false)))
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false)))
         .watchSingleOrNull();
   }
+  
+  Stream<List<db.Card>> watchCardsByDeck(String deckId) async* {
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      yield const <db.Card>[];
+      return;
+    }
 
-  Stream<List<db.Card>> watchCardsByDeck(String deckId) {
-    return (_database.select(_database.cards)
+    final deck = await (_database.select(_database.decks)
+          ..where((tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false)))
+        .getSingleOrNull();
+
+    if (deck == null) {
+      yield const <db.Card>[];
+      return;
+    }
+
+    yield* (_database.select(_database.cards)
           ..where((tbl) =>
               tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false))
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAt)]))
