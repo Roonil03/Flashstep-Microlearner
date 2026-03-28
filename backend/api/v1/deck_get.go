@@ -10,9 +10,11 @@ import (
 func GetDecks(c *gin.Context) {
 	userID := c.GetString("user_id")
 	rows, err := db.DB.Query(`
-	SELECT id, title, description, is_public, updated_at, version
+	SELECT id, user_id, title, description, is_public, created_at, updated_at, version, is_deleted
 	FROM decks
-	WHERE (user_id=$1 OR is_public=true) AND is_deleted=false
+	WHERE user_id=$1
+	AND is_deleted=false
+	ORDER BY updated_at DESC, created_at DESC, id DESC
 	`, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

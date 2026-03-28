@@ -49,6 +49,8 @@ func main() {
 		{
 			protected.POST("/decks", v1.CreateDeck)
 			protected.GET("/decks", v1.GetDecks)
+			protected.GET("/decks/public", v1.GetPublicDecks)
+			protected.POST("/decks/:id/download", v1.DownloadPublicDeck)
 			protected.PUT("/decks/:id", v1.UpdateDeck)
 			protected.DELETE("/decks/:id", v1.DeleteDeck)
 
