@@ -100,6 +100,14 @@ class ReviewRepository {
       throw StateError('No signed-in user found for review logging.');
     }
 
+    String? storedDeviceId = await _storage.readDeviceId();
+    if (storedDeviceId == null || storedDeviceId.isEmpty) {
+      storedDeviceId = _newId();
+      await _storage.writeDeviceId(storedDeviceId);
+    }
+    final String deviceId = storedDeviceId;
+
+
     final reviewLogId = _newId();
     final cardOperationId = _newId();
     final reviewOperationId = _newId();
@@ -136,7 +144,7 @@ class ReviewRepository {
               previousInterval: card.interval,
               newInterval: outcome.interval,
               reviewedAt: now,
-              deviceId: 'mobile-local',
+              deviceId: deviceId,
               syncStatus: 'pending',
             ),
           );
@@ -180,7 +188,7 @@ class ReviewRepository {
                 'previous_interval': card.interval,
                 'new_interval': outcome.interval,
                 'reviewed_at': now.toIso8601String(),
-                'device_id': 'mobile-local',
+                'device_id': deviceId,
                 'created_at': now.toIso8601String(),
               }),
               createdAt: now,
@@ -188,9 +196,9 @@ class ReviewRepository {
             ),
           );
 
-      await (_database.update(_database.reviewLogs)..where((tbl) => tbl.id.equals(reviewLogId))).write(
-        const db.ReviewLogsCompanion(syncStatus: Value('pending')),
-      );
+      // await (_database.update(_database.reviewLogs)..where((tbl) => tbl.id.equals(reviewLogId))).write(
+      //   const db.ReviewLogsCompanion(syncStatus: Value('pending')),
+      // );
     });
   }
 }

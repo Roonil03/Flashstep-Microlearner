@@ -62,6 +62,27 @@ type syncReviewLog struct {
 	CreatedAt        time.Time
 }
 
+func nullableStringValue(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+func nullableTimeValue(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return *t
+}
+
+func nullableUUIDValue(id *uuid.UUID) interface{} {
+	if id == nil {
+		return nil
+	}
+	return id.String()
+}
+
 func asString(v interface{}) string {
 	if v == nil {
 		return ""
@@ -354,10 +375,31 @@ func SyncUpload(c *gin.Context) {
 	}
 
 	sort.SliceStable(decks, func(i, j int) bool {
-		return decks[i].UpdatedAt.Before(decks[j].UpdatedAt)
+		if !decks[i].UpdatedAt.Equal(decks[j].UpdatedAt) {
+			return decks[i].UpdatedAt.Before(decks[j].UpdatedAt)
+		}
+		if !decks[i].CreatedAt.Equal(decks[j].CreatedAt) {
+			return decks[i].CreatedAt.Before(decks[j].CreatedAt)
+		}
+		return decks[i].ID.String() < decks[j].ID.String()
 	})
 	sort.SliceStable(cards, func(i, j int) bool {
-		return cards[i].UpdatedAt.Before(cards[j].UpdatedAt)
+		if !cards[i].UpdatedAt.Equal(cards[j].UpdatedAt) {
+			return cards[i].UpdatedAt.Before(cards[j].UpdatedAt)
+		}
+		if !cards[i].CreatedAt.Equal(cards[j].CreatedAt) {
+			return cards[i].CreatedAt.Before(cards[j].CreatedAt)
+		}
+		return cards[i].ID.String() < cards[j].ID.String()
+	})
+	sort.SliceStable(reviewLogs, func(i, j int) bool {
+		if !reviewLogs[i].ReviewedAt.Equal(reviewLogs[j].ReviewedAt) {
+			return reviewLogs[i].ReviewedAt.Before(reviewLogs[j].ReviewedAt)
+		}
+		if !reviewLogs[i].CreatedAt.Equal(reviewLogs[j].CreatedAt) {
+			return reviewLogs[i].CreatedAt.Before(reviewLogs[j].CreatedAt)
+		}
+		return reviewLogs[i].ID.String() < reviewLogs[j].ID.String()
 	})
 
 	tx, err := db.DB.Begin()
@@ -389,7 +431,7 @@ func SyncUpload(c *gin.Context) {
 			d.ID,
 			userID,
 			d.Title,
-			d.Description,
+			nullableStringValue(d.Description),
 			d.IsPublic,
 			d.CreatedAt,
 			d.UpdatedAt,
@@ -484,8 +526,8 @@ func SyncUpload(c *gin.Context) {
 			card.Interval,
 			card.EaseFactor,
 			card.RepetitionCount,
-			card.DueTimestamp,
-			card.LastReviewedAt,
+			nullableTimeValue(card.DueTimestamp),
+			nullableTimeValue(card.LastReviewedAt),
 			card.CreatedAt,
 			card.UpdatedAt,
 			card.Version,
@@ -516,6 +558,11 @@ func SyncUpload(c *gin.Context) {
 			return
 		}
 
+		if logItem.UserID != userID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "review log user_id does not match authenticated user"})
+			return
+		}
+
 		_, err = tx.Exec(`
         INSERT INTO review_logs (
             id, user_id, card_id, rating,
@@ -526,13 +573,13 @@ func SyncUpload(c *gin.Context) {
         ON CONFLICT (id) DO NOTHING
     `,
 			logItem.ID,
-			userID,
+			logItem.UserID,
 			logItem.CardID,
 			logItem.Rating,
 			logItem.PreviousInterval,
 			logItem.NewInterval,
 			logItem.ReviewedAt,
-			logItem.DeviceID,
+			nullableUUIDValue(logItem.DeviceID),
 			logItem.CreatedAt,
 		)
 		if err != nil {

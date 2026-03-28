@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SessionStorage {
   static const _tokenKey = 'jwt_token';
+  static const _deviceIdKey = 'device_id';
 
   const SessionStorage();
 
@@ -52,11 +53,24 @@ class SessionStorage {
     await _storage.delete(key: _lastSyncAtKey);
   }
 
+  Future<void> writeDeviceId(String deviceId) async {
+    await _storage.write(key: _deviceIdKey, value: deviceId);
+  }
+
+  Future<String?> readDeviceId() async {
+    return _storage.read(key: _deviceIdKey);
+  }
+
+  Future<void> clearDeviceId() async {
+    await _storage.delete(key: _deviceIdKey);
+  }
+
   Future<void> clearAll() async {
     await clearToken();
     await clearUsername();
     await clearUserId();
     await clearLastSyncAt();
+    await clearDeviceId();
   }  
 
   static const _userIdKey = 'user_id';
