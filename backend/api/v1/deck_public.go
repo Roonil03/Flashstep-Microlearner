@@ -130,12 +130,12 @@ func DownloadPublicDeck(c *gin.Context) {
 	now := time.Now().UTC()
 
 	_, err = tx.Exec(`
-		INSERT INTO decks (
-			id, user_id, title, description, is_public,
-			created_at, updated_at, version, is_deleted
-		)
-		VALUES ($1,$2,$3,$4,false,$5,$5,1,false)
-	`, newDeckID, userID, sourceTitle, sourceDescription, now)
+	INSERT INTO decks (
+		id, user_id, title, description, is_public,
+		created_at, updated_at, version, is_deleted
+	)
+	VALUES ($1,$2,$3,$4,false,$5,$5,1,false)
+`, newDeckID, userID, sourceTitle, nullableStringValue(sourceDescription), now)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

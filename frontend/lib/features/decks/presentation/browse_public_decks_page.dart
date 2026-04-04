@@ -56,7 +56,6 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
               title: const Text('Download this deck?'),
               content: Text(
                 'This will create a separate copy of "${deck.title}" in your account. '
-                'Your reviews and progress will stay independent from ${deck.ownerUsername}\'s original deck.',
               ),
               actions: [
                 TextButton(
