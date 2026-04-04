@@ -158,39 +158,57 @@ func DownloadPublicDeck(c *gin.Context) {
 		IsDeleted       bool
 	}
 
+	type sourceCard struct {
+		Front string
+		Back  string
+	}
+
 	cardRows, err := tx.Query(`
-		SELECT front, back
-		FROM cards
-		WHERE deck_id=$1
-		  AND is_deleted=false
-		ORDER BY created_at ASC, id ASC
-	`, sourceDeckID)
+	SELECT front, back
+	FROM cards
+	WHERE deck_id=$1
+	  AND is_deleted=false
+	ORDER BY created_at ASC, id ASC
+`, sourceDeckID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer cardRows.Close()
 
-	cards := make([]copiedCard, 0)
+	sourceCards := make([]sourceCard, 0)
 	for cardRows.Next() {
-		var front, back string
-		if err := cardRows.Scan(&front, &back); err != nil {
+		var row sourceCard
+		if err := cardRows.Scan(&row.Front, &row.Back); err != nil {
+			_ = cardRows.Close()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		sourceCards = append(sourceCards, row)
+	}
+	if err := cardRows.Err(); err != nil {
+		_ = cardRows.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if err := cardRows.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
+	cards := make([]copiedCard, 0, len(sourceCards))
+	for _, src := range sourceCards {
 		newCardID := uuid.New()
 		dueAt := now
 
 		_, err = tx.Exec(`
-			INSERT INTO cards (
-				id, deck_id, front, back, state,
-				interval, ease_factor, repetition_count,
-				due_timestamp, last_reviewed_at,
-				created_at, updated_at, version, is_deleted
-			)
-			VALUES ($1,$2,$3,$4,'new',0,2.5,0,$5,NULL,$6,$6,1,false)
-		`, newCardID, newDeckID, front, back, dueAt, now)
+		INSERT INTO cards (
+			id, deck_id, front, back, state,
+			interval, ease_factor, repetition_count,
+			due_timestamp, last_reviewed_at,
+			created_at, updated_at, version, is_deleted
+		)
+		VALUES ($1,$2,$3,$4,'new',0,2.5,0,$5,NULL,$6,$6,1,false)
+	`, newCardID, newDeckID, src.Front, src.Back, dueAt, now)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -199,8 +217,8 @@ func DownloadPublicDeck(c *gin.Context) {
 		cards = append(cards, copiedCard{
 			ID:              newCardID,
 			DeckID:          newDeckID,
-			Front:           front,
-			Back:            back,
+			Front:           src.Front,
+			Back:            src.Back,
 			State:           "new",
 			Interval:        0,
 			EaseFactor:      2.5,

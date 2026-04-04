@@ -5,16 +5,17 @@
 - Ease Factor (EF)
 - Repetition Count
 - Due Date
+
 #### Interval
 - Fail:
     - Interval: 1 Day
-    - Repitition = 0
+    - Repetition = 0
 - Hard:
     - Interval: previous_interval x 1.2
 - Good:
     - Interval: previous_interval x EF
 - Easy:
-    - Interval: previous_internal x EF x 1.3
+    - Interval: previous_interval x EF x 1.3
 
 #### Ease Factor Updates:
 - Initial EF = 2.5
@@ -23,7 +24,7 @@ EF' = EF + (0.1 - (5 - quality) x (0.08 + (5 - quality) x 0.02))
 ```
 - Here:
     - quality belongs to [0-5]
-    - constrainted such that EF >= 1.3 (min bound)
+    - constrained such that EF >= 1.3 (min bound)
 
 #### Due Date:
 - Due Date = Current Time + Interval
@@ -34,14 +35,15 @@ EF' = EF + (0.1 - (5 - quality) x (0.08 + (5 - quality) x 0.02))
 #### Card States:
 Each card exists in one of the following states:
 1. New:
-    - Never Reviewed
+    - Never reviewed
     - Introduced gradually
 2. Learning:
     - Recently introduced
-    - Short Intervals
+    - Short intervals
 3. Review:
-    - Long Term Retention Phase
-    - SM-2 Scheduling
+    - Long-term retention phase
+    - SM-2 scheduling
+
 #### Variables:
 Each card will store:
 - `id`
@@ -55,33 +57,48 @@ Each card will store:
 - `updated_at`
 - `is_deleted`
 
-### Sync Stratergy Design:
+### Sync Strategy Design
 #### Sync Principles:
-- Local DB is source of truth during offline usage
-- Sync is eventual consistency-based
-- Operations are: 
-    - Logged locally
-    - Replayed to server
+- The local Drift database is the source of truth during offline usage.
+- Every user session works against that user's own local database file.
+- Local writes happen first.
+- Sync is eventual-consistency based.
+- Operations are:
+    - logged locally
+    - replayed to the server later
+
+#### Local User Isolation Rules:
+- The app uses a separate local SQLite database per signed-in user.
+- Logging into a different account switches the active Drift database file instead of reusing the previous account's local cache.
+- Logging out switches the app to a guest-local database, so decks from one user cannot appear inside another user's account on the same device.
+- Public deck downloads are imported into the currently signed-in user's local database only.
 
 #### Upload (Client -> Server):
-- Review Logs:
-    - All user interactions
-    - Used for analytics + state reconstruction
-- Updated Cards:
-    - Edited Cards
-    - Scheduling Updates
-- Deck Changes:
-    - Created/updated/deleted decks
+- Review logs:
+    - all user interactions
+    - used for analytics + state reconstruction
+- Updated cards:
+    - edited cards
+    - scheduling updates
+- Deck changes:
+    - created / updated / deleted decks
 
 #### Download (Server -> Client):
-- New decks (public or collaborative [collaborative is editing already premade decks that are uploaded])
-- Updated Cards
-- Deleted Records
+- the signed-in user's latest decks
+- the signed-in user's latest cards
+- deleted records needed for convergence
 
-#### Sync Trigger Condititions:
-- App Launch
-- Network Reconnect
-- Periodic Background Job
+#### Sync Order:
+1. Save to the local Drift database first.
+2. Queue the change locally.
+3. If network is available, upload pending local changes.
+4. Download latest server changes.
+5. Merge them into the current user's local database.
+
+#### Sync Trigger Conditions:
+- app launch
+- manual sync
+- network reconnect / background sync trigger
 
 ### Conflict Resolution Strategy
 Due to offline-first design, conflicts may occur when the same data is modified on multiple devices.
@@ -89,17 +106,13 @@ Due to offline-first design, conflicts may occur when the same data is modified 
 #### Selected Strategy: Hybrid Approach
 A combination of:
 1. Last-Write-Wins (Primary)
-    - Based on updated_at timestamp
-    - Fast and simple
-
+    - based on `updated_at`
+    - fast and simple
 2. Versioning (Secondary Safety)
-    - Each record includes version
-    - Incremented on update
-
+    - each record includes `version`
+    - incremented on update
 3. Server-Assisted Merge (For Critical Data)
-    - Used for:
-        - Collaborative decks
-        - Shared edits
+    - reserved for future collaborative deck flows
 
 #### Conflict Handling Rules:
 | Scenario                | Resolution       |
@@ -110,13 +123,14 @@ A combination of:
 | Deleted vs updated      | Deletion wins    |
 
 #### Soft Delete Strategy
-Instead of removing records:
-```JSON
+Instead of removing records immediately from sync state:
+```json
 "is_deleted": true
 ```
 Ensures:
-- Sync consistency
-- Recovery capability
+- sync consistency
+- recovery capability
+- multi-device convergence
 
 ### Sync Data Model
 #### Metadata Fields (Required)
@@ -125,14 +139,19 @@ Each record must include:
 - `updated_at`
 - `version`
 - `is_deleted`
+
 #### Sync Queue (Client-Side)
 Local table:
-```JSON
+```json
 {
   "operation_id": "uuid",
   "type": "create | update | delete | review",
   "payload": {},
-  "created_at": timestamp,
+  "created_at": "timestamp",
   "synced": false
 }
 ```
+
+#### Per-User Sync Cursor
+- `last_sync_at` is stored per user, not globally.
+- Switching accounts on the same device must not reuse another user's sync cursor.

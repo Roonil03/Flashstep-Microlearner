@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -42,9 +44,9 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
         isPublic: _isPublic,
       );
 
-      await syncService.syncNow();
-
       if (!mounted) return;
+
+      unawaited(syncService.syncNow());
 
       Navigator.of(context).pushReplacementNamed(
         AppRoutes.deckDetail,

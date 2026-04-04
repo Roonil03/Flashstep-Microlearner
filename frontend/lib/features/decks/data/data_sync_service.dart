@@ -11,7 +11,7 @@ import '../../../core/storage/session_storage.dart';
 
 final deckSyncServiceProvider = Provider<DeckSyncService>((ref) {
   return DeckSyncService(
-    database: ref.read(appDatabaseProvider),
+    database: ref.watch(appDatabaseProvider),
     storage: const SessionStorage(),
   );
 });
@@ -48,10 +48,15 @@ class DeckSyncService {
       return const SyncResult.warning('You are not signed in, so sync was skipped.');
     }
 
+    final currentUserId = await _storage.readUserId();
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return const SyncResult.warning('No active local user was found, so sync was skipped.');
+    }
+
     try {
       await _uploadPendingChanges(token);
-      await _downloadAndMergeChanges(token);
-      await _storage.writeLastSyncAt(DateTime.now().toUtc());
+      await _downloadAndMergeChanges(token, currentUserId);
+      await _storage.writeLastSyncAt(DateTime.now().toUtc(), userId: currentUserId);
       return const SyncResult.success('Sync completed successfully.');
     } on http.ClientException catch (e) {
       return SyncResult.warning('Could not reach the server: $e');
@@ -135,8 +140,8 @@ class DeckSyncService {
     }
   }
 
-  Future<void> _downloadAndMergeChanges(String token) async {
-    final since = await _storage.readLastSyncAt() ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  Future<void> _downloadAndMergeChanges(String token, String currentUserId) async {
+    final since = await _storage.readLastSyncAt(userId: currentUserId) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/sync/download?since=${Uri.encodeComponent(since.toUtc().toIso8601String())}',
@@ -151,14 +156,13 @@ class DeckSyncService {
       );
     }
 
-    await _mergeDownloadedData(response.body);
+    await _mergeDownloadedData(response.body, currentUserId);
   }
 
-  Future<void> _mergeDownloadedData(String body) async {
+  Future<void> _mergeDownloadedData(String body, String localUserId) async {
     final decoded = jsonDecode(body);
     if (decoded is! Map<String, dynamic>) return;
 
-    final localUserId = await _storage.readUserId() ?? '';
     final remoteDecks = (decoded['decks'] as List<dynamic>? ?? const []);
     final remoteCards = (decoded['cards'] as List<dynamic>? ?? const []);
 
@@ -177,7 +181,7 @@ class DeckSyncService {
         await _database.into(_database.decks).insertOnConflictUpdate(
               db.DecksCompanion.insert(
                 id: deckId,
-                userId: rawDeck['user_id']?.toString() ?? localDeck?.userId ?? localUserId,
+                userId: rawDeck['user_id']?.toString() ?? localUserId,
                 title: rawDeck['title']?.toString() ?? '',
                 description: Value(rawDeck['description']?.toString()),
                 isPublic: Value(rawDeck['is_public'] as bool? ?? false),

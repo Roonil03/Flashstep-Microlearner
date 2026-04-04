@@ -10,6 +10,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/db"
 	"backend/internal/handlers"
+	"backend/internal/maintenance"
 	"backend/internal/middleware"
 	"backend/internal/repositories"
 	"backend/internal/services"
@@ -22,6 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer conn.Close()
+	maintenance.StartDeletedUserCleanup(conn)
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)

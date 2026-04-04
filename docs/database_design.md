@@ -1,6 +1,6 @@
 # Database Design:
 ### users:
-```SQL
+```sql
 CREATE TABLE users (
     id UUID PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -15,8 +15,9 @@ CREATE TABLE users (
     is_deleted BOOLEAN DEFAULT FALSE
 );
 ```
+
 ### decks:
-```SQL
+```sql
 CREATE TABLE decks (
     id UUID PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -33,9 +34,10 @@ CREATE TABLE decks (
     is_deleted BOOLEAN DEFAULT FALSE
 );
 ```
+
 ### cards
 > Core Table
-```SQL
+```sql
 CREATE TABLE cards (
     id UUID PRIMARY KEY,
     deck_id UUID REFERENCES decks(id) ON DELETE CASCADE,
@@ -59,9 +61,10 @@ CREATE TABLE cards (
     is_deleted BOOLEAN DEFAULT FALSE
 );
 ```
+
 ### review_logs
-> CRITICAL FOR SYNC + ANALYTICS
-```SQL
+> Critical for sync + analytics
+```sql
 CREATE TABLE review_logs (
     id UUID PRIMARY KEY,
 
@@ -80,9 +83,10 @@ CREATE TABLE review_logs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
 ### user_progress
-> ANALYTICS OPTIMIZATION
-```SQL
+> Analytics optimization
+```sql
 CREATE TABLE user_progress (
     id UUID PRIMARY KEY,
 
@@ -102,9 +106,10 @@ CREATE TABLE user_progress (
     version INT DEFAULT 1
 );
 ```
-### deck_collaborators 
-> OPTIONAL BUT POWERFUL
-```SQL
+
+### deck_collaborators
+> Optional future table
+```sql
 CREATE TABLE deck_collaborators (
     id UUID PRIMARY KEY,
 
@@ -116,9 +121,43 @@ CREATE TABLE deck_collaborators (
     created_at TIMESTAMP DEFAULT NOW()
 );
 ```
-# Local Database Design:
-### Card Model:
-```Dart
+
+# Local Database Design
+## Isolation Model
+The client now uses a **user-oriented local database design**:
+- one Drift SQLite database file per signed-in user
+- one guest-local database file when no user is signed in
+- account switching changes the active local database file
+- decks, cards, review logs, and sync queue items never mix between users on the same device
+
+### Local Database File Naming
+Example shape:
+```text
+app_guest_v2.sqlite
+app_user_<sanitized_user_id>_v2.sqlite
+```
+
+This means local isolation is enforced by **database-file separation**, not just by clearing rows on logout.
+
+## Local Deck Model
+```dart
+class DeckModel {
+  String id;
+  String userId;
+
+  String title;
+  String? description;
+  bool isPublic;
+
+  DateTime createdAt;
+  DateTime updatedAt;
+  int version;
+  bool isDeleted;
+}
+```
+
+## Local Card Model
+```dart
 class CardModel {
   String id;
   String deckId;
@@ -131,20 +170,18 @@ class CardModel {
   double easeFactor;
   int repetitionCount;
 
-  DateTime dueTimestamp;
+  DateTime? dueTimestamp;
   DateTime? lastReviewedAt;
 
+  DateTime createdAt;
   DateTime updatedAt;
   int version;
   bool isDeleted;
-
-  // LOCAL ONLY
-  String syncStatus; // pending | synced | failed
-  DateTime? lastSyncedAt;
 }
 ```
-### Review Log Model:
-```Dart
+
+## Local Review Log Model
+```dart
 class ReviewLog {
   String id;
   String userId;
@@ -157,15 +194,17 @@ class ReviewLog {
   DateTime reviewedAt;
   String deviceId;
 
-  String syncStatus;
+  String syncStatus; // pending | synced | failed
 }
 ```
-### Sync Queue:
-> Local Only
-```Dart
+
+## Local Sync Queue
+> Local only
+```dart
 class SyncQueueItem {
   String operationId;
   String type; // create | update | delete | review
+  String entity;
 
   Map<String, dynamic> payload;
 
@@ -173,3 +212,9 @@ class SyncQueueItem {
   bool synced;
 }
 ```
+
+## Local Session Rules
+- login switches to that user's database file
+- logout switches to the guest database file
+- delete-account removes the deleted user's local database file after server-side deletion succeeds
+- `last_sync_at` is tracked per user so one user's sync cursor does not affect another user's merge window

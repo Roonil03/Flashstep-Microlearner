@@ -2,12 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_theme.dart';
 import '../storage/session_storage.dart';
+import '../storage/database_manager.dart';
 import 'api_client.dart';
 import '../../features/auth/data/auth_api.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/decks/data/deck_repository.dart';
 import '../storage/database_provider.dart';
-import '../storage/app_database.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 final sessionStorageProvider =
@@ -21,7 +21,7 @@ final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
     api: ref.read(authApiProvider),
     storage: ref.read(sessionStorageProvider),
-    database: ref.read(appDatabaseProvider),
+    databaseManager: ref.read(databaseManagerProvider),
   ),
 );
 

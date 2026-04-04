@@ -11,7 +11,7 @@ import 'review_scheduler.dart';
 
 final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
   return ReviewRepository(
-    database: ref.read(appDatabaseProvider),
+    database: ref.watch(appDatabaseProvider),
     storage: const SessionStorage(),
   );
 });

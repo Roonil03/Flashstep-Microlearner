@@ -72,10 +72,11 @@ class HomeRepository {
   }
 
   Future<void> addDeckToLocal(DeckSummary deck) async {
+    final currentUserId = await _sessionStorage.readUserId() ?? '';
     await _database.into(_database.decks).insert(
           DecksCompanion.insert(
             id: deck.id,
-            userId: '',
+            userId: currentUserId,
             title: deck.title,
             description: Value(deck.description),
             isPublic: Value(deck.isPublic),

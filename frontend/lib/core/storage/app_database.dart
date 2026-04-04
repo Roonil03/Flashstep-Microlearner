@@ -89,7 +89,25 @@ class Cards extends Table {
 
 @DriftDatabase(tables: [ReviewLogs, SyncQueueItems, Users, Decks, Cards])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase._({required this.databaseFileName})
+      : super(_openConnection(databaseFileName));
+
+  factory AppDatabase.forUser({String? userId}) {
+    final fileName = fileNameForUser(userId);
+    return AppDatabase._(databaseFileName: fileName);
+  }
+
+  final String databaseFileName;
+
+  static String fileNameForUser(String? userId) {
+    final trimmed = userId?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return 'app_guest_v2.sqlite';
+    }
+
+    final safeUserId = trimmed.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return 'app_user_${safeUserId}_v2.sqlite';
+  }
 
   @override
   int get schemaVersion => 2;
@@ -105,12 +123,10 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection(String databaseFileName) {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
-
-    final file = File(p.join(dir.path, 'app_v2.sqlite'));
-
+    final file = File(p.join(dir.path, databaseFileName));
     return NativeDatabase(file);
   });
 }

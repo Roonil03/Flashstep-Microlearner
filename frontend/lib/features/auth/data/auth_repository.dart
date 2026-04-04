@@ -1,16 +1,16 @@
+import '../../../core/storage/database_manager.dart';
 import '../../../core/storage/session_storage.dart';
 import 'auth_api.dart';
-import '../../../core/storage/app_database.dart';
 
 class AuthRepository {
   final AuthApi api;
   final SessionStorage storage;
-  final AppDatabase database;
+  final DatabaseManager databaseManager;
 
   AuthRepository({
     required this.api,
     required this.storage,
-    required this.database,
+    required this.databaseManager,
   });
 
   Future<String> _requireToken() async {
@@ -25,8 +25,6 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
-    final previousUserId = await storage.readUserId();
-
     final session = await api.login(
       email: email,
       password: password,
@@ -56,19 +54,14 @@ class AuthRepository {
       }
     }
 
-    if (previousUserId != null &&
-        previousUserId.isNotEmpty &&
-        previousUserId != resolvedUserId) {
-      await _clearLocalAppData();
-      await storage.clearLastSyncAt();
-    }
-
     await storage.saveToken(session.token);
     await storage.writeUserId(resolvedUserId);
 
     if (resolvedUsername.isNotEmpty) {
       await storage.writeUsername(resolvedUsername);
     }
+
+    await databaseManager.switchToUser(resolvedUserId);
 
     return AuthSession(
       token: session.token,
@@ -98,7 +91,7 @@ class AuthRepository {
       final me = await api.getMe(token);
 
       if (me.userId.isEmpty) {
-        await _resetSessionAndLocalData();
+        await _resetSessionOnly();
         return false;
       }
 
@@ -108,15 +101,16 @@ class AuthRepository {
         await storage.writeUsername(me.username);
       }
 
+      await databaseManager.switchToUser(me.userId);
       return true;
     } catch (_) {
-      await _resetSessionAndLocalData();
+      await _resetSessionOnly();
       return false;
     }
   }
 
   Future<void> logout() async {
-    await _resetSessionAndLocalData();
+    await _resetSessionOnly();
   }
 
   Future<void> changePassword({
@@ -133,16 +127,19 @@ class AuthRepository {
 
   Future<void> deleteAccount() async {
     final token = await _requireToken();
+    final userId = await storage.readUserId();
     await api.deleteAccount(token: token);
-    await _resetSessionAndLocalData();
-  }
-
-  Future<void> _clearLocalAppData() async {
-    await database.clearAllLocalData();
-  }
-
-  Future<void> _resetSessionAndLocalData() async {
-    await _clearLocalAppData();
     await storage.clearAll();
+    if (userId != null && userId.isNotEmpty) {
+      await storage.clearLastSyncAt(userId: userId);
+      await databaseManager.deleteDatabaseForUser(userId);
+    } else {
+      await databaseManager.switchToAnonymous();
+    }
+  }
+
+  Future<void> _resetSessionOnly() async {
+    await storage.clearAll();
+    await databaseManager.switchToAnonymous();
   }
 }

@@ -1,79 +1,90 @@
-# Software Requirements:
+# Software Requirements
 
-## Front End:
-- Flutter SDK using Kotlin
-    - Riverpod
-    - BLoC
+## Frontend
+- Flutter SDK
+- Riverpod
+- Drift for local storage
 
-## Back End:
-- GoLang (Gin for the main, Fibre for more speed)
-- JWT Tokens in GoLang
+## Backend
+- Go (Gin)
+- JWT authentication
 - REST APIs
-- Dockerize the Backend
+- Dockerized deployment
 
-## Storage:
-- Drift Local Storage/ Isar for it based on net
-- postgreSQL on firebase
-    - Check for CI/CD for hosting it on firebase
+## Storage
+- Drift local storage on device
+- PostgreSQL on the backend
 
+## System Architecture Flow
+User -> Flutter App -> State Management (Riverpod) -> **User-scoped Drift Local Database** -> Sync Engine -> REST API (Go backend using Gin) -> PostgreSQL Database
 
-## System Architecture Flow:
-User    ->      Flutter App     ->      State Management (Riverpod & Bloc)      ->      Local Database (Drift)     ->      Sync Engine (Background Worker)     ->      REST API(Go Backend using GoFr, Gin and Fiber)      ->     PostgreSQL Database
-
-
-## Functional Requirements:
+## Functional Requirements
 ### User Authentication (JWT)
+- sign up
+- sign in
+- session restore using `/me`
+- sign out
+- account deletion
 
+### Deck and Card Management
+- create / edit / delete decks
+- add / edit / delete cards within decks
+- browse public decks
+- download a public deck as a copy into the current user's account
+- view decks and cards
 
-### Deck and Call Management:
-- Create, Edit, Download from the DB, Delete Decks
-- Add/Edit/Delete cards within Decks
-- View Decks and Cards
+### Spaced Repetition Review
+- cards are scheduled using spaced-repetition logic based on SM-2-style state transitions
 
-### Spaced Repitition Review:
-- Cards are scheduled using spaced repitition algorithms (SM-2 and FSRS[Free Spaced Repitition Scheduler])
+### Offline DB First
+- all user actions save locally first
+- sync runs afterward when network is available
+- local database remains usable offline
 
-### Offline DB First:
-- Work mainly with Isar, with Drift, if everything else fails
+### Local User Isolation
+- each signed-in user gets a different local Drift database file
+- logging into a new account on the same device must not expose the previous user's decks or cards
+- logout switches the app to a guest-local database
+- sync cursors are tracked per user
 
-### Background Sync:
-- Sync runs periodically or on connectivity change
-    - Detect network availability
-    - Push unsynced local changes
-    - Fetch updates frmo backend
-    - Merge Data into local DB
+### Background Sync
+- sync runs manually and on future background/connectivity triggers
+- detects whether a valid session exists
+- pushes unsynced local changes first
+- fetches updates from backend second
+- merges data into the current user's local database only
 
 ### Basic Analytics Dashboard
-- Cards reviewed per day
-- Retention Rates
-- Study Streaks
+- cards reviewed per day
+- retention rates
+- study streaks
 
-## UI Pages:
+## UI Pages
 1. Analytics Page
 2. Splash Screen
-    - App Logo
-    - Checks for JWT existence and local session validity
-    - Redirects either to login or home
+   - app logo
+   - checks for JWT existence and local session validity
+   - restores the correct local user database on startup
+   - redirects to login or home
 3. Login Page
-    - email/user; password; login button; *"go to register"* button
+   - email / password / login button / go-to-register button
 4. Register Page
-    - email; username; password; confirm password; register button
+   - email / username / password / confirm password / register button
 5. Home Dashboard
-    - List of Decks
-    - Deck of the Day
-    - Quick Actions - Create Deck, Start Review, Browse Decks
-    - Sync Indicator
-6. Create Decks Page:
-    - Deck Name; Descriptiom; Save Button
+   - list of the current user's decks
+   - deck of the day
+   - quick actions: create deck, start review, browse decks
+   - sync indicator
+6. Create Deck Page
+   - deck name / description / visibility / save button
 7. Start Review Page
-    - Review Subpage
-    - End of Review Subpage
-8. Browsing through all decks with description
-    - Download Manager
+   - review subpage
+   - end-of-review subpage
+8. Browse Public Decks Page
+   - public deck list
+   - download manager
 9. Settings
-    - App Settings Page
-    - Profile Settings Page
-10. Loading Pages:
-    - Loading / Empty State Screens
-    - Error Page
-
+   - app settings page
+   - profile settings page
+   - sign out
+10. Loading / Empty / Error States

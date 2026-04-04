@@ -442,23 +442,50 @@ func SyncUpload(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		if d.IsDeleted {
+			if _, err := tx.Exec(`
+				UPDATE cards
+				SET is_deleted=true,
+				    updated_at=CASE
+				        WHEN updated_at < $2 THEN $2
+				        ELSE updated_at
+				    END,
+				    version=CASE
+				        WHEN updated_at < $2 THEN version + 1
+				        ELSE version
+				    END
+				WHERE deck_id=$1
+				  AND is_deleted=false
+			`, d.ID, d.UpdatedAt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 	}
 
 	for _, card := range cards {
-		var deckExists bool
+		var deckUpdatedAt time.Time
+		var deckIsDeleted bool
 		err := tx.QueryRow(`
-			SELECT EXISTS(
-				SELECT 1
-				FROM decks
-				WHERE id=$1 AND user_id=$2
-			)
-		`, card.DeckID, userID).Scan(&deckExists)
+			SELECT updated_at, is_deleted
+			FROM decks
+			WHERE id=$1 AND user_id=$2
+		`, card.DeckID, userID).Scan(&deckUpdatedAt, &deckIsDeleted)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "card references a missing or unauthorized deck"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if !deckExists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "card references a missing or unauthorized deck"})
+
+		if deckIsDeleted && !card.IsDeleted {
+			if !card.UpdatedAt.After(deckUpdatedAt) {
+				continue
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot apply active card changes to a deleted deck"})
 			return
 		}
 
