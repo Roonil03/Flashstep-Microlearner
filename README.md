@@ -28,7 +28,9 @@ The goal of the project is to make short, repeatable learning sessions feel smoo
 
 ## License
 
-This project is licensed under the terms described in [LICENSE](LICENSE).
+This project is licensed under the terms described in [MIT License](LICENSE).
 
 ## Contributors:
 - Project Creator and maintainer: [Roonil03](https://github.com/Roonil03)
+
+> This project was made as part of the Advanced Technology Lab Project
