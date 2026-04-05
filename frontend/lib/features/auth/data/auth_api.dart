@@ -5,6 +5,16 @@ import 'package:http/http.dart' as http;
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 
+class AuthApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const AuthApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => 'AuthApiException(statusCode: $statusCode, message: $message)';
+}
+
 class AuthSession {
   final String token;
   final String userId;
@@ -96,8 +106,9 @@ class AuthApi {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
+      throw AuthApiException(
         _extractErrorMessage(response, fallback: 'Register failed'),
+        statusCode: response.statusCode,
       );
     }
   }
@@ -116,8 +127,9 @@ class AuthApi {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
+      throw AuthApiException(
         _extractErrorMessage(response, fallback: 'Login failed'),
+        statusCode: response.statusCode,
       );
     }
 
@@ -149,8 +161,9 @@ class AuthApi {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
+      throw AuthApiException(
         _extractErrorMessage(response, fallback: 'Failed to fetch user'),
+        statusCode: response.statusCode,
       );
     }
 
@@ -177,8 +190,9 @@ class AuthApi {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
+      throw AuthApiException(
         _extractErrorMessage(response, fallback: 'Password update failed'),
+        statusCode: response.statusCode,
       );
     }
   }
@@ -192,8 +206,9 @@ class AuthApi {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
+      throw AuthApiException(
         _extractErrorMessage(response, fallback: 'Account deletion failed'),
+        statusCode: response.statusCode,
       );
     }
   }

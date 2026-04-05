@@ -93,3 +93,7 @@ User -> Flutter App -> State Management (Riverpod) -> **User-scoped Drift Local 
 - Analytics pages must read synced server-side analytics rather than local-only counters.
 - Daily review volume defaults to 25 cards per user per day and must be configurable.
 
+### Stored session restore
+- if a JWT and `user_id` already exist locally, app launch should restore the user session without asking for credentials again
+- transient network failures during splash validation must not force a logout
+- the login page should appear only after explicit logout or explicit backend authentication failure

@@ -605,3 +605,9 @@ At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollup
   "error": "error message"
 }
 ```
+
+### Session restore behavior
+- The client persists the JWT and `user_id` locally after a successful login.
+- On app launch, the splash flow first checks for a stored session and re-enters the app without prompting for credentials again.
+- The login screen should only reappear after an explicit logout or when `GET /me` returns an authentication failure such as `401 Unauthorized` / `403 Forbidden`.
+- Temporary connectivity failures must not be treated as logout events by the client.

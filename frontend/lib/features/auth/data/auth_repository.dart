@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/storage/database_manager.dart';
 import '../../../core/storage/session_storage.dart';
 import 'auth_api.dart';
@@ -87,8 +89,15 @@ class AuthRepository {
     final token = await storage.readToken();
     if (token == null || token.isEmpty) return false;
 
+    final storedUserId = await storage.readUserId();
+    final hasStoredUser = storedUserId != null && storedUserId.isNotEmpty;
+
+    if (hasStoredUser) {
+      await databaseManager.switchToUser(storedUserId!);
+    }
+
     try {
-      final me = await api.getMe(token);
+      final me = await api.getMe(token).timeout(const Duration(seconds: 3));
 
       if (me.userId.isEmpty) {
         await _resetSessionOnly();
@@ -103,9 +112,16 @@ class AuthRepository {
 
       await databaseManager.switchToUser(me.userId);
       return true;
+    } on AuthApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        await _resetSessionOnly();
+        return false;
+      }
+      return hasStoredUser;
+    } on TimeoutException {
+      return hasStoredUser;
     } catch (_) {
-      await _resetSessionOnly();
-      return false;
+      return hasStoredUser;
     }
   }
 

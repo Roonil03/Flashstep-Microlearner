@@ -161,3 +161,8 @@ Local table:
 - The default daily review limit is 25 cards, configurable from System Settings.
 - Daily card selection is enforced locally before a review session begins.
 
+## Splash authentication restore
+- The client persists both the JWT and the resolved `user_id` after login.
+- Splash restoration first re-attaches the correct user-scoped local database using the stored `user_id`.
+- A best-effort `/me` validation can happen after local restore, but temporary network failure must not force the user back to Login.
+- The Login page should only be shown after logout or explicit token rejection by the backend.
