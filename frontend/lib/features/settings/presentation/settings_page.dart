@@ -118,7 +118,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Version 0.1.0 (Beta Build 1)',
+                'Version 0.4.5 (Beta Build 2)',
                 style: theme.textTheme.bodySmall,
               ),
             ],
