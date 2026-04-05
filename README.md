@@ -7,7 +7,7 @@ A local-first microlearning and flashcard app built with Flutter and Go (Gin), d
 
 ## What this project is
 
-Flashapp Microlearner is a full-stack flashcard learning platform with:
+Flashstep Microlearner is a full-stack flashcard learning platform with:
 
 - a Flutter frontend for Android and cross-platform clients
 - a Go backend with PostgreSQL
