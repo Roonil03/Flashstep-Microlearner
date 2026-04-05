@@ -1,7 +1,5 @@
 # API Documentation
 
-## Base URL
-`http://localhost:8080/api/v1`
 
 ## Auth Header
 Protected routes require:
