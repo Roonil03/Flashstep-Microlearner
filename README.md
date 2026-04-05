@@ -28,7 +28,8 @@ The goal of the project is to make short, repeatable learning sessions feel smoo
 
 ## License
 
-This project is licensed under the terms described in [MIT License](LICENSE).
+- This project is licensed under the terms described in [MIT License](LICENSE).
+- The images for the logo are under the [CC SA 4.0](./frontend/assets/LICENSE).
 
 ## Contributors:
 - Project Creator and maintainer: [Roonil03](https://github.com/Roonil03)
