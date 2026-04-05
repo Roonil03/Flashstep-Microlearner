@@ -155,3 +155,9 @@ Local table:
 #### Per-User Sync Cursor
 - `last_sync_at` is stored per user, not globally.
 - Switching accounts on the same device must not reuse another user's sync cursor.
+
+## Daily review limit and local scheduler
+- The client uses an SM-2 style local scheduler for card reviews.
+- The default daily review limit is 25 cards, configurable from System Settings.
+- Daily card selection is enforced locally before a review session begins.
+

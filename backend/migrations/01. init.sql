@@ -200,3 +200,108 @@ FOR EACH ROW
 EXECUTE FUNCTION enforce_max_50_cards_per_deck();
 
 COMMIT;
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS user_card_progress (
+    id UUID PRIMARY KEY,
+
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    card_id UUID NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    deck_id UUID NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+
+    total_reviews INT NOT NULL DEFAULT 0,
+    correct_reviews INT NOT NULL DEFAULT 0,
+    again_count INT NOT NULL DEFAULT 0,
+    hard_count INT NOT NULL DEFAULT 0,
+    good_count INT NOT NULL DEFAULT 0,
+    easy_count INT NOT NULL DEFAULT 0,
+
+    last_rating VARCHAR(10)
+        CHECK (last_rating IS NULL OR last_rating IN ('again', 'hard', 'good', 'easy')),
+
+    current_interval DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ease_factor DOUBLE PRECISION NOT NULL DEFAULT 2.5,
+    repetition_count INT NOT NULL DEFAULT 0,
+    due_timestamp TIMESTAMPTZ,
+    last_reviewed_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version INT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS analytics_daily_stats (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day DATE NOT NULL,
+
+    reviews_count INT NOT NULL DEFAULT 0,
+    correct_count INT NOT NULL DEFAULT 0,
+    again_count INT NOT NULL DEFAULT 0,
+    hard_count INT NOT NULL DEFAULT 0,
+    good_count INT NOT NULL DEFAULT 0,
+    easy_count INT NOT NULL DEFAULT 0,
+
+    distinct_cards_reviewed INT NOT NULL DEFAULT 0,
+    average_previous_interval DOUBLE PRECISION NOT NULL DEFAULT 0,
+    average_new_interval DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (user_id, day)
+);
+
+CREATE TABLE IF NOT EXISTS analytics_rollups (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    window_days INT NOT NULL CHECK (window_days IN (7, 30, 90)),
+
+    from_date DATE NOT NULL,
+    to_date DATE NOT NULL,
+
+    reviews_count INT NOT NULL DEFAULT 0,
+    correct_count INT NOT NULL DEFAULT 0,
+    active_days INT NOT NULL DEFAULT 0,
+    average_study_load DOUBLE PRECISION NOT NULL DEFAULT 0,
+    reviews_today INT NOT NULL DEFAULT 0,
+    best_day_count INT NOT NULL DEFAULT 0,
+
+    again_count INT NOT NULL DEFAULT 0,
+    hard_count INT NOT NULL DEFAULT 0,
+    good_count INT NOT NULL DEFAULT 0,
+    easy_count INT NOT NULL DEFAULT 0,
+
+    review_activity JSONB NOT NULL DEFAULT '[]'::jsonb,
+    accuracy_trend JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+    computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (user_id, window_days)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_card_progress_user_card
+    ON user_card_progress(user_id, card_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_card_progress_user_deck
+    ON user_card_progress(user_id, deck_id);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_stats_day
+    ON analytics_daily_stats(day);
+
+DROP TRIGGER IF EXISTS trg_user_card_progress_updated_at ON user_card_progress;
+CREATE TRIGGER trg_user_card_progress_updated_at
+BEFORE UPDATE ON user_card_progress
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_analytics_daily_stats_updated_at ON analytics_daily_stats;
+CREATE TRIGGER trg_analytics_daily_stats_updated_at
+BEFORE UPDATE ON analytics_daily_stats
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_analytics_rollups_updated_at ON analytics_rollups;
+CREATE TRIGGER trg_analytics_rollups_updated_at
+BEFORE UPDATE ON analytics_rollups
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMIT;

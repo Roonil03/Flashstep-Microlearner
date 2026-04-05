@@ -6,6 +6,7 @@ class SessionStorage {
   static const _usernameKey = 'username';
   static const _userIdKey = 'user_id';
   static const _lastSyncAtKeyPrefix = 'last_sync_at';
+  static const _dailyReviewLimitKey = 'daily_review_limit';
 
   const SessionStorage();
 
@@ -78,6 +79,21 @@ class SessionStorage {
 
   Future<void> clearDeviceId() async {
     await _storage.delete(key: _deviceIdKey);
+  }
+
+
+  Future<void> writeDailyReviewLimit(int limit) async {
+    final normalized = limit.clamp(1, 500) as int;
+    await _storage.write(key: _dailyReviewLimitKey, value: normalized.toString());
+  }
+
+  Future<int> readDailyReviewLimit() async {
+    final value = await _storage.read(key: _dailyReviewLimitKey);
+    final parsed = int.tryParse(value ?? '');
+    if (parsed == null || parsed < 1) {
+      return 25;
+    }
+    return parsed;
   }
 
   Future<void> clearAll() async {

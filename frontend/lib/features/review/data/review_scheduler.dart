@@ -27,56 +27,40 @@ class ReviewScheduler {
     DateTime? now,
   }) {
     final reviewTime = (now ?? DateTime.now()).toUtc();
-    final safeEf = previousEaseFactor <= 0 ? _initialEaseFactor : previousEaseFactor;
-
+    final safeEaseFactor = previousEaseFactor <= 0 ? _initialEaseFactor : previousEaseFactor;
     final quality = _qualityFromRating(rating);
-    final updatedEf = _nextEaseFactor(safeEf, quality);
+    final nextEaseFactor = _nextEaseFactor(safeEaseFactor, quality);
 
-    if (rating == 'again') {
-      return ReviewOutcome(
-        nextState: 'learning',
-        interval: 1,
-        easeFactor: updatedEf,
-        repetitionCount: 0,
-        dueTimestamp: reviewTime.add(const Duration(days: 1)),
-      );
-    }
+    late final int nextRepetitionCount;
+    late final double nextInterval;
 
-    final int nextRepetitions = previousRepetitionCount + 1;
-    final double baseInterval = previousInterval <= 0 ? 1 : previousInterval;
-
-    double nextInterval;
-    switch (rating) {
-      case 'hard':
-        nextInterval = baseInterval * 1.2;
-        break;
-      case 'easy':
-        nextInterval = baseInterval * updatedEf * 1.3;
-        break;
-      case 'good':
-      default:
-        nextInterval = baseInterval * updatedEf;
-        break;
-    }
-
-    if (previousRepetitionCount == 0) {
-      if (rating == 'hard') {
+    if (quality < 3) {
+      nextRepetitionCount = 0;
+      nextInterval = 1;
+    } else {
+      final previousSuccessfulRepetitions = previousRepetitionCount < 0 ? 0 : previousRepetitionCount;
+      if (previousSuccessfulRepetitions == 0) {
         nextInterval = 1;
-      } else if (rating == 'good') {
-        nextInterval = 3;
-      } else if (rating == 'easy') {
-        nextInterval = 4;
+      } else if (previousSuccessfulRepetitions == 1) {
+        nextInterval = 6;
+      } else {
+        final baseInterval = previousInterval <= 0 ? 1 : previousInterval;
+        final multiplier = rating == 'easy' ? (nextEaseFactor + 0.15) : nextEaseFactor;
+        final interval = (baseInterval * multiplier).roundToDouble();
+        nextInterval = interval < 1 ? 1 : interval;
       }
+      nextRepetitionCount = previousSuccessfulRepetitions + 1;
     }
 
-    final normalizedInterval = nextInterval < 1 ? 1 : double.parse(nextInterval.toStringAsFixed(2));
+    final normalizedInterval = double.parse(nextInterval.toStringAsFixed(2));
+    final nextState = nextRepetitionCount < 2 ? 'learning' : 'review';
 
     return ReviewOutcome(
-      nextState: nextRepetitions < 2 ? 'learning' : 'review',
-      interval: normalizedInterval.toDouble(),
-      easeFactor: updatedEf,
-      repetitionCount: nextRepetitions,
-      dueTimestamp: reviewTime.add(Duration(hours: (normalizedInterval * 24).round())),
+      nextState: nextState,
+      interval: normalizedInterval,
+      easeFactor: nextEaseFactor,
+      repetitionCount: nextRepetitionCount,
+      dueTimestamp: reviewTime.add(Duration(days: normalizedInterval.round())),
     );
   }
 
@@ -94,8 +78,11 @@ class ReviewScheduler {
     }
   }
 
-  static double _nextEaseFactor(double currentEf, int quality) {
-    final updated = currentEf + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-    return updated < _minEaseFactor ? _minEaseFactor : double.parse(updated.toStringAsFixed(2));
+  static double _nextEaseFactor(double currentEaseFactor, int quality) {
+    final next = currentEaseFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    if (next < _minEaseFactor) {
+      return _minEaseFactor;
+    }
+    return double.parse(next.toStringAsFixed(2));
   }
 }

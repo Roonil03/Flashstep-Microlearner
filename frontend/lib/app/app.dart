@@ -10,6 +10,7 @@ import '../features/settings/presentation/settings_page.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/review/presentation/start_review_page.dart';
 import '../features/decks/presentation/browse_decks_page.dart';
+import '../features/analytics/presentation/analytics_page.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -31,7 +32,7 @@ class App extends ConsumerWidget {
         AppRoutes.login: (_) => const LoginPage(),
         AppRoutes.register: (_) => const RegisterPage(),
         AppRoutes.home: (_) => const HomeDashboardPage(),
-        AppRoutes.analytics: (_) => const _PlaceholderPage(title: 'Analytics Page'),
+        AppRoutes.analytics: (_) => const AnalyticsPage(),
         AppRoutes.settings: (_) => const SettingsPage(),
         AppRoutes.browseDecks: (_) => const BrowseDecksPage(),
         AppRoutes.review: (_) => const StartReviewPage(),

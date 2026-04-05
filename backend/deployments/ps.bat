@@ -132,3 +132,14 @@ if ($migrationFile) {
 }
 
 docker exec -it flashcards_postgres psql -U $postgresUser -d $postgresDB
+
+
+
+/*
+flutter clean
+flutter pub get
+dart run flutter_launcher_icons
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+
+*/

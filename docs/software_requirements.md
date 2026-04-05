@@ -88,3 +88,8 @@ User -> Flutter App -> State Management (Riverpod) -> **User-scoped Drift Local 
    - profile settings page
    - sign out
 10. Loading / Empty / Error States
+
+## Analytics and review constraints
+- Analytics pages must read synced server-side analytics rather than local-only counters.
+- Daily review volume defaults to 25 cards per user per day and must be configurable.
+

@@ -24,6 +24,7 @@ func main() {
 	}
 	defer conn.Close()
 	maintenance.StartDeletedUserCleanup(conn)
+	maintenance.StartAnalyticsAggregation(conn)
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -69,6 +70,7 @@ func main() {
 			protected.GET("/analytics/average-session-length", analyticsHandler.AverageSessionLength)
 			protected.GET("/analytics/accuracy-trends", analyticsHandler.AccuracyTrends)
 			protected.GET("/analytics/deck-performance", analyticsHandler.DeckPerformance)
+			protected.GET("/analytics/dashboard", analyticsHandler.Dashboard)
 		}
 		{
 			protected.PUT("/auth/change-password", userHandler.ChangePassword)

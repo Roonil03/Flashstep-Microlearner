@@ -19,6 +19,7 @@ class ApiEndpoints {
   static const String syncUpload = '/sync/upload';
   static const String syncDownload = '/sync/download';
 
+  static const String analyticsDashboard = '/analytics/dashboard';
   static const String dailyReviewCount = '/analytics/daily-review-count';
   static const String averageSessionLength = '/analytics/average-session-length';
   static const String accuracyTrends = '/analytics/accuracy-trends';

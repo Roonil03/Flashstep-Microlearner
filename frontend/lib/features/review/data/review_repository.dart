@@ -41,6 +41,32 @@ class ReviewRepository {
 
   String _newId() => _uuid.v4();
 
+  Future<int> _dailyAllowanceRemaining() async {
+    final userId = await _storage.readUserId();
+    if (userId == null || userId.isEmpty) {
+      return 0;
+    }
+
+    final maxCards = await _storage.readDailyReviewLimit();
+    final now = DateTime.now().toUtc();
+    final startOfDay = DateTime.utc(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    final distinctCardsExpression = _database.reviewLogs.cardId.count(distinct: true);
+    final row = await (_database.selectOnly(_database.reviewLogs)
+          ..addColumns([distinctCardsExpression])
+          ..where(
+            _database.reviewLogs.userId.equals(userId) &
+                _database.reviewLogs.reviewedAt.isBiggerOrEqualValue(startOfDay) &
+                _database.reviewLogs.reviewedAt.isSmallerThanValue(endOfDay),
+          ))
+        .getSingle();
+
+    final reviewedDistinctCards = row.read(distinctCardsExpression) ?? 0;
+    final remaining = maxCards - reviewedDistinctCards;
+    return remaining < 0 ? 0 : remaining;
+  }
+
   Future<List<ReviewDeckSummary>> getReviewableDecks() async {
     final now = DateTime.now().toUtc();
     final currentUserId = await _storage.readUserId();
@@ -48,16 +74,25 @@ class ReviewRepository {
       return [];
     }
 
+    var remainingAllowance = await _dailyAllowanceRemaining();
+    if (remainingAllowance <= 0) {
+      return [];
+    }
+
     final decks = await (_database.select(_database.decks)
-          ..where((tbl) =>
-              tbl.userId.equals(currentUserId) &
-              tbl.isDeleted.equals(false))
-          ..orderBy([(tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc)]))
+          ..where((tbl) => tbl.userId.equals(currentUserId) & tbl.isDeleted.equals(false))
+          ..orderBy([
+            (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc),
+          ]))
         .get();
 
     final summaries = <ReviewDeckSummary>[];
 
     for (final deck in decks) {
+      if (remainingAllowance <= 0) {
+        break;
+      }
+
       final dueCards = await (_database.select(_database.cards)
             ..where((tbl) =>
                 tbl.deckId.equals(deck.id) &
@@ -71,13 +106,17 @@ class ReviewRepository {
 
       if (dueCards.isEmpty) continue;
 
+      final visibleCount = dueCards.length > remainingAllowance ? remainingAllowance : dueCards.length;
+      if (visibleCount <= 0) continue;
+
       summaries.add(
         ReviewDeckSummary(
           deckId: deck.id,
           title: deck.title,
-          dueCount: dueCards.length,
+          dueCount: visibleCount,
         ),
       );
+      remainingAllowance -= visibleCount;
     }
 
     return summaries;
@@ -85,7 +124,12 @@ class ReviewRepository {
 
   Future<List<db.Card>> getDueCardsForDeck(String deckId) async {
     final now = DateTime.now().toUtc();
-    return (_database.select(_database.cards)
+    final remainingAllowance = await _dailyAllowanceRemaining();
+    if (remainingAllowance <= 0) {
+      return [];
+    }
+
+    final cards = await (_database.select(_database.cards)
           ..where((tbl) =>
               tbl.deckId.equals(deckId) &
               tbl.isDeleted.equals(false) &
@@ -95,6 +139,11 @@ class ReviewRepository {
             (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
           ]))
         .get();
+
+    if (cards.length <= remainingAllowance) {
+      return cards;
+    }
+    return cards.take(remainingAllowance).toList(growable: false);
   }
 
   Future<void> applyReview({
@@ -112,8 +161,7 @@ class ReviewRepository {
       storedDeviceId = _newId();
       await _storage.writeDeviceId(storedDeviceId);
     }
-    final String deviceId = storedDeviceId;
-
+    final deviceId = storedDeviceId;
 
     final reviewLogId = _newId();
     final cardOperationId = _newId();
@@ -202,10 +250,6 @@ class ReviewRepository {
               synced: const Value(false),
             ),
           );
-
-      // await (_database.update(_database.reviewLogs)..where((tbl) => tbl.id.equals(reviewLogId))).write(
-      //   const db.ReviewLogsCompanion(syncStatus: Value('pending')),
-      // );
     });
   }
 }

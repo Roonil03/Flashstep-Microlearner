@@ -31,3 +31,11 @@ func (s *AnalyticsService) DeckPerformance(ctx context.Context, userID, deckID s
 func (s *AnalyticsService) AverageSessionLength(ctx context.Context, userID string, from, to time.Time) (float64, error) {
 	return s.repo.AverageSessionLength(ctx, userID, from, to)
 }
+
+func (s *AnalyticsService) Dashboard(ctx context.Context, userID string, rangeDays int) (models.AnalyticsDashboard, error) {
+	return s.repo.Dashboard(ctx, userID, rangeDays)
+}
+
+func (s *AnalyticsService) RefreshAllAnalytics(ctx context.Context, asOf time.Time) error {
+	return s.repo.RefreshAllUsersAnalytics(ctx, asOf)
+}

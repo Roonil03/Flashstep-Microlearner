@@ -86,7 +86,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (!mounted){
           return;
       }
-      Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted){
         return;

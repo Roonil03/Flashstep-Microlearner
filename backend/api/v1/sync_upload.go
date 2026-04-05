@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/repositories"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -402,6 +403,12 @@ func SyncUpload(c *gin.Context) {
 		return reviewLogs[i].ID.String() < reviewLogs[j].ID.String()
 	})
 
+	ctx := c.Request.Context()
+	progressRepo := repositories.NewProgressRepository()
+	analyticsRepo := repositories.NewAnalyticsRepository(db.DB)
+	impactedCardIDs := make(map[string]struct{})
+	impactedDeckIDs := make(map[string]struct{})
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -567,21 +574,20 @@ func SyncUpload(c *gin.Context) {
 	}
 
 	for _, logItem := range reviewLogs {
-		var cardBelongsToUser bool
+		var deckID uuid.UUID
 		err := tx.QueryRow(`
-        SELECT EXISTS(
-            SELECT 1
-            FROM cards c
-            JOIN decks d ON d.id = c.deck_id
-            WHERE c.id=$1 AND d.user_id=$2
-        )
-    `, logItem.CardID, userID).Scan(&cardBelongsToUser)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        SELECT c.deck_id
+        FROM cards c
+        JOIN decks d ON d.id = c.deck_id
+        WHERE c.id=$1 AND d.user_id=$2
+        LIMIT 1
+    `, logItem.CardID, userID).Scan(&deckID)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "review log references a missing or unauthorized card"})
 			return
 		}
-		if !cardBelongsToUser {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "review log references a missing or unauthorized card"})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -613,9 +619,28 @@ func SyncUpload(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		impactedCardIDs[logItem.CardID.String()] = struct{}{}
+		impactedDeckIDs[deckID.String()] = struct{}{}
+	}
+
+	for cardID := range impactedCardIDs {
+		if err := progressRepo.RecomputeUserCardProgress(ctx, tx, userID.String(), cardID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	for deckID := range impactedDeckIDs {
+		if err := progressRepo.RecomputeDeckProgress(ctx, tx, userID.String(), deckID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if err := analyticsRepo.RefreshUserAnalytics(ctx, userID.String(), time.Now().UTC()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

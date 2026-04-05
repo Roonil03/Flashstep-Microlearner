@@ -526,25 +526,75 @@ Sync rules:
 
 ## ANALYTICS APIs
 
-### Daily Review Count
-`GET /analytics/daily-review-count`
+### Dashboard
+`GET /analytics/dashboard?range_days=7|30|90`
 
-Returns number of reviews per day.
+Returns the analytics dashboard payload for the authenticated user.
+
+Response shape:
+- `username`
+- `range_days`
+- `generated_at`
+- current card/deck counters from the cloud database:
+  - `total_decks`
+  - `total_cards`
+  - `learned_cards`
+  - `mature_cards`
+  - `new_cards`
+  - `learning_cards`
+  - `review_cards`
+  - `due_now`
+  - `due_next_24_hours`
+- range metrics from persisted analytics rollups:
+  - `reviews_today`
+  - `reviews_in_range`
+  - `active_days_in_range`
+  - `average_study_load`
+  - `retention_rate`
+  - `best_day_count`
+- long-term indicators:
+  - `current_streak`
+  - `longest_interval_days`
+- `rating_breakdown`
+- `review_activity`
+- `accuracy_trend`
+- `deck_insights`
+
+Notes:
+- dashboard data is server-backed,
+- chart data is sourced from persisted 7 / 30 / 90 day rollups,
+- current due/card counters are computed from live deck/card rows,
+- the endpoint accepts only `7`, `30`, or `90`.
+
+### Daily Review Count
+`GET /analytics/daily-review-count?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+Returns number of reviews per day from persisted daily analytics rows.
 
 ### Average Session Length
-`GET /analytics/average-session-length`
+`GET /analytics/average-session-length?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
-Returns average study session duration.
+Returns average daily review load across active study days in the selected range.
 
 ### Accuracy Trends
-`GET /analytics/accuracy-trends`
+`GET /analytics/accuracy-trends?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 Returns correctness percentage over time.
 
 ### Deck Performance
-`GET /analytics/deck-performance`
+`GET /analytics/deck-performance?deck_id=<UUID>`
 
-Returns performance per deck, including review count and accuracy.
+Returns all-time performance per deck using persisted `user_progress` rows.
+
+### Analytics persistence notes
+- `review_logs` remain the global synced source of truth for review history,
+- `user_progress` stores per-user, per-deck summary progress,
+- `user_card_progress` stores per-user, per-card score/state snapshots,
+- `analytics_daily_stats` stores daily aggregated review history,
+- `analytics_rollups` stores the current 7 / 30 / 90 day dashboard rollups.
+
+### Midnight UTC maintenance
+At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollups for active users.
 
 ---
 

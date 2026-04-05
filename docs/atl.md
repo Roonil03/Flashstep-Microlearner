@@ -15,3 +15,8 @@
 9. Limit public deck capabilities to verified users if that product rule is kept.
 10. Add curated premade public decks.
 11. Add CSV import for decks/cards.
+
+## Operational notes
+- Midnight UTC maintenance recomputes analytics rollups and purges deleted users.
+- Backend analytics persists 7/30/90 day dashboard rollups for fast retrieval.
+

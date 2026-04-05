@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +31,7 @@ func parseRange(c *gin.Context) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, err
 	}
 	to = to.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-	return from, to, nil
+	return from.UTC(), to.UTC(), nil
 }
 
 func (h *AnalyticsHandler) DailyReviewCount(c *gin.Context) {
@@ -88,6 +89,25 @@ func (h *AnalyticsHandler) DeckPerformance(c *gin.Context) {
 		return
 	}
 	out, err := h.service.DeckPerformance(c.Request.Context(), userID, deckID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *AnalyticsHandler) Dashboard(c *gin.Context) {
+	userID := c.GetString("user_id")
+	rangeDays, err := strconv.Atoi(c.DefaultQuery("range_days", "30"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "range_days must be 7, 30, or 90"})
+		return
+	}
+	if rangeDays != 7 && rangeDays != 30 && rangeDays != 90 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "range_days must be 7, 30, or 90"})
+		return
+	}
+	out, err := h.service.Dashboard(c.Request.Context(), userID, rangeDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

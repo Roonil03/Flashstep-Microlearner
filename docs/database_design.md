@@ -218,3 +218,9 @@ class SyncQueueItem {
 - logout switches to the guest database file
 - delete-account removes the deleted user's local database file after server-side deletion succeeds
 - `last_sync_at` is tracked per user so one user's sync cursor does not affect another user's merge window
+
+## Analytics persistence additions
+- `user_card_progress`: per-user, per-card score/state snapshots.
+- `analytics_daily_stats`: daily aggregated review history rebuilt from review logs.
+- `analytics_rollups`: 7/30/90 day dashboard rollups rebuilt from daily stats.
+

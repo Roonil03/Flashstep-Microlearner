@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/network/providers.dart';
+import '../../../core/storage/session_storage.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -111,7 +113,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Flashstep Microlearner',
+                'Flashapp Microlearner',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -545,13 +547,138 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   }
 }
 
-class _SystemSettings extends ConsumerWidget {
+class _SystemSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   const _SystemSettings({required this.onBack});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SystemSettings> createState() => _SystemSettingsState();
+}
+
+class _SystemSettingsState extends ConsumerState<_SystemSettings> {
+  static const _storage = SessionStorage();
+  late Future<int> _dailyLimitFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dailyLimitFuture = _storage.readDailyReviewLimit();
+  }
+
+  Future<void> _showDailyReviewLimitDialog() async {
+    final currentLimit = await _storage.readDailyReviewLimit();
+    if (!mounted){
+      return;
+    }
+    int selectedLimit = currentLimit.clamp(0, 1000);
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 8,
+                  bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily review limit',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose how many cards you want available each day.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Text(
+                        '$selectedLimit cards per day',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 220,
+                      child: CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                          initialItem: selectedLimit,
+                        ),
+                        itemExtent: 40,
+                        useMagnifier: true,
+                        magnification: 1.08,
+                        onSelectedItemChanged: (value) {
+                          setSheetState(() {
+                            selectedLimit = value;
+                          });
+                        },
+                        children: List<Widget>.generate(
+                          1001,
+                          (index) => Center(
+                            child: Text(
+                              '$index',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () async {
+                              await _storage.writeDailyReviewLimit(selectedLimit);
+                              if (!sheetContext.mounted) return;
+                              Navigator.of(sheetContext).pop(true);
+                            },
+                            child: const Text('Save'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (saved == true && mounted) {
+      setState(() {
+        _dailyLimitFuture = _storage.readDailyReviewLimit();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Daily review limit updated')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final themeMode = ref.watch(appThemeModeProvider);
@@ -560,7 +687,7 @@ class _SystemSettings extends ConsumerWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: onBack,
+          onPressed: widget.onBack,
         ),
         title: const Text('System Settings'),
       ),
@@ -573,9 +700,7 @@ class _SystemSettings extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color: isDark
-                  ? const Color(0xFF1A2D3D)
-                  : const Color(0xFFF5F5F5),
+              color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -583,9 +708,7 @@ class _SystemSettings extends ConsumerWidget {
               children: [
                 Text(
                   'App Theme',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
                 RadioListTile<ThemeMode>(
@@ -604,6 +727,26 @@ class _SystemSettings extends ConsumerWidget {
                   title: const Text('Dark Mode'),
                   onChanged: (value) {
                     ref.read(appThemeModeProvider.notifier).setTheme(value!);
+                  },
+                ),
+                const Divider(height: 24),
+                Text(
+                  'Review settings',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                FutureBuilder<int>(
+                  future: _dailyLimitFuture,
+                  builder: (context, snapshot) {
+                    final value = snapshot.data ?? 25;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.today_outlined),
+                      title: const Text('Daily review limit'),
+                      subtitle: Text('$value cards per day'),
+                      trailing: const Icon(Icons.swipe_vertical_outlined),
+                      onTap: _showDailyReviewLimitDialog,
+                    );
                   },
                 ),
               ],

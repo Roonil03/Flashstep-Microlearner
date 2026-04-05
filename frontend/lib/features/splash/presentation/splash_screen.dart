@@ -47,8 +47,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushReplacementNamed(
+    Navigator.of(context).pushNamedAndRemoveUntil(
       valid ? AppRoutes.home : AppRoutes.login,
+      (route) => false,
     );
   }
 
@@ -116,15 +117,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                   Transform.rotate(
                     angle: _controller.value * 2 * math.pi,
                     child: Image.asset(
-                      'assets/LogoWIthoutText_WithoutBG.png',
+                      'assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png',
                       width: 150,
                       height: 150,
                       fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.auto_stories_rounded,
+                        size: 120,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Loading...',
+                    'Flashapp Microlearner',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: isDark ? Colors.white : Colors.black87,
                           fontWeight: FontWeight.w600,

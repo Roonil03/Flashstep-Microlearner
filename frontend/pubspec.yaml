@@ -1,4 +1,4 @@
-name: Flashstep Microlearner
+name: frontend
 description: "The frontend of the entire project"
 publish_to: 'none'
 version: 1.0.0+1
@@ -41,6 +41,8 @@ flutter:
     - assets/LogoWithText.png
     - assets/LogoWithoutText_WithoutBGLarge.png
     - assets/LogoWithText_WithoutBG.png
+    - assets/LogoWithoutText_WithoutBGLarge_Square.png
+    - assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png
 
 flutter_launcher_icons:
   android: true
