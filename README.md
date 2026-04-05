@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/assets/LogoWithText_WithoutBG.png" alt="Flashapp Microlearner" width="220" />
+  <img src="frontend/assets/LogoWithText_WithoutBGLarge.png" alt="Flashapp Microlearner" width="220" />
 
 # Flashstep Microlearner
 A local-first microlearning and flashcard app built with Flutter and Go (Gin), designed for fast review sessions, deck management, spaced repetition, sync, and learner analytics.
