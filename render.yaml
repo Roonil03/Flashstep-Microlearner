@@ -6,8 +6,8 @@ services:
     region: singapore
     branch: main
     rootDir: backend
-    dockerfilePath: ./backend/deployments/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: deployments/Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     autoDeployTrigger: checksPass
     envVars:
