@@ -1,5 +1,5 @@
 class ApiConfig {
-  static String host = 'localhost';
+  static String host = 'https://flashstep-api.onrender.com';
   static int port = 8080;
 
   static String apiPrefix = '/api/v1';
