@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	Port            string
+	DatabaseURL     string
 	DBHost          string
 	DBPort          string
 	DBUser          string
@@ -25,6 +26,7 @@ func Load() *Config {
 	loadEnv()
 	cfg := &Config{
 		Port:            getEnv("PORT", "8080"),
+		DatabaseURL:     getEnv("DATABASE_URL", ""),
 		DBHost:          getEnv("DB_HOST", "localhost"),
 		DBPort:          getEnv("GO_PORT", "5432"),
 		DBUser:          getEnv("DB_USER", "postgres"),
@@ -45,6 +47,7 @@ func loadEnv() {
 		".env",
 		"../../.env",
 		"backend/.env",
+		"../../deployments/.env",
 	}
 	for _, path := range paths {
 		absPath, _ := filepath.Abs(path)

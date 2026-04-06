@@ -13,22 +13,25 @@ import (
 var DB *sql.DB
 
 func Connect(cfg *config.Config) (*sql.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=UTC",
-		cfg.DBHost,
-		cfg.DBPort,
-		cfg.DBUser,
-		cfg.DBPassword,
-		cfg.DBName,
-		cfg.DBSSLMode,
-	)
+	dsn := cfg.DatabaseURL
+	if dsn == "" {
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=UTC",
+			cfg.DBHost,
+			cfg.DBPort,
+			cfg.DBUser,
+			cfg.DBPassword,
+			cfg.DBName,
+			cfg.DBSSLMode,
+		)
+	}
 	var err error
 	for attempt := 1; attempt <= 10; attempt++ {
 		DB, err = sql.Open("postgres", dsn)
 		if err == nil {
 			if pingErr := DB.Ping(); pingErr == nil {
-				DB.SetMaxOpenConns(25)
-				DB.SetMaxIdleConns(10)
+				DB.SetMaxOpenConns(10)
+				DB.SetMaxIdleConns(5)
 				DB.SetConnMaxLifetime(5 * time.Minute)
 				return DB, nil
 			} else {
