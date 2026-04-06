@@ -113,7 +113,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Flashapp Microlearner',
+                'Flashstep Microlearner',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

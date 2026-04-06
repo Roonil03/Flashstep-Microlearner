@@ -130,7 +130,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Flashapp Microlearner',
+                    'Flashstep Microlearner',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: isDark ? Colors.white : Colors.black87,
                           fontWeight: FontWeight.w600,
