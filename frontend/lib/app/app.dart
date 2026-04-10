@@ -11,6 +11,7 @@ import '../features/splash/presentation/splash_screen.dart';
 import '../features/review/presentation/start_review_page.dart';
 import '../features/decks/presentation/browse_decks_page.dart';
 import '../features/analytics/presentation/analytics_page.dart';
+import '../features/decks/data/auto_sync_service.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -21,6 +22,8 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeModeProvider);
 
+    ref.watch(autoSyncBootstrapProvider);
+    
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),

@@ -9,6 +9,7 @@ import '../../../core/config/api_config.dart';
 import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
+import '../model/csv_import_models.dart';
 
 final _uuid = Uuid();
 
@@ -345,6 +346,129 @@ class DeckRepository {
     });
 
     return cardId;
+  }
+
+    Future<int> importCardsOffline({
+    required String deckId,
+    required List<CsvCardDraft> cards,
+  }) async {
+    if (cards.isEmpty) {
+      throw StateError('There are no cards to import.');
+    }
+
+    if (cards.length > maxCardsPerDeck) {
+      throw StateError(
+        'A single import can contain at most $maxCardsPerDeck cards.',
+      );
+    }
+
+    final currentUserId = await _requireUserId();
+
+    final deck = await (_database.select(_database.decks)
+          ..where(
+            (tbl) =>
+                tbl.id.equals(deckId) &
+                tbl.userId.equals(currentUserId) &
+                tbl.isDeleted.equals(false),
+          ))
+        .getSingleOrNull();
+
+    if (deck == null) {
+      throw StateError('Deck not found.');
+    }
+
+    final normalizedCards = cards.map((card) {
+      final front = card.front.trim();
+      final back = card.back.trim();
+
+      if (front.isEmpty || back.isEmpty) {
+        throw StateError(
+          'CSV row ${card.sourceRow} has an empty Front or Back value.',
+        );
+      }
+
+      return CsvCardDraft(
+        front: front,
+        back: back,
+        sourceRow: card.sourceRow,
+      );
+    }).toList(growable: false);
+
+    final existingCount = await getCardCountForDeck(deckId);
+    final remainingSlots = maxCardsPerDeck - existingCount;
+
+    if (remainingSlots <= 0) {
+      throw StateError('This deck is already full.');
+    }
+
+    if (normalizedCards.length > remainingSlots) {
+      throw StateError(
+        'This deck only has room for $remainingSlots more card'
+        '${remainingSlots == 1 ? '' : 's'}.',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final nextDeckVersion = deck.version + 1;
+
+    await _database.transaction(() async {
+      for (final draft in normalizedCards) {
+        final cardId = _generateId();
+
+        await _database.into(_database.cards).insert(
+              db.CardsCompanion.insert(
+                id: cardId,
+                deckId: deckId,
+                front: draft.front,
+                back: draft.back,
+                state: const Value('new'),
+                interval: const Value(0),
+                easeFactor: const Value(2.5),
+                repetitionCount: const Value(0),
+                dueTimestamp: Value(now),
+                lastReviewedAt: const Value(null),
+                createdAt: now,
+                updatedAt: now,
+                version: const Value(1),
+                isDeleted: const Value(false),
+              ),
+            );
+
+        await _enqueueSyncOperation(
+          operationId: cardId,
+          type: 'create',
+          entity: 'card',
+          payload: _cardPayload(
+            id: cardId,
+            deckId: deckId,
+            front: draft.front,
+            back: draft.back,
+            state: 'new',
+            interval: 0,
+            easeFactor: 2.5,
+            repetitionCount: 0,
+            dueTimestamp: now,
+            lastReviewedAt: null,
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+            isDeleted: false,
+          ),
+          createdAt: now,
+        );
+      }
+
+      await (_database.update(_database.decks)
+            ..where((tbl) => tbl.id.equals(deckId)))
+          .write(
+        db.DecksCompanion(
+          updatedAt: Value(now),
+          version: Value(nextDeckVersion),
+        ),
+      );
+    });
+
+    return normalizedCards.length;
   }
 
   Future<void> updateDeckOffline({

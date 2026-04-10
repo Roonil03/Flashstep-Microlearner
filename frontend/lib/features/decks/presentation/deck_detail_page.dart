@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/app_database.dart' as db;
 import '../data/data_sync_service.dart';
 import '../data/deck_repository.dart';
+import 'csv_import_page.dart';
+import '../model/csv_import_models.dart';
 
 enum _DeckDetailAction { editDeck, deleteDeck }
 enum _CardMenuAction { edit, delete }
@@ -506,17 +508,34 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    Text(
-                                      'Add card',
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Limit: ${DeckRepository.maxCardsPerDeck} cards per deck',
-                                      style: theme.textTheme.bodySmall,
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Add card',
+                                                style: theme.textTheme.titleMedium?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Limit: ${DeckRepository.maxCardsPerDeck} cards per deck',
+                                                style: theme.textTheme.bodySmall,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        OutlinedButton.icon(
+                                          onPressed: (hasReachedLimit || _loading) ? null : _openCsvImport,
+                                          icon: const Icon(Icons.upload_file_outlined),
+                                          label: const Text('Import CSV'),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 16),
                                     TextFormField(
@@ -757,6 +776,32 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _openCsvImport() async {
+    final result = await Navigator.of(context).push<CsvImportSuccessResult>(
+      MaterialPageRoute(
+        builder: (_) => CsvImportPage(deckId: widget.deckId),
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    final isSyncedNow = result.syncedNow;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor:
+            isSyncedNow ? Colors.green : const Color(0xFFFACC15),
+        content: Text(
+          result.message,
+          style: TextStyle(
+            color: isSyncedNow ? Colors.white : Colors.black,
+          ),
+        ),
       ),
     );
   }
