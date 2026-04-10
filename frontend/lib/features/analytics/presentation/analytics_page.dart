@@ -18,7 +18,11 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
 
   Future<void> _refresh() async {
     ref.invalidate(analyticsDashboardProvider(_rangeDays));
-    await ref.read(analyticsDashboardProvider(_rangeDays).future);
+    try {
+      await ref.read(analyticsDashboardProvider(_rangeDays).future);
+    } catch (_) {
+
+    }
   }
 
   @override
@@ -52,16 +56,21 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
                 _SkeletonCard(height: 220),
               ],
             ),
-            error: (error, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-              children: [
-                _ErrorState(
-                  message: '$error',
-                  onRetry: _refresh,
-                ),
-              ],
-            ),
+             error: (error, _) {
+              final resolved = _resolveAnalyticsError(error);
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                children: [
+                  _ErrorState(
+                    title: resolved.title,
+                    message: resolved.message,
+                    icon: resolved.icon,
+                    onRetry: _refresh,
+                  ),
+                ],
+              );
+            },
             data: (data) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -169,6 +178,45 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
       ),
     );
   }
+}
+
+class _AnalyticsErrorData {
+  final String title;
+  final String message;
+  final IconData icon;
+
+  const _AnalyticsErrorData({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+}
+
+_AnalyticsErrorData _resolveAnalyticsError(Object error) {
+  if (error is AnalyticsLoadException && error.isOffline) {
+    return const _AnalyticsErrorData(
+      title: 'No internet connection',
+      message:
+          'Your analytics could not be refreshed because the device appears to be offline. Reconnect and tap Try again.',
+      icon: Icons.wifi_off_rounded,
+    );
+  }
+
+  final text = error.toString();
+
+  if (text.contains('signed in')) {
+    return const _AnalyticsErrorData(
+      title: 'Sign in required',
+      message: 'Please sign in again to view your analytics dashboard.',
+      icon: Icons.lock_outline_rounded,
+    );
+  }
+
+  return const _AnalyticsErrorData(
+    title: 'Could not load analytics',
+    message: 'Something went wrong while loading analytics. Please try again.',
+    icon: Icons.error_outline,
+  );
 }
 
 class _AnalyticsHeroCard extends StatelessWidget {
@@ -1060,10 +1108,17 @@ class _SkeletonCard extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
+  final String title;
   final String message;
+  final IconData icon;
   final VoidCallback onRetry;
 
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1071,18 +1126,26 @@ class _ErrorState extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF171B2E) : Colors.white,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF171B2E)
+            : Colors.white,
       ),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+          Icon(icon, size: 48, color: Colors.redAccent),
           const SizedBox(height: 12),
           Text(
-            'Could not load analytics',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
-          Text(message, textAlign: TextAlign.center),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: onRetry,

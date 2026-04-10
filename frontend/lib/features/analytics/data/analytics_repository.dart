@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -22,6 +24,19 @@ final analyticsDashboardProvider =
       );
 });
 
+class AnalyticsLoadException implements Exception {
+  final String message;
+  final bool isOffline;
+
+  const AnalyticsLoadException(
+    this.message, {
+    this.isOffline = false,
+  });
+
+  @override
+  String toString() => message;
+}
+
 class AnalyticsRepository {
   final SessionStorage _storage;
   final ApiClient _apiClient;
@@ -32,7 +47,7 @@ class AnalyticsRepository {
   })  : _storage = storage,
         _apiClient = apiClient;
 
-  Future<AnalyticsDashboardData> loadDashboard({
+    Future<AnalyticsDashboardData> loadDashboard({
     required int rangeDays,
   }) async {
     final token = await _storage.readToken();
@@ -46,17 +61,38 @@ class AnalyticsRepository {
       },
     );
 
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
-    );
+    late final http.Response response;
+
+    try {
+      response = await http
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+    } on SocketException {
+      throw const AnalyticsLoadException(
+        'No internet connection. Reconnect and try loading analytics again.',
+        isOffline: true,
+      );
+    } on http.ClientException {
+      throw const AnalyticsLoadException(
+        'Analytics could not reach the server. Check your network and try again.',
+        isOffline: true,
+      );
+    } on TimeoutException {
+      throw const AnalyticsLoadException(
+        'Analytics request timed out. Check your connection and try again.',
+        isOffline: true,
+      );
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Analytics request failed (${response.statusCode}): ${response.body}',
+      throw AnalyticsLoadException(
+        'Analytics sync failed (${response.statusCode}). Please try again shortly.',
       );
     }
 
