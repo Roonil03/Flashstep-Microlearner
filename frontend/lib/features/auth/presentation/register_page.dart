@@ -21,18 +21,48 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   bool isLoading = false;
 
+  String? passwordErrorText;
+
+  @override
+  void initState() {
+    super.initState();
+    passwordController.addListener(_validatePassword);
+  }
+
+  void _validatePassword() {
+    final password = passwordController.text.trim();
+    final nextError = password.isEmpty
+        ? null
+        : password.length < 8
+            ? 'Password must be at least 8 characters'
+            : null;
+
+    if (nextError != passwordErrorText) {
+      setState(() {
+        passwordErrorText = nextError;
+      });
+    }
+  }
+
   Future<void> register() async {
     final email = emailController.text.trim();
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
-    /// ✅ Validation
     if (email.isEmpty ||
         username.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
       showSnack("Please fill all fields");
+      return;
+    }
+
+    if (password.length < 8) {
+      setState(() {
+        passwordErrorText = 'Password must be at least 8 characters';
+      });
+      showSnack("Password must be at least 8 characters");
       return;
     }
 
@@ -57,6 +87,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     }
 
     setState(() => isLoading = false);
+  }
+
+  @override
+  void dispose() {
+    passwordController.removeListener(_validatePassword);
+    emailController.dispose();
+    usernameController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
   }
 
   void showSnack(String message) {
@@ -97,7 +137,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     _inputField("Username", usernameController, isDark),
                     const SizedBox(height: 15),
                     _inputField("Password", passwordController, isDark,
-                        obscure: true),
+                        obscure: true, errorText: passwordErrorText,),
                     const SizedBox(height: 15),
                     _inputField("Confirm Password",
                         confirmPasswordController, isDark,
@@ -146,7 +186,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   Widget _inputField(
       String label, TextEditingController controller, bool isDark,
-      {bool obscure = false}) {
+      {bool obscure = false, String? errorText,}) {
     return TextField(
       controller: controller,
       obscureText: obscure,
@@ -156,6 +196,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         filled: true,
         fillColor: Colors.green.withOpacity(0.2),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        errorText: errorText,        
       ),
     );
   }
