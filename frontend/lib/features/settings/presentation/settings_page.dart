@@ -571,7 +571,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
     if (!mounted){
       return;
     }
-    int selectedLimit = currentLimit.clamp(0, 1000);
+    int selectedLimit = currentLimit.clamp(1, 500);
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -616,21 +616,21 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       height: 220,
                       child: CupertinoPicker(
                         scrollController: FixedExtentScrollController(
-                          initialItem: selectedLimit,
+                          initialItem: selectedLimit - 1,
                         ),
                         itemExtent: 40,
                         useMagnifier: true,
                         magnification: 1.08,
                         onSelectedItemChanged: (value) {
                           setSheetState(() {
-                            selectedLimit = value;
+                            selectedLimit = value + 1;
                           });
                         },
                         children: List<Widget>.generate(
-                          1001,
+                          500,
                           (index) => Center(
                             child: Text(
-                              '$index',
+                              '${index + 1}',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
