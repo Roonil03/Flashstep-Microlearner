@@ -7,6 +7,7 @@ class SessionStorage {
   static const _userIdKey = 'user_id';
   static const _lastSyncAtKeyPrefix = 'last_sync_at';
   static const _dailyReviewLimitKey = 'daily_review_limit';
+  static const _selectiveReviewDecksOnlyKey = 'selective_review_decks_only';
 
   const SessionStorage();
 
@@ -94,6 +95,21 @@ class SessionStorage {
       return 25;
     }
     return parsed;
+  }
+
+  Future<void> writeSelectiveReviewDecksOnly(bool value) async {
+    await _storage.write(
+      key: _selectiveReviewDecksOnlyKey,
+      value: value ? 'true' : 'false',
+    );
+  }
+
+  Future<bool> readSelectiveReviewDecksOnly() async {
+    final value = await _storage.read(key: _selectiveReviewDecksOnlyKey);
+    if (value == null) {
+      return true;
+    }
+    return value.toLowerCase() == 'true';
   }
 
   Future<void> clearAll() async {

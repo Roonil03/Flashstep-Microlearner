@@ -73,42 +73,38 @@ class ReviewRepository {
     if (currentUserId == null || currentUserId.isEmpty) {
       return [];
     }
-
-    var remainingAllowance = await _dailyAllowanceRemaining();
-    if (remainingAllowance <= 0) {
-      return [];
-    }
-
-    final decks = await (_database.select(_database.decks)
-          ..where((tbl) => tbl.userId.equals(currentUserId) & tbl.isDeleted.equals(false))
-          ..orderBy([
-            (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc),
-          ]))
-        .get();
-
-    final summaries = <ReviewDeckSummary>[];
-
-    for (final deck in decks) {
+    final useSelectiveDecksOnly = await _storage.readSelectiveReviewDecksOnly();
+    int remainingAllowance = 0;
+    if (useSelectiveDecksOnly) {
+      remainingAllowance = await _dailyAllowanceRemaining();
       if (remainingAllowance <= 0) {
+        return [];
+      }
+    }
+    final decks = await (_database.select(_database.decks)
+      ..where((tbl) => tbl.userId.equals(currentUserId) & tbl.isDeleted.equals(false))
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc),
+      ])).get();
+    final summaries = <ReviewDeckSummary>[];
+    for (final deck in decks) {
+      if (useSelectiveDecksOnly && remainingAllowance <= 0) {
         break;
       }
-
       final dueCards = await (_database.select(_database.cards)
-            ..where((tbl) =>
-                tbl.deckId.equals(deck.id) &
-                tbl.isDeleted.equals(false) &
-                (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
-            ..orderBy([
-              (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-              (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
-            ]))
-          .get();
-
+        ..where((tbl) =>
+            tbl.deckId.equals(deck.id) &
+            tbl.isDeleted.equals(false) &
+            (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
+        ..orderBy([
+          (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
+          (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
+        ])).get();
       if (dueCards.isEmpty) continue;
-
-      final visibleCount = dueCards.length > remainingAllowance ? remainingAllowance : dueCards.length;
+      final visibleCount = useSelectiveDecksOnly
+          ? (dueCards.length > remainingAllowance ? remainingAllowance : dueCards.length)
+          : dueCards.length;
       if (visibleCount <= 0) continue;
-
       summaries.add(
         ReviewDeckSummary(
           deckId: deck.id,
@@ -116,30 +112,35 @@ class ReviewRepository {
           dueCount: visibleCount,
         ),
       );
-      remainingAllowance -= visibleCount;
+      if (useSelectiveDecksOnly) {
+        remainingAllowance -= visibleCount;
+      }
     }
-
     return summaries;
   }
 
   Future<List<db.Card>> getDueCardsForDeck(String deckId) async {
     final now = DateTime.now().toUtc();
-    final remainingAllowance = await _dailyAllowanceRemaining();
-    if (remainingAllowance <= 0) {
-      return [];
+    final useSelectiveDecksOnly = await _storage.readSelectiveReviewDecksOnly();
+    int remainingAllowance = 0;
+    if (useSelectiveDecksOnly) {
+      remainingAllowance = await _dailyAllowanceRemaining();
+      if (remainingAllowance <= 0) {
+        return [];
+      }
     }
-
     final cards = await (_database.select(_database.cards)
-          ..where((tbl) =>
-              tbl.deckId.equals(deckId) &
-              tbl.isDeleted.equals(false) &
-              (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
-          ..orderBy([
-            (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-            (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
-          ]))
-        .get();
-
+      ..where((tbl) =>
+          tbl.deckId.equals(deckId) &
+          tbl.isDeleted.equals(false) &
+          (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
+        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
+      ])).get();
+    if (!useSelectiveDecksOnly) {
+      return cards;
+    }
     if (cards.length <= remainingAllowance) {
       return cards;
     }

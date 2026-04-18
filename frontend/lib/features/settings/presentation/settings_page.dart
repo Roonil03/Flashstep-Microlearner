@@ -559,11 +559,13 @@ class _SystemSettings extends ConsumerStatefulWidget {
 class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   static const _storage = SessionStorage();
   late Future<int> _dailyLimitFuture;
+  late Future<bool> _selectiveDecksOnlyFuture;
 
   @override
   void initState() {
     super.initState();
     _dailyLimitFuture = _storage.readDailyReviewLimit();
+    _selectiveDecksOnlyFuture = _storage.readSelectiveReviewDecksOnly();
   }
 
   Future<void> _showDailyReviewLimitDialog() async {
@@ -677,6 +679,26 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
     }
   }
 
+  Future<void> _toggleSelectiveDecksOnly(bool value) async {
+    await _storage.writeSelectiveReviewDecksOnly(value);
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectiveDecksOnlyFuture = Future<bool>.value(value);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value
+              ? 'Start Review will use selective decks from the algorithm'
+              : 'Start Review will show all decks with due cards',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -746,6 +768,25 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       subtitle: Text('$value cards per day'),
                       trailing: const Icon(Icons.swipe_vertical_outlined),
                       onTap: _showDailyReviewLimitDialog,
+                    );
+                  },
+                ),
+                const Divider(height: 16),
+                FutureBuilder<bool>(
+                  future: _selectiveDecksOnlyFuture,
+                  builder: (context, snapshot) {
+                    final value = snapshot.data ?? true;
+                    return SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.tune_outlined),
+                      title: const Text('Use selective review decks'),
+                      subtitle: Text(
+                        value
+                            ? 'Only show the decks chosen by the review algorithm'
+                            : 'Show all decks with due cards on Start Review',
+                      ),
+                      value: value,
+                      onChanged: _toggleSelectiveDecksOnly,
                     );
                   },
                 ),
