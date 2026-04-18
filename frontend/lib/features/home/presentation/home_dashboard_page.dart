@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 
 import '../../../app/router.dart';
 import '../../../core/storage/database_provider.dart';
@@ -26,9 +27,21 @@ final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
 final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   final username = await ref.watch(usernameProvider.future);
   final decks = await ref.watch(userDecksProvider.future);
+  final sessionStorage = const SessionStorage();
 
-  final dueToday = decks.fold<int>(0, (sum, deck) => sum + deck.dueCards);
-  final deckOfTheDay = decks.isNotEmpty ? decks.first : null;
+  final dailyReviewLimit = await sessionStorage.readDailyReviewLimit();
+  final rawDueToday = decks.fold<int>(0, (sum, deck) => sum + deck.dueCards);
+  final dueToday = math.min(rawDueToday, dailyReviewLimit);
+  final lastSyncedAt = await sessionStorage.readLastSyncAt();
+
+  DeckSummary? deckOfTheDay;
+  for (final deck in decks) {
+    if (deck.dueCards > 0) {
+      deckOfTheDay = deck;
+      break;
+    }
+  }
+  deckOfTheDay ??= decks.isNotEmpty ? decks.first : null;
 
   return HomeDashboardData(
     displayName: username,
@@ -39,7 +52,7 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
     retentionRate: 0.0,
     isOffline: false,
     isSyncing: false,
-    lastSyncedAt: DateTime.now(),
+    lastSyncedAt: lastSyncedAt,
     deckOfTheDay: deckOfTheDay,
     decks: decks,
   );
@@ -76,11 +89,25 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
     await _refreshDashboard();
   }
 
-  String _timeLabel(DateTime? time) {
-    if (time == null) return 'Not scheduled';
+  Future<void> _openSettings() async {
+    await Navigator.of(context).pushNamed(AppRoutes.settings);
+    if (!mounted) return;
+
+    ref.invalidate(homeDashboardProvider);
+    await ref.read(homeDashboardProvider.future);
+  }
+
+  String _timeLabel(DateTime? time, {required int dueCards}) {
+    if (time == null) {
+      return dueCards > 0 ? 'Due now' : 'Not scheduled';
+    }
     final diff = time.difference(DateTime.now());
-    if (diff.inMinutes <= 0) return 'Due now';
-    if (diff.inHours == 0) return 'In ${diff.inMinutes} min';
+    if (diff.inMinutes <= 0){
+      return 'Due now';
+    }
+    if (diff.inHours == 0){
+      return 'In ${diff.inMinutes} min';
+    }
     return 'In ${diff.inHours} h ${diff.inMinutes.remainder(60)} min';
   }
 
@@ -109,14 +136,12 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                   IconButton(
                     tooltip: 'Analytics',
                     icon: const Icon(Icons.insights_outlined),
-                    onPressed: () =>
-                        Navigator.of(context).pushNamed(AppRoutes.analytics),
+                    onPressed: () => Navigator.of(context).pushNamed(AppRoutes.analytics),
                   ),
                   IconButton(
                     tooltip: 'Settings',
                     icon: const Icon(Icons.settings_outlined),
-                    onPressed: () =>
-                        Navigator.of(context).pushNamed(AppRoutes.settings),
+                    onPressed: _openSettings,
                   ),
                   const SizedBox(width: 6),
                 ],
@@ -126,7 +151,6 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                 sliver: Consumer(
                   builder: (context, ref, _) {
                     final dashboardAsync = ref.watch(homeDashboardProvider);
-
                     return dashboardAsync.when(
                       loading: () => SliverList(
                         delegate: SliverChildListDelegate(
@@ -166,27 +190,24 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                   children: [
                                     _DeckOfTheDayCard(
                                       deck: data.deckOfTheDay!,
-                                      timeLabel:
-                                          _timeLabel(data.deckOfTheDay!.nextDueAt),
-                                      onStartReview: () =>
-                                          Navigator.of(context).pushNamed(
+                                      timeLabel: _timeLabel(
+                                        data.deckOfTheDay!.nextDueAt,
+                                        dueCards: data.deckOfTheDay!.dueCards,
+                                      ),
+                                      onStartReview: () => Navigator.of(context).pushNamed(
                                         AppRoutes.review,
                                         arguments: data.deckOfTheDay!.id,
                                       ),
-                                      onOpenDeck: () =>
-                                          _openDeckDetail(data.deckOfTheDay!.id),
+                                      onOpenDeck: () => _openDeckDetail(data.deckOfTheDay!.id),
                                     ),
                                     const SizedBox(height: 16),
                                   ],
                                 ),
                               _QuickActionsGrid(
                                 onCreateDeck: _openCreateDeck,
-                                onStartReview: () => Navigator.of(context)
-                                    .pushNamed(AppRoutes.review),
-                                onBrowseDecks: () => Navigator.of(context)
-                                    .pushNamed(AppRoutes.browseDecks),
-                                onAnalytics: () => Navigator.of(context)
-                                    .pushNamed(AppRoutes.analytics),
+                                onStartReview: () => Navigator.of(context).pushNamed(AppRoutes.review),
+                                onBrowseDecks: () => Navigator.of(context).pushNamed(AppRoutes.browseDecks),
+                                onAnalytics: () => Navigator.of(context).pushNamed(AppRoutes.analytics),
                               ),
                               const SizedBox(height: 16),
                               _MiniStatsRow(
@@ -196,8 +217,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                               ),
                               const SizedBox(height: 18),
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Your decks',
@@ -206,8 +226,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: () => Navigator.of(context)
-                                        .pushNamed(AppRoutes.browseDecks),
+                                    onPressed: () => Navigator.of(context).pushNamed(AppRoutes.browseDecks),
                                     child: const Text('Browse all'),
                                   ),
                                 ],
@@ -215,16 +234,13 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                               const SizedBox(height: 8),
                               if (data.decks.isEmpty)
                                 Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 24),
+                                  padding: const EdgeInsets.symmetric(vertical: 24),
                                   child: Center(
                                     child: Text(
                                       'Damn, this place looks empty. Where are the cards?',
-                                      style:
-                                          theme.textTheme.bodyMedium?.copyWith(
+                                      style: theme.textTheme.bodyMedium?.copyWith(
                                         fontStyle: FontStyle.italic,
-                                        color:
-                                            theme.textTheme.bodySmall?.color,
+                                        color: theme.textTheme.bodySmall?.color,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
@@ -233,8 +249,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                               else
                                 ...data.decks.map(
                                   (deck) => Padding(
-                                    padding:
-                                        const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.only(bottom: 12),
                                     child: _DeckCard(
                                       deck: deck,
                                       onTap: () => _openDeckDetail(deck.id),
@@ -295,10 +310,19 @@ class _TopGreetingCard extends StatelessWidget {
 
   String _lastSyncTime() {
     if (lastSyncedAt == null) return 'No sync time';
-    final diff = DateTime.now().difference(lastSyncedAt!);
+    final localSyncTime = lastSyncedAt!.toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(localSyncTime);
+    if (diff.inSeconds < 0) return 'just now';
     if (diff.inMinutes < 1) return 'just now';
     if (diff.inHours < 1) return '${diff.inMinutes} min ago';
-    return '${diff.inHours} h ago';
+    if (diff.inDays < 1) {
+      return '${diff.inHours} h ${diff.inMinutes.remainder(60)} min ago';
+    }
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${localSyncTime.day.toString().padLeft(2, '0')}/'
+        '${localSyncTime.month.toString().padLeft(2, '0')}/'
+        '${localSyncTime.year}';
   }
 
   @override
@@ -815,7 +839,17 @@ class _SyncFooterCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final minute = lastSyncedAt?.minute.toString().padLeft(2, '0') ?? '00';
+    final localSyncTime = lastSyncedAt?.toLocal();
+    final hour = localSyncTime?.hour.toString().padLeft(2, '0') ?? '00';
+    final minute = localSyncTime?.minute.toString().padLeft(2, '0') ?? '00';
+    final day = localSyncTime?.day.toString().padLeft(2, '0') ?? '00';
+    final month = localSyncTime?.month.toString().padLeft(2, '0') ?? '00';
+    final year = localSyncTime?.year.toString() ?? '0000';
+    final now = DateTime.now();
+    final isToday = localSyncTime != null &&
+        localSyncTime.year == now.year &&
+        localSyncTime.month == now.month &&
+        localSyncTime.day == now.day;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -839,7 +873,9 @@ class _SyncFooterCard extends StatelessWidget {
               Text(
                 lastSyncedAt == null
                     ? 'Not synced yet'
-                    : 'Last sync: ${lastSyncedAt!.hour}:$minute',
+                    : isToday
+                        ? 'Last sync: $hour:$minute'
+                        : 'Last sync: $day/$month/$year $hour:$minute',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                 ),
