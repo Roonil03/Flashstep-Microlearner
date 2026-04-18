@@ -25,9 +25,11 @@ final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
 });
 
 final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
+  final repository = ref.watch(homeRepositoryProvider);
   final username = await ref.watch(usernameProvider.future);
   final decks = await ref.watch(userDecksProvider.future);
   final sessionStorage = const SessionStorage();
+  final dashboardStats = await repository.getDashboardStats();
 
   final dailyReviewLimit = await sessionStorage.readDailyReviewLimit();
   final rawDueToday = decks.fold<int>(0, (sum, deck) => sum + deck.dueCards);
@@ -47,9 +49,9 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
     displayName: username,
     decksCount: decks.length,
     dueToday: dueToday,
-    reviewedToday: 0,
-    streak: 0,
-    retentionRate: 0.0,
+    reviewedToday: dashboardStats.reviewedToday,
+    streak: dashboardStats.streak,
+    retentionRate: dashboardStats.retentionRate,
     isOffline: false,
     isSyncing: false,
     lastSyncedAt: lastSyncedAt,
