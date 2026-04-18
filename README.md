@@ -21,7 +21,7 @@ The goal of the project is to make short, repeatable learning sessions feel smoo
 ## Documentation
 
 - [Installation Guide](INSTALL.md)
-- [Release Notes 0.9.1](./docs/release-0.9.1.md)
+- [Release Notes 0.9.7](./docs/release-0.9.7.md)
 - [Backend API Reference](./backend/api/API.md)
 - [Architecture and Design Docs](docs/)
 
