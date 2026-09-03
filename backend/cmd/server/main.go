@@ -25,6 +25,7 @@ func main() {
 	defer conn.Close()
 	maintenance.StartDeletedUserCleanup(conn)
 	maintenance.StartAnalyticsAggregation(conn)
+	v1.InitBloomFilter()
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -74,6 +75,7 @@ func main() {
 		}
 		{
 			protected.PUT("/auth/change-password", userHandler.ChangePassword)
+			protected.PUT("/auth/change-username", authHandler.UpdateUsername)
 			protected.DELETE("/auth/delete-account", userHandler.DeleteAccount)
 		}
 	}

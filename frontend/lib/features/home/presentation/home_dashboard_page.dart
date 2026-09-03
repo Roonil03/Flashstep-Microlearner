@@ -68,6 +68,8 @@ class HomeDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
+  bool _showAllDecks = false;
+
   Future<void> _refreshDashboard() async {
     await ref.read(deckSyncServiceProvider).syncNow();
     ref.invalidate(usernameProvider);
@@ -227,10 +229,15 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pushNamed(AppRoutes.browseDecks),
-                                    child: const Text('Browse all'),
-                                  ),
+                                  if (data.decks.length > 5)
+                                    TextButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _showAllDecks = !_showAllDecks;
+                                        });
+                                      },
+                                      child: Text(_showAllDecks ? 'Show less' : 'Explore all'),
+                                    ),
                                 ],
                               ),
                               const SizedBox(height: 8),
@@ -249,7 +256,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                   ),
                                 )
                               else
-                                ...data.decks.map(
+                                ...data.decks.take(_showAllDecks ? data.decks.length : 5).map(
                                   (deck) => Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: _DeckCard(

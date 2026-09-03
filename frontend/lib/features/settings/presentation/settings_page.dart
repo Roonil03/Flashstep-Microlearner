@@ -120,7 +120,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Version 0.9.7 (Beta Build 4)',
+                'Version 1.0.0-pre',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -364,6 +364,121 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
     }
   }
 
+  Future<void> _showChangeUsernameDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final usernameController = TextEditingController();
+
+        bool isSubmitting = false;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            Future<void> submit() async {
+              if (isSubmitting) return;
+
+              final username = usernameController.text.trim();
+
+              if (username.isEmpty) {
+                setStateDialog(() {
+                  errorText = 'Username is required.';
+                });
+                return;
+              }
+
+              setStateDialog(() {
+                isSubmitting = true;
+                errorText = null;
+              });
+
+              try {
+                await ref.read(authRepositoryProvider).changeUsername(
+                      username: username,
+                    );
+
+                if (!dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop(true);
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setStateDialog(() {
+                  errorText = _messageFromError(e);
+                  isSubmitting = false;
+                });
+              }
+            }
+
+            return PopScope(
+              canPop: !isSubmitting,
+              child: AlertDialog(
+                title: const Text('Change Username'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (errorText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                      TextField(
+                        controller: usernameController,
+                        enabled: !isSubmitting,
+                        decoration: const InputDecoration(
+                          labelText: 'New Username',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSubmitting
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: isSubmitting ? null : submit,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Update'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Username updated successfully')),
+      );
+    }
+  }
+
   Future<void> _showDeleteAccountDialog() async {
     final result = await showDialog<bool>(
       context: context,
@@ -528,6 +643,13 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               ),
               ListTile(
                 dense: true,
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Change Username'),
+                onTap: _showChangeUsernameDialog,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                dense: true,
                 leading: const Icon(Icons.lock_outline),
                 title: const Text('Change Password'),
                 onTap: _showChangePasswordDialog,
@@ -560,12 +682,14 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   static const _storage = SessionStorage();
   late Future<int> _dailyLimitFuture;
   late Future<bool> _selectiveDecksOnlyFuture;
+  late Future<bool> _bypassSrsFuture;
 
   @override
   void initState() {
     super.initState();
     _dailyLimitFuture = _storage.readDailyReviewLimit();
     _selectiveDecksOnlyFuture = _storage.readSelectiveReviewDecksOnly();
+    _bypassSrsFuture = _storage.readBypassSrs();
   }
 
   Future<void> _showDailyReviewLimitDialog() async {
@@ -699,6 +823,26 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
     );
   }
 
+  Future<void> _toggleBypassSrs(bool value) async {
+    await _storage.writeBypassSrs(value);
+
+    if (!mounted) return;
+
+    setState(() {
+      _bypassSrsFuture = Future<bool>.value(value);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value
+              ? 'Review will ignore limits and due dates'
+              : 'Review will respect limits and due dates',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -787,6 +931,25 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       ),
                       value: value,
                       onChanged: _toggleSelectiveDecksOnly,
+                    );
+                  },
+                ),
+                const Divider(height: 16),
+                FutureBuilder<bool>(
+                  future: _bypassSrsFuture,
+                  builder: (context, snapshot) {
+                    final value = snapshot.data ?? false;
+                    return SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.all_inclusive_outlined),
+                      title: const Text('Review all cards'),
+                      subtitle: Text(
+                        value
+                            ? 'Ignores daily limits and due dates. All cards are available.'
+                            : 'Respects daily limits and due dates.',
+                      ),
+                      value: value,
+                      onChanged: _toggleBypassSrs,
                     );
                   },
                 ),

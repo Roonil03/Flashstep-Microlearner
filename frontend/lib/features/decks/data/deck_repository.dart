@@ -974,14 +974,20 @@ class DeckRepository {
     });
   }
 
-  Future<List<PublicDeckSummary>> fetchPublicDecks() async {
+  Future<List<PublicDeckSummary>> fetchPublicDecks([String? query]) async {
     final token = await _storage.readToken();
     if (token == null || token.isEmpty) {
       throw StateError('You must be signed in to browse public decks.');
     }
 
+    var url = '${ApiConfig.baseUrl}/decks/public';
+    if (query != null && query.trim().isNotEmpty) {
+      final encodedQuery = Uri.encodeQueryComponent(query.trim());
+      url += '?search=$encodedQuery';
+    }
+
     final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/decks/public'),
+      Uri.parse(url),
       headers: {'Authorization': 'Bearer $token'},
     );
 

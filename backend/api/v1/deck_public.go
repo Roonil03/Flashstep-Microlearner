@@ -4,11 +4,38 @@ import (
 	"backend/internal/db"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+var (
+	publicDecksBloom *bloom.BloomFilter
+	bloomMutex       sync.RWMutex
+)
+
+func InitBloomFilter() {
+	bloomMutex.Lock()
+	defer bloomMutex.Unlock()
+	publicDecksBloom = bloom.NewWithEstimates(10000, 0.01)
+
+	rows, err := db.DB.Query(`SELECT title FROM decks WHERE is_public=true AND is_deleted=false`)
+	if err == nil {
+		defer rows.Close()
+		var title string
+		for rows.Next() {
+			if err := rows.Scan(&title); err == nil {
+				words := strings.Fields(strings.ToLower(title))
+				for _, w := range words {
+					publicDecksBloom.AddString(w)
+				}
+			}
+		}
+	}
+}
 
 func GetPublicDecks(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
@@ -18,7 +45,23 @@ func GetPublicDecks(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	searchQuery := strings.TrimSpace(c.Query("search"))
+	if searchQuery != "" {
+		bloomMutex.RLock()
+		if publicDecksBloom != nil {
+			words := strings.Fields(strings.ToLower(searchQuery))
+			for _, w := range words {
+				if !publicDecksBloom.TestString(w) {
+					bloomMutex.RUnlock()
+					c.JSON(http.StatusOK, make([]gin.H, 0))
+					return
+				}
+			}
+		}
+		bloomMutex.RUnlock()
+	}
+
+	query := `
 		SELECT d.id, d.user_id, d.title, d.description, d.updated_at, d.version,
 		       u.username,
 		       COUNT(c.id) FILTER (WHERE c.is_deleted=false) AS card_count
@@ -28,9 +71,20 @@ func GetPublicDecks(c *gin.Context) {
 		WHERE d.is_public=true
 		  AND d.is_deleted=false
 		  AND d.user_id <> $1
+	`
+	args := []interface{}{userID}
+
+	if searchQuery != "" {
+		query += ` AND d.title ILIKE '%' || $2 || '%'`
+		args = append(args, searchQuery)
+	}
+
+	query += `
 		GROUP BY d.id, d.user_id, d.title, d.description, d.updated_at, d.version, u.username
 		ORDER BY d.updated_at DESC, d.title ASC
-	`, userID)
+	`
+
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
