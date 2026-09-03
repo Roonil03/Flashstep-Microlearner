@@ -73,7 +73,8 @@ class ReviewRepository {
     if (currentUserId == null || currentUserId.isEmpty) {
       return [];
     }
-    final useSelectiveDecksOnly = await _storage.readSelectiveReviewDecksOnly();
+    final bypassSrs = await _storage.readBypassSrs();
+    final useSelectiveDecksOnly = bypassSrs ? false : await _storage.readSelectiveReviewDecksOnly();
     int remainingAllowance = 0;
     if (useSelectiveDecksOnly) {
       remainingAllowance = await _dailyAllowanceRemaining();
@@ -91,15 +92,20 @@ class ReviewRepository {
       if (useSelectiveDecksOnly && remainingAllowance <= 0) {
         break;
       }
-      final dueCards = await (_database.select(_database.cards)
-        ..where((tbl) =>
-            tbl.deckId.equals(deck.id) &
-            tbl.isDeleted.equals(false) &
-            (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
-        ..orderBy([
-          (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-          (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
-        ])).get();
+      final dueCardsQuery = _database.select(_database.cards)
+        ..where((tbl) => tbl.deckId.equals(deck.id) & tbl.isDeleted.equals(false));
+      
+      if (!bypassSrs) {
+        dueCardsQuery.where((tbl) => tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now));
+      }
+      
+      dueCardsQuery.orderBy([
+        (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
+        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
+      ]);
+      
+      final dueCards = await dueCardsQuery.get();
+      
       if (dueCards.isEmpty) continue;
       final visibleCount = useSelectiveDecksOnly
           ? (dueCards.length > remainingAllowance ? remainingAllowance : dueCards.length)
@@ -121,6 +127,16 @@ class ReviewRepository {
 
   Future<List<db.Card>> getDueCardsForDeck(String deckId) async {
     final now = DateTime.now().toUtc();
+    final bypassSrs = await _storage.readBypassSrs();
+    if (bypassSrs) {
+      return (_database.select(_database.cards)
+        ..where((tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false))
+        ..orderBy([
+          (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
+          (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
+        ])).get();
+    }
+
     final useSelectiveDecksOnly = await _storage.readSelectiveReviewDecksOnly();
     int remainingAllowance = 0;
     if (useSelectiveDecksOnly) {

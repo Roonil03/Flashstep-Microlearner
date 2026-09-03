@@ -8,6 +8,7 @@ class SessionStorage {
   static const _lastSyncAtKeyPrefix = 'last_sync_at';
   static const _dailyReviewLimitKey = 'daily_review_limit';
   static const _selectiveReviewDecksOnlyKey = 'selective_review_decks_only';
+  static const _bypassSrsKey = 'bypass_srs';
 
   const SessionStorage();
 
@@ -110,6 +111,18 @@ class SessionStorage {
       return true;
     }
     return value.toLowerCase() == 'true';
+  }
+
+  Future<void> writeBypassSrs(bool value) async {
+    await _storage.write(
+      key: _bypassSrsKey,
+      value: value ? 'true' : 'false',
+    );
+  }
+
+  Future<bool> readBypassSrs() async {
+    final value = await _storage.read(key: _bypassSrsKey);
+    return value?.toLowerCase() == 'true';
   }
 
   Future<void> clearAll() async {

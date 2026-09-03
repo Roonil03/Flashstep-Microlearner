@@ -111,3 +111,14 @@ func (r *UserRepository) SoftDeleteUser(userID string) error {
 	`, userID)
 	return err
 }
+
+func (r *UserRepository) UpdateUsername(userID, username string) error {
+	_, err := r.DB.Exec(`
+		UPDATE users
+		SET username = $1,
+		    updated_at = NOW(),
+		    version = version + 1
+		WHERE id = $2 AND is_deleted = FALSE
+	`, username, userID)
+	return err
+}

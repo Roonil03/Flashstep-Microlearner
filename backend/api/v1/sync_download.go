@@ -82,6 +82,11 @@ func SyncDownload(c *gin.Context) {
 		})
 	}
 
+	if err := deckRows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	cardRows, err := db.DB.Query(`
 		SELECT c.id, c.deck_id, c.front, c.back, c.state,
 		       c.interval, c.ease_factor, c.repetition_count,
@@ -160,6 +165,11 @@ func SyncDownload(c *gin.Context) {
 			"version":          version,
 			"is_deleted":       isDeleted,
 		})
+	}
+
+	if err := cardRows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

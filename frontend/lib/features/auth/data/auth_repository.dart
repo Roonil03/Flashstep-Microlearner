@@ -167,6 +167,17 @@ class AuthRepository {
     );
   }
 
+  Future<void> changeUsername({
+    required String username,
+  }) async {
+    final token = await _requireToken();
+    await api.changeUsername(
+      token: token,
+      username: username,
+    );
+    await storage.writeUsername(username);
+  }
+
   Future<void> deleteAccount() async {
     final token = await _requireToken();
     final userId = await storage.readUserId();

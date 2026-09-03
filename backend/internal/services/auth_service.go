@@ -125,3 +125,11 @@ func (s *AuthService) Me(ctx context.Context, userID string) (models.UserPublic,
 	}
 	return user.Public(), nil
 }
+
+func (s *AuthService) UpdateUsername(ctx context.Context, userID, username string) error {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if username == "" {
+		return errors.New("username is required")
+	}
+	return s.users.UpdateUsername(userID, username)
+}

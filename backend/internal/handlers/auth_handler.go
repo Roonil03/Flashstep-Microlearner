@@ -72,3 +72,25 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, user)
 }
+
+func (h *AuthHandler) UpdateUsername(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	id, _ := userID.(string)
+	if strings.TrimSpace(id) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing user id"})
+		return
+	}
+
+	var req models.UpdateUsernameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.service.UpdateUsername(c.Request.Context(), id, req.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "username updated successfully"})
+}

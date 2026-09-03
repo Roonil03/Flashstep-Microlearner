@@ -17,6 +17,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
   String? _error;
   List<PublicDeckSummary> _decks = const [];
   final Set<String> _downloadingDeckIds = <String>{};
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -26,6 +27,12 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadPublicDecks() async {
     setState(() {
       _loading = true;
@@ -33,7 +40,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     });
 
     try {
-      final decks = await ref.read(deckRepositoryProvider).fetchPublicDecks();
+      final decks = await ref.read(deckRepositoryProvider).fetchPublicDecks(_searchController.text);
       if (!mounted) return;
       setState(() {
         _decks = decks;
@@ -141,13 +148,69 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
           ),
         ],
       ),
-      body: Builder(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search decks...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _loadPublicDecks();
+                  },
+                ),
+              ),
+              onSubmitted: (_) => _loadPublicDecks(),
+            ),
+          ),
+          Expanded(
+            child: Builder(
         builder: (context) {
           if (_loading) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (_error != null) {
+            final isOffline = _error!.toLowerCase().contains('socketexception') || _error!.toLowerCase().contains('failed host lookup') || _error!.toLowerCase().contains('clientexception');
+            if (isOffline) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No Internet Connection',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'You need an active internet connection to browse and search for public decks. Please check your network and try again.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: _loadPublicDecks,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Try again'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -238,6 +301,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
             ),
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

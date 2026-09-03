@@ -197,6 +197,26 @@ class AuthApi {
     }
   }
 
+  Future<void> changeUsername({
+    required String token,
+    required String username,
+  }) async {
+    final response = await http.put(
+      _client.uri(ApiEndpoints.changeUsername),
+      headers: _jsonHeaders(token),
+      body: jsonEncode({
+        'username': username,
+      }),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(
+        _extractErrorMessage(response, fallback: 'Username update failed'),
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
   Future<void> deleteAccount({
     required String token,
   }) async {

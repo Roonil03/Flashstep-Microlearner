@@ -37,7 +37,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     final cards = await ref.read(reviewRepositoryProvider).getDueCardsForDeck(widget.deckId);
     if (!mounted) return;
     setState(() {
-      _cards = cards;
+      _cards = cards.toList();
       _loading = false;
     });
 
@@ -65,6 +65,15 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     setState(() {
       _revealed = false;
       _index += 1;
+    });
+  }
+
+  void _shuffleRemaining() {
+    if (_cards.isEmpty || _index >= _cards.length - 1) return;
+    setState(() {
+      final remaining = _cards.sublist(_index);
+      remaining.shuffle();
+      _cards.replaceRange(_index, _cards.length, remaining);
     });
   }
 
@@ -114,6 +123,13 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       backgroundColor: bg,
       appBar: AppBar(
         title: Text(widget.deckTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.shuffle),
+            tooltip: 'Shuffle remaining cards',
+            onPressed: (_cards.isEmpty || _index >= _cards.length - 1) ? null : _shuffleRemaining,
+          ),
+        ],
       ),
       body: Stack(
         children: [

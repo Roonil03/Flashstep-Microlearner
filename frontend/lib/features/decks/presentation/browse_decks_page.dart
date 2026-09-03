@@ -20,6 +20,9 @@ class BrowseDecksPage extends ConsumerStatefulWidget {
 
 class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
   bool _refreshing = false;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   void _triggerBackgroundSync() {
     unawaited(ref.read(deckSyncServiceProvider).syncNow());
@@ -33,9 +36,20 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refresh();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -194,8 +208,38 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Your decks'),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search decks...',
+                  border: InputBorder.none,
+                ),
+                style: const TextStyle(fontSize: 18),
+              )
+            : const Text('Your decks'),
         actions: [
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchController.clear();
+                });
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+              tooltip: 'Search',
+            ),
           IconButton(
             onPressed: _refreshing ? null : _refresh,
             icon: _refreshing
@@ -222,7 +266,12 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final decks = snapshot.data ?? const <db.Deck>[];
+          var decks = snapshot.data ?? const <db.Deck>[];
+          
+          if (_searchQuery.isNotEmpty) {
+            decks = decks.where((deck) => deck.title.toLowerCase().contains(_searchQuery)).toList();
+          }
+
           if (decks.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
