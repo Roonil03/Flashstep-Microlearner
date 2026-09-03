@@ -120,7 +120,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Version 1.0.0-pre',
+                'Version 1.0.0',
                 style: theme.textTheme.bodySmall,
               ),
             ],
