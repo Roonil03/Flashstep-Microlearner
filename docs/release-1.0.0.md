@@ -9,7 +9,7 @@
 
 ## Improvements
 - Improved offline experience when browsing public decks by showing an appropriate "No Internet" UI.
-- Upgraded app version to 1.0.0-pre.
+- Upgraded app version to 1.0.0 (Official Release Version).
 
 ## Technical Notes
 - Backend introduced `github.com/bits-and-blooms/bloom/v3` for fast public deck prefix caching.
