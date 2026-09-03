@@ -1,4 +1,4 @@
-# Release 1.0.0-pre
+# Release 1.0.0
 
 ## New Features
 - **Public Deck Search**: You can now search through public decks seamlessly with a new Bloom Filter-powered search bar on the backend.
