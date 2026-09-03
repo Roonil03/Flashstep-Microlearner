@@ -34,6 +34,9 @@ func InitBloomFilter() {
 				}
 			}
 		}
+		if err := rows.Err(); err != nil {
+			// just log or ignore for initialization
+		}
 	}
 }
 
@@ -125,6 +128,11 @@ func GetPublicDecks(c *gin.Context) {
 			"owner_username": ownerUsername,
 			"card_count":     cardCount,
 		})
+	}
+
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, publicDecks)

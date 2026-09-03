@@ -60,5 +60,9 @@ func GetDeckCards(c *gin.Context) {
 			"is_deleted":    isDeleted,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, cards)
 }

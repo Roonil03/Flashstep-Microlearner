@@ -302,8 +302,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
           );
         },
       ),
-    ),
-    ],
+          ),
+        ],
+      ),
     );
   }
 }
