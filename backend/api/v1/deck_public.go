@@ -49,20 +49,7 @@ func GetPublicDecks(c *gin.Context) {
 	}
 
 	searchQuery := strings.TrimSpace(c.Query("search"))
-	if searchQuery != "" {
-		bloomMutex.RLock()
-		if publicDecksBloom != nil {
-			words := strings.Fields(strings.ToLower(searchQuery))
-			for _, w := range words {
-				if !publicDecksBloom.TestString(w) {
-					bloomMutex.RUnlock()
-					c.JSON(http.StatusOK, make([]gin.H, 0))
-					return
-				}
-			}
-		}
-		bloomMutex.RUnlock()
-	}
+
 
 	query := `
 		SELECT d.id, d.user_id, d.title, d.description, d.updated_at, d.version,
