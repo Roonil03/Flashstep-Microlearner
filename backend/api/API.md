@@ -77,6 +77,28 @@ Response `200 OK`:
 }
 ```
 
+### Change Username
+`PUT /auth/change-username`
+
+Request body:
+```json
+{
+  "username": "new_username"
+}
+```
+
+Response `200 OK`:
+```json
+{
+  "message": "username updated successfully"
+}
+```
+
+Errors:
+- `400 Bad Request`: invalid request payload
+- `401 Unauthorized`: missing or invalid token
+- `500 Internal Server Error`: database failure
+
 ### Change Password
 `PUT /auth/change-password`
 
