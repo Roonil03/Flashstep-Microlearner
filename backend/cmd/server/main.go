@@ -65,6 +65,8 @@ func main() {
 
 			protected.POST("/sync/upload", v1.SyncUpload)
 			protected.GET("/sync/download", v1.SyncDownload)
+			protected.GET("/sync/manifest", v1.SyncManifest)
+			protected.POST("/sync/fetch", v1.SyncFetch)
 		}
 		{
 			protected.GET("/analytics/daily-review-count", analyticsHandler.DailyReviewCount)

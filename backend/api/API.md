@@ -419,6 +419,30 @@ Behavior notes:
 
 ## SYNC APIs
 
+### Paged Reconciliation (v1.1.0)
+
+`GET /sync/manifest?cursor=<deck UUID>&limit=500` returns
+`{"decks":[{"id":"<UUID>","fingerprint":"<opaque revision digest>"}],"next_cursor":null}`.
+The default/max page size is 500. Continue using `next_cursor` until it is null.
+Decks are ordered by UUID and include tombstones; fingerprints include ordered
+child-card revision metadata, so card changes invalidate their parent deck.
+
+`POST /sync/fetch` accepts
+`{"deck_ids":["<UUID>"],"cursor":"<card UUID>","limit":500}`.
+Supply 1–25 deck IDs; omit cursor for the first page. The response contains
+`decks`, `cards`, and `next_cursor`. Each page repeats the selected deck details
+and returns up to 500 cards ordered by UUID, including all tombstones. Missing
+or unauthorized IDs and invalid cursors/limits return 400. Authentication is
+required, and timestamps retain fractional precision.
+
+Updated clients upload bounded batches, compare manifests every sync, and fetch
+only changed decks. Cache the original manifest fingerprint only after all fetch
+pages merge. Concurrent changes during paging are detected on the next sync;
+these endpoints do not hold a database snapshot across HTTP requests.
+Pending local edits remain protected. No database migration is needed.
+Existing upload/download endpoints remain supported. If manifest is unavailable
+(404/405), updated clients perform a full legacy download for reconciliation.
+
 ### Upload Changes
 `POST /sync/upload`
 
