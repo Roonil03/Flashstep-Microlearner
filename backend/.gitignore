@@ -27,7 +27,6 @@ coverage.html
 *.db
 *.sqlite
 *.sqlite3
-**/.dockerignore
 **/Dockerfile.*
 tmp/
 temp/
