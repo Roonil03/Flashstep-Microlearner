@@ -33,20 +33,21 @@ type syncDeck struct {
 }
 
 type syncCard struct {
-	ID              uuid.UUID
-	DeckID          uuid.UUID
-	Front           string
-	Back            string
-	State           string
-	Interval        float64
-	EaseFactor      float64
-	RepetitionCount int
-	DueTimestamp    *time.Time
-	LastReviewedAt  *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	Version         int
-	IsDeleted       bool
+	ID               uuid.UUID
+	DeckID           uuid.UUID
+	Front            string
+	Back             string
+	State            string
+	Interval         float64
+	EaseFactor       float64
+	RepetitionCount  int
+	DueTimestamp     *time.Time
+	LastReviewedAt   *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	Version          int
+	IsDeleted        bool
+	FromDeckDeletion bool
 }
 
 type syncReviewLog struct {
@@ -248,20 +249,21 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 	}
 
 	return syncCard{
-		ID:              id,
-		DeckID:          deckID,
-		Front:           asString(raw["front"]),
-		Back:            asString(raw["back"]),
-		State:           state,
-		Interval:        asFloat64(raw["interval"]),
-		EaseFactor:      easeFactor,
-		RepetitionCount: asInt(raw["repetition_count"]),
-		DueTimestamp:    parseOptionalTime(raw["due_timestamp"]),
-		LastReviewedAt:  parseOptionalTime(raw["last_reviewed_at"]),
-		CreatedAt:       createdAt,
-		UpdatedAt:       updatedAt,
-		Version:         asInt(raw["version"]),
-		IsDeleted:       asBool(raw["is_deleted"]),
+		ID:               id,
+		DeckID:           deckID,
+		Front:            asString(raw["front"]),
+		Back:             asString(raw["back"]),
+		State:            state,
+		Interval:         asFloat64(raw["interval"]),
+		EaseFactor:       easeFactor,
+		RepetitionCount:  asInt(raw["repetition_count"]),
+		DueTimestamp:     parseOptionalTime(raw["due_timestamp"]),
+		LastReviewedAt:   parseOptionalTime(raw["last_reviewed_at"]),
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
+		Version:          asInt(raw["version"]),
+		IsDeleted:        asBool(raw["is_deleted"]),
+		FromDeckDeletion: asBool(raw["from_deck_deletion"]),
 	}, nil
 }
 

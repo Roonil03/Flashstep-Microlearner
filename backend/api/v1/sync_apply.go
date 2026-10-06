@@ -303,6 +303,11 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		if !ok || deck.owner != user {
 			return invalidSync("card references a missing or unauthorized deck")
 		}
+		if c.IsDeleted && c.FromDeckDeletion && !deck.deleted {
+			// A rejected or subsequently undone parent deletion must not leave
+			// its separately batched child tombstones applied to an active deck.
+			continue
+		}
 		if deck.deleted && !c.IsDeleted {
 			if !c.UpdatedAt.After(deck.updated) {
 				continue
