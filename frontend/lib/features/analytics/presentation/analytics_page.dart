@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -77,7 +78,7 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
               children: [
                 _AnalyticsHeroCard(data: data, isDark: isDark),
                 const SizedBox(height: 16),
-                _RangeSelector(
+                AnalyticsRangeControl(
                   currentValue: _rangeDays,
                   onChanged: (value) {
                     if (value == _rangeDays) return;
@@ -335,31 +336,6 @@ class _HeroChip extends StatelessWidget {
           Text(label),
         ],
       ),
-    );
-  }
-}
-
-class _RangeSelector extends StatelessWidget {
-  final int currentValue;
-  final ValueChanged<int> onChanged;
-
-  const _RangeSelector({
-    required this.currentValue,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      children: [
-        for (final value in const [7, 30, 90])
-          ChoiceChip(
-            label: Text('$value days'),
-            selected: currentValue == value,
-            onSelected: (_) => onChanged(value),
-          ),
-      ],
     );
   }
 }

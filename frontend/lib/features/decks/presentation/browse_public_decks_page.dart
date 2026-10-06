@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,7 +41,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     });
 
     try {
-      final decks = await ref.read(deckRepositoryProvider).fetchPublicDecks(_searchController.text);
+      final decks = await ref
+          .read(deckRepositoryProvider)
+          .fetchPublicDecks(_searchController.text);
       if (!mounted) return;
       setState(() {
         _decks = decks;
@@ -56,13 +59,14 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
   }
 
   Future<void> _downloadDeck(PublicDeckSummary deck) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (context) {
             return AlertDialog(
-              title: const Text('Download this deck?'),
+              title: const Text('Add this deck to your library?'),
               content: Text(
-                'This will create a separate copy of "${deck.title}" in your account. '
+                'This will create a separate copy of "${deck.title}" in your account. You can edit your copy without changing the original. ',
               ),
               actions: [
                 TextButton(
@@ -71,7 +75,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Download'),
+                  child: const Text('Add to my decks'),
                 ),
               ],
             );
@@ -86,8 +90,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     });
 
     try {
-      final newDeckId =
-          await ref.read(deckRepositoryProvider).downloadPublicDeck(deck.id);
+      final newDeckId = await ref
+          .read(deckRepositoryProvider)
+          .downloadPublicDeck(deck.id);
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -97,10 +102,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
           action: SnackBarAction(
             label: 'Open',
             onPressed: () {
-              Navigator.of(context).pushNamed(
-                AppRoutes.deckDetail,
-                arguments: newDeckId,
-              );
+              Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.deckDetail, arguments: newDeckId);
             },
           ),
         ),
@@ -131,7 +135,8 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
   }
 
   String _meta(PublicDeckSummary deck) {
-    final cardLabel = deck.cardCount == 1 ? '1 card' : '${deck.cardCount} cards';
+    final cardLabel =
+        deck.cardCount == 1 ? '1 card' : '${deck.cardCount} cards';
     return '$cardLabel • By ${deck.ownerUsername}';
   }
 
@@ -173,135 +178,147 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
           ),
           Expanded(
             child: Builder(
-        builder: (context) {
-          if (_loading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              builder: (context) {
+                if (_loading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (_error != null) {
-            final isOffline = _error!.toLowerCase().contains('socketexception') || _error!.toLowerCase().contains('failed host lookup') || _error!.toLowerCase().contains('clientexception');
-            if (isOffline) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No Internet Connection',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
+                if (_error != null) {
+                  final isOffline =
+                      _error!.toLowerCase().contains('socketexception') ||
+                      _error!.toLowerCase().contains('failed host lookup') ||
+                      _error!.toLowerCase().contains('clientexception');
+                  if (isOffline) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.wifi_off_rounded,
+                              size: 64,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No Internet Connection',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'You need an active internet connection to browse and search for public decks. Please check your network and try again.',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              onPressed: _loadPublicDecks,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Try again'),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'You need an active internet connection to browse and search for public decks. Please check your network and try again.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton.icon(
-                        onPressed: _loadPublicDecks,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Try again'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
+                    );
+                  }
 
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.cloud_off_outlined, size: 48),
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _loadPublicDecks,
-                      child: const Text('Try again'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          if (_decks.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: _loadPublicDecks,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                children: const [
-                  SizedBox(height: 120),
-                  Icon(Icons.public_off_outlined, size: 52),
-                  SizedBox(height: 16),
-                  Text(
-                    'No public decks available right now.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: _loadPublicDecks,
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              itemCount: _decks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final deck = _decks[index];
-                final downloading = _downloadingDeckIds.contains(deck.id);
-                return Card(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    title: Text(
-                      deck.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8),
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_subtitle(deck)),
-                          const SizedBox(height: 6),
-                          Text(
-                            _meta(deck),
-                            style: Theme.of(context).textTheme.bodySmall,
+                          const Icon(Icons.cloud_off_outlined, size: 48),
+                          const SizedBox(height: 16),
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: _loadPublicDecks,
+                            child: const Text('Try again'),
                           ),
                         ],
                       ),
                     ),
-                    trailing: downloading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : IconButton(
-                            onPressed: () => _downloadDeck(deck),
-                            icon: const Icon(Icons.download_rounded),
-                            tooltip: 'Download deck',
+                  );
+                }
+
+                if (_decks.isEmpty) {
+                  return RefreshIndicator(
+                    onRefresh: _loadPublicDecks,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: const [
+                        SizedBox(height: 120),
+                        Icon(Icons.public_off_outlined, size: 52),
+                        SizedBox(height: 16),
+                        Text(
+                          'No public decks available right now.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: _loadPublicDecks,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    itemCount: _decks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final deck = _decks[index];
+                      final downloading = _downloadingDeckIds.contains(deck.id);
+                      return Card(
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          title: Text(
+                            deck.title,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_subtitle(deck)),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _meta(deck),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                const SizedBox(height: 12),
+                                downloading
+                                  ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : LearningAction(
+                                    onPressed: () => _downloadDeck(deck),
+                                    icon: Icons.download_rounded,
+                                    label: 'Add to my decks',
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                        ),
+                      );
+                    },
                   ),
                 );
               },
             ),
-          );
-        },
-      ),
           ),
         ],
       ),

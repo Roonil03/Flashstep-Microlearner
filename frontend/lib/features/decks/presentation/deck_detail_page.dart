@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'csv_import_page.dart';
 import '../model/csv_import_models.dart';
 
 enum _DeckDetailAction { editDeck, deleteDeck }
+
 enum _CardMenuAction { edit, delete }
 
 class DeckDetailPage extends ConsumerStatefulWidget {
@@ -58,6 +60,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
   }
 
   Future<void> _addCard() async {
+    if (_loading) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _loading = true);
@@ -119,7 +122,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     if (result == null) return;
 
     try {
-      await ref.read(deckRepositoryProvider).updateDeckOffline(
+      await ref
+          .read(deckRepositoryProvider)
+          .updateDeckOffline(
             deckId: deck.id,
             title: result.title,
             description: result.description,
@@ -145,24 +150,26 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
   }
 
   Future<void> _confirmAndDeleteDeck(db.Deck deck) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete deck?'),
-            content: Text(
-              '"${deck.title}" will be removed. You can undo this for 10 seconds.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Delete deck?'),
+                content: Text(
+                  '"${deck.title}" will be removed. You can undo this for 10 seconds.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Delete'),
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
         ) ??
         false;
 
@@ -194,12 +201,14 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
         Navigator.of(context).pop(true);
       }
 
-      unawaited(controller.closed.then((reason) async {
-        if (reason == SnackBarClosedReason.action) {
-          return;
-        }
-        await repo.finalizeDeckDeletion(deletion);
-      }));
+      unawaited(
+        controller.closed.then((reason) async {
+          if (reason == SnackBarClosedReason.action) {
+            return;
+          }
+          await repo.finalizeDeckDeletion(deletion);
+        }),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -230,7 +239,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     if (result == null) return;
 
     try {
-      await ref.read(deckRepositoryProvider).updateCardOffline(
+      await ref
+          .read(deckRepositoryProvider)
+          .updateCardOffline(
             cardId: card.id,
             front: result.front,
             back: result.back,
@@ -255,24 +266,26 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
   }
 
   Future<void> _deleteCard(db.Card card) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete card?'),
-            content: const Text(
-              'This card will be removed. You can undo this for 10 seconds.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Delete card?'),
+                content: const Text(
+                  'This card will be removed. You can undo this for 10 seconds.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Delete'),
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
         ) ??
         false;
 
@@ -300,12 +313,14 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
         ),
       );
 
-      unawaited(controller.closed.then((reason) async {
-        if (reason == SnackBarClosedReason.action) {
-          return;
-        }
-        await repo.finalizeCardDeletion(deletion);
-      }));
+      unawaited(
+        controller.closed.then((reason) async {
+          if (reason == SnackBarClosedReason.action) {
+            return;
+          }
+          await repo.finalizeCardDeletion(deletion);
+        }),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -332,11 +347,8 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     final backgroundColor = isDark ? Colors.black : Colors.white;
-    final greenFieldFill =
-        isDark ? const Color(0xFF063B2E) : const Color(0xFFEAF7EC);
     final greenTextColor =
         isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
-    final fieldBorderColor = const Color(0xFF2E8B57);
     final buttonColor =
         isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
 
@@ -363,9 +375,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
           final deck = deckSnapshot.data;
 
           if (deck == null) {
-            return const Center(
-              child: Text('Deck not found'),
-            );
+            return const Center(child: Text('Deck not found'));
           }
 
           return StreamBuilder<List<db.Card>>(
@@ -374,7 +384,8 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
               final cards = cardsSnapshot.data ?? const <db.Card>[];
               final totalCards = cards.length;
               final dueCards = _dueCount(cards);
-              final hasReachedLimit = totalCards >= DeckRepository.maxCardsPerDeck;
+              final hasReachedLimit =
+                  totalCards >= DeckRepository.maxCardsPerDeck;
 
               return SafeArea(
                 child: LayoutBuilder(
@@ -400,9 +411,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
-                                color: isDark
-                                    ? const Color(0xFF1A2D3D)
-                                    : const Color(0xFFF5F5F5),
+                                color:
+                                    isDark
+                                        ? const Color(0xFF1A2D3D)
+                                        : const Color(0xFFF5F5F5),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,43 +428,49 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                           deck.title,
                                           style: theme.textTheme.titleLarge
                                               ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                                                fontWeight: FontWeight.w800,
+                                              ),
                                         ),
                                       ),
                                       PopupMenuButton<_DeckDetailAction>(
-                                        onSelected: (action) =>
-                                            _handleDeckAction(action, deck),
-                                        itemBuilder: (context) => const [
-                                          PopupMenuItem(
-                                            value:
-                                                _DeckDetailAction.editDeck,
-                                            child: ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading:
-                                                  Icon(Icons.edit_outlined),
-                                              title: Text('Edit deck'),
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value:
-                                                _DeckDetailAction.deleteDeck,
-                                            child: ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading:
-                                                  Icon(Icons.delete_outline),
-                                              title: Text('Delete deck'),
-                                            ),
-                                          ),
-                                        ],
+                                        onSelected:
+                                            (action) =>
+                                                _handleDeckAction(action, deck),
+                                        itemBuilder:
+                                            (context) => const [
+                                              PopupMenuItem(
+                                                value:
+                                                    _DeckDetailAction.editDeck,
+                                                child: ListTile(
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  leading: Icon(
+                                                    Icons.edit_outlined,
+                                                  ),
+                                                  title: Text('Edit deck'),
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value:
+                                                    _DeckDetailAction
+                                                        .deleteDeck,
+                                                child: ListTile(
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  leading: Icon(
+                                                    Icons.delete_outline,
+                                                  ),
+                                                  title: Text('Delete deck'),
+                                                ),
+                                              ),
+                                            ],
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     deck.description ?? 'No description yet.',
-                                    style:
-                                        theme.textTheme.bodyMedium?.copyWith(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.textTheme.bodySmall?.color
                                           ?.withOpacity(0.8),
                                     ),
@@ -468,9 +486,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       ),
                                       _Pill(label: '$dueCards due'),
                                       _Pill(
-                                        label: deck.isPublic
-                                            ? 'Public'
-                                            : 'Private',
+                                        label:
+                                            deck.isPublic
+                                                ? 'Public'
+                                                : 'Private',
                                       ),
                                     ],
                                   ),
@@ -480,9 +499,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       'This deck already has the maximum 50 cards.',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                            color: Colors.redAccent,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                     ),
                                   ],
                                 ],
@@ -495,13 +514,15 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(20),
-                                  color: isDark
-                                      ? const Color(0xFF111827)
-                                      : Colors.white,
+                                  color:
+                                      isDark
+                                          ? const Color(0xFF111827)
+                                          : Colors.white,
                                   border: Border.all(
-                                    color: isDark
-                                        ? Colors.white12
-                                        : const Color(0xFFE3E3E3),
+                                    color:
+                                        isDark
+                                            ? Colors.white12
+                                            : const Color(0xFFE3E3E3),
                                   ),
                                 ),
                                 child: Column(
@@ -509,31 +530,41 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 'Add card',
-                                                style: theme.textTheme.titleMedium?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                                style: theme
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
                                               ),
                                               const SizedBox(height: 8),
                                               Text(
                                                 'Limit: ${DeckRepository.maxCardsPerDeck} cards per deck',
-                                                style: theme.textTheme.bodySmall,
+                                                style:
+                                                    theme.textTheme.bodySmall,
                                               ),
                                             ],
                                           ),
                                         ),
                                         const SizedBox(width: 12),
-                                        OutlinedButton.icon(
-                                          onPressed: (hasReachedLimit || _loading) ? null : _openCsvImport,
-                                          icon: const Icon(Icons.upload_file_outlined),
-                                          label: const Text('Import CSV'),
+                                        LearningAction(
+                                          onPressed:
+                                              (hasReachedLimit || _loading)
+                                                  ? null
+                                                  : _openCsvImport,
+                                          icon: Icons.upload_file_outlined,
+                                          label: 'Import CSV',
                                         ),
                                       ],
                                     ),
@@ -541,32 +572,13 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                     TextFormField(
                                       controller: _frontController,
                                       enabled: !hasReachedLimit && !_loading,
-                                      style:
-                                          TextStyle(color: greenTextColor),
+                                      style: TextStyle(color: greenTextColor),
                                       cursorColor: greenTextColor,
                                       textInputAction: TextInputAction.next,
-                                      decoration: InputDecoration(
-                                        labelText: 'Front',
-                                        labelStyle: TextStyle(
-                                          color: greenTextColor,
-                                        ),
-                                        filled: true,
-                                        fillColor: greenFieldFill,
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: fieldBorderColor,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: fieldBorderColor,
-                                            width: 2,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
+                                      decoration: learningInputDecoration(
+                                        'Front',
+                                        helperText:
+                                            'Write a question or prompt.',
                                       ),
                                       validator: (value) {
                                         if (value == null ||
@@ -580,34 +592,15 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                     TextFormField(
                                       controller: _backController,
                                       enabled: !hasReachedLimit && !_loading,
-                                      style:
-                                          TextStyle(color: greenTextColor),
+                                      style: TextStyle(color: greenTextColor),
                                       cursorColor: greenTextColor,
                                       maxLines: 3,
                                       minLines: 3,
                                       textInputAction: TextInputAction.done,
-                                      decoration: InputDecoration(
-                                        labelText: 'Back',
-                                        labelStyle: TextStyle(
-                                          color: greenTextColor,
-                                        ),
-                                        filled: true,
-                                        fillColor: greenFieldFill,
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: fieldBorderColor,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: fieldBorderColor,
-                                            width: 2,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
+                                      decoration: learningInputDecoration(
+                                        'Back',
+                                        helperText:
+                                            'Write the answer you want to remember.',
                                       ),
                                       validator: (value) {
                                         if (value == null ||
@@ -634,25 +627,27 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                           backgroundColor: buttonColor,
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(14),
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
                                           ),
                                         ),
-                                        child: _loading
-                                            ? const SizedBox(
-                                                height: 18,
-                                                width: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.white,
+                                        child:
+                                            _loading
+                                                ? const SizedBox(
+                                                  height: 18,
+                                                  width: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                                : Text(
+                                                  hasReachedLimit
+                                                      ? 'Card limit reached'
+                                                      : 'Save Card',
                                                 ),
-                                              )
-                                            : Text(
-                                                hasReachedLimit
-                                                    ? 'Card limit reached'
-                                                    : 'Save Card',
-                                              ),
                                       ),
                                     ),
                                   ],
@@ -669,13 +664,13 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                             const SizedBox(height: 8),
                             if (cards.isEmpty)
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 24),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 24,
+                                ),
                                 child: Center(
                                   child: Text(
-                                    'No cards yet. Add your first one.',
-                                    style:
-                                        theme.textTheme.bodyMedium?.copyWith(
+                                    'No cards yet. Use the Front and Back fields above, or import a CSV.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       fontStyle: FontStyle.italic,
                                     ),
                                   ),
@@ -684,25 +679,25 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                             else
                               ListView.separated(
                                 shrinkWrap: true,
-                                physics:
-                                    const NeverScrollableScrollPhysics(),
+                                physics: const NeverScrollableScrollPhysics(),
                                 itemCount: cards.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
+                                separatorBuilder:
+                                    (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final card = cards[index];
                                   return Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      borderRadius:
-                                          BorderRadius.circular(18),
-                                      color: isDark
-                                          ? const Color(0xFF111827)
-                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      color:
+                                          isDark
+                                              ? const Color(0xFF111827)
+                                              : Colors.white,
                                       border: Border.all(
-                                        color: isDark
-                                            ? Colors.white12
-                                            : const Color(0xFFE8E8E8),
+                                        color:
+                                            isDark
+                                                ? Colors.white12
+                                                : const Color(0xFFE8E8E8),
                                       ),
                                     ),
                                     child: Column(
@@ -717,45 +712,48 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                               child: Text(
                                                 card.front,
                                                 style: theme
-                                                    .textTheme.titleSmall
+                                                    .textTheme
+                                                    .titleSmall
                                                     ?.copyWith(
-                                                  fontWeight:
-                                                      FontWeight.w700,
-                                                ),
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
                                               ),
                                             ),
                                             PopupMenuButton<_CardMenuAction>(
-                                              onSelected: (action) =>
-                                                  _handleCardAction(
-                                                action,
-                                                card,
-                                              ),
-                                              itemBuilder: (context) => const [
-                                                PopupMenuItem(
-                                                  value:
-                                                      _CardMenuAction.edit,
-                                                  child: ListTile(
-                                                    contentPadding:
-                                                        EdgeInsets.zero,
-                                                    leading: Icon(
-                                                      Icons.edit_outlined,
-                                                    ),
-                                                    title: Text('Edit'),
+                                              onSelected:
+                                                  (action) => _handleCardAction(
+                                                    action,
+                                                    card,
                                                   ),
-                                                ),
-                                                PopupMenuItem(
-                                                  value:
-                                                      _CardMenuAction.delete,
-                                                  child: ListTile(
-                                                    contentPadding:
-                                                        EdgeInsets.zero,
-                                                    leading: Icon(
-                                                      Icons.delete_outline,
+                                              itemBuilder:
+                                                  (context) => const [
+                                                    PopupMenuItem(
+                                                      value:
+                                                          _CardMenuAction.edit,
+                                                      child: ListTile(
+                                                        contentPadding:
+                                                            EdgeInsets.zero,
+                                                        leading: Icon(
+                                                          Icons.edit_outlined,
+                                                        ),
+                                                        title: Text('Edit'),
+                                                      ),
                                                     ),
-                                                    title: Text('Delete'),
-                                                  ),
-                                                ),
-                                              ],
+                                                    PopupMenuItem(
+                                                      value:
+                                                          _CardMenuAction
+                                                              .delete,
+                                                      child: ListTile(
+                                                        contentPadding:
+                                                            EdgeInsets.zero,
+                                                        leading: Icon(
+                                                          Icons.delete_outline,
+                                                        ),
+                                                        title: Text('Delete'),
+                                                      ),
+                                                    ),
+                                                  ],
                                             ),
                                           ],
                                         ),
@@ -782,9 +780,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
 
   Future<void> _openCsvImport() async {
     final result = await Navigator.of(context).push<CsvImportSuccessResult>(
-      MaterialPageRoute(
-        builder: (_) => CsvImportPage(deckId: widget.deckId),
-      ),
+      MaterialPageRoute(builder: (_) => CsvImportPage(deckId: widget.deckId)),
     );
 
     if (!mounted || result == null) return;
@@ -794,13 +790,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            isSyncedNow ? Colors.green : const Color(0xFFFACC15),
+        backgroundColor: isSyncedNow ? Colors.green : const Color(0xFFFACC15),
         content: Text(
           result.message,
-          style: TextStyle(
-            color: isSyncedNow ? Colors.white : Colors.black,
-          ),
+          style: TextStyle(color: isSyncedNow ? Colors.white : Colors.black),
         ),
       ),
     );
@@ -838,8 +831,9 @@ class _DeckEditDialogState extends State<_DeckEditDialog> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.deck.title);
-    _descriptionController =
-        TextEditingController(text: widget.deck.description ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.deck.description ?? '',
+    );
     _isPublic = widget.deck.isPublic;
   }
 
@@ -917,10 +911,7 @@ class _CardEditResult {
   final String front;
   final String back;
 
-  const _CardEditResult({
-    required this.front,
-    required this.back,
-  });
+  const _CardEditResult({required this.front, required this.back});
 }
 
 class _CardEditDialog extends StatefulWidget {
@@ -1029,9 +1020,7 @@ class _Pill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+        style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }

@@ -79,9 +79,9 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
   }
 
   Future<void> _openPublicDecks() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BrowsePublicDecksPage()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const BrowsePublicDecksPage()));
   }
 
   String _subtitle(db.Deck deck) {
@@ -92,10 +92,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
     return deck.isPublic ? 'Public deck' : 'Private deck';
   }
 
-  Future<void> _handleDeckAction(
-    _DeckMenuAction action,
-    db.Deck deck,
-  ) async {
+  Future<void> _handleDeckAction(_DeckMenuAction action, db.Deck deck) async {
     switch (action) {
       case _DeckMenuAction.rename:
         await _showEditDeckDialog(deck);
@@ -114,7 +111,9 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
     if (result == null) return;
 
     try {
-      await ref.read(deckRepositoryProvider).updateDeckOffline(
+      await ref
+          .read(deckRepositoryProvider)
+          .updateDeckOffline(
             deckId: deck.id,
             title: result.title,
             description: result.description,
@@ -140,24 +139,26 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
   }
 
   Future<void> _confirmAndDeleteDeck(db.Deck deck) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete deck?'),
-            content: Text(
-              '"${deck.title}" will be removed. You can undo this for 10 seconds.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Delete deck?'),
+                content: Text(
+                  '"${deck.title}" will be removed. You can undo this for 10 seconds.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Delete'),
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
         ) ??
         false;
 
@@ -185,12 +186,14 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
         ),
       );
 
-      unawaited(controller.closed.then((reason) async {
-        if (reason == SnackBarClosedReason.action) {
-          return;
-        }
-        await repo.finalizeDeckDeletion(deletion);
-      }));
+      unawaited(
+        controller.closed.then((reason) async {
+          if (reason == SnackBarClosedReason.action) {
+            return;
+          }
+          await repo.finalizeDeckDeletion(deletion);
+        }),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -208,17 +211,18 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Search decks...',
-                  border: InputBorder.none,
-                ),
-                style: const TextStyle(fontSize: 18),
-              )
-            : const Text('Your decks'),
+        title:
+            _isSearching
+                ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Search decks...',
+                    border: InputBorder.none,
+                  ),
+                  style: const TextStyle(fontSize: 18),
+                )
+                : const Text('Your decks'),
         actions: [
           if (_isSearching)
             IconButton(
@@ -242,13 +246,14 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
             ),
           IconButton(
             onPressed: _refreshing ? null : _refresh,
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.sync),
+            icon:
+                _refreshing
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.sync),
             tooltip: 'Sync now',
           ),
         ],
@@ -267,9 +272,14 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
           }
 
           var decks = snapshot.data ?? const <db.Deck>[];
-          
+
           if (_searchQuery.isNotEmpty) {
-            decks = decks.where((deck) => deck.title.toLowerCase().contains(_searchQuery)).toList();
+            decks =
+                decks
+                    .where(
+                      (deck) => deck.title.toLowerCase().contains(_searchQuery),
+                    )
+                    .toList();
           }
 
           if (decks.isEmpty) {
@@ -283,7 +293,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                   Icon(Icons.style_outlined, size: 52),
                   SizedBox(height: 16),
                   Text(
-                    'No decks yet.',
+                    'No decks yet. Create a deck with the button below, or browse public decks.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),
@@ -320,24 +330,25 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                     trailing: PopupMenuButton<_DeckMenuAction>(
                       tooltip: 'Deck actions',
                       onSelected: (action) => _handleDeckAction(action, deck),
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: _DeckMenuAction.rename,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Edit'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: _DeckMenuAction.delete,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.delete_outline),
-                            title: Text('Delete'),
-                          ),
-                        ),
-                      ],
+                      itemBuilder:
+                          (context) => const [
+                            PopupMenuItem(
+                              value: _DeckMenuAction.rename,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.edit_outlined),
+                                title: Text('Edit'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _DeckMenuAction.delete,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Delete'),
+                              ),
+                            ),
+                          ],
                       child: Icon(
                         deck.isPublic ? Icons.public : Icons.lock_outline,
                       ),
@@ -384,8 +395,9 @@ class _DeckEditDialogState extends State<_DeckEditDialog> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.deck.title);
-    _descriptionController =
-        TextEditingController(text: widget.deck.description ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.deck.description ?? '',
+    );
     _isPublic = widget.deck.isPublic;
   }
 

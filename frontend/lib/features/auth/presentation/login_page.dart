@@ -8,7 +8,7 @@ import '../data/auth_repository.dart';
 
 class LoginCubit extends Cubit<bool> {
   final AuthRepository _authRepository;
-  
+
   LoginCubit(this._authRepository) : super(false);
 
   Future<String> login({
@@ -54,11 +54,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(
-          top: 16,
-          left: 16,
-          right: 16,
-        ),
+        margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
         backgroundColor: const Color(0xFF003153),
         content: Text(
           'Welcome Back, $username!',
@@ -69,41 +65,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _handleLogin(BuildContext context) async {
-    if (!(_formKey.currentState?.validate() ?? false)){
-        return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
-    final authRepository = ref.read(authRepositoryProvider);
-    try{
+    try {
       final username = await context.read<LoginCubit>().login(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
-      if (!mounted){
-          return;
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      if (!mounted) {
+        return;
       }
       _showTopSnackBar(context, username);
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      if (!mounted){
-          return;
+      if (!mounted) {
+        return;
       }
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.home,
-        (route) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
     } catch (e) {
-      if (!mounted){
+      if (!mounted) {
         return;
       }
       final isDark = Theme.of(context).brightness == Brightness.dark;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(
-            top: 16,
-            left: 16,
-            right: 16,
-          ),
-          backgroundColor: isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
+          margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
+          backgroundColor:
+              isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
           content: const Text(
             'Wrong email or password',
             style: TextStyle(color: Colors.white),
@@ -117,16 +107,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark ? Colors.black : Colors.white;
-    final greenFieldFill = isDark
-        ? const Color(0xFF063B2E)
-        : const Color(0xFFEAF7EC);
-    final greenTextColor = isDark
-        ? const Color(0xFFB8F2C8)
-        : const Color(0xFF0B5D1E);
+    final greenFieldFill =
+        isDark ? const Color(0xFF063B2E) : const Color(0xFFEAF7EC);
+    final greenTextColor =
+        isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
     final fieldBorderColor = const Color(0xFF2E8B57);
-    final buttonColor = isDark
-        ? const Color(0xFF6EC1E4)
-        : const Color(0xFF003153);
+    final buttonColor =
+        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
     final linkBlue = Colors.blueAccent;
     return BlocProvider(
       create: (_) => LoginCubit(ref.read(authRepositoryProvider)),
@@ -151,26 +138,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           Text(
                             'Login',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
-                                  color: isDark ? Colors.white : Colors.black87,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineMedium?.copyWith(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'Enter your account details to continue.',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black54,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
                           ),
                           const SizedBox(height: 32),
                           TextFormField(
@@ -249,9 +232,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           SizedBox(
                             height: 50,
                             child: ElevatedButton(
-                              onPressed: isLoading
-                                  ? null
-                                  : () => _handleLogin(context),
+                              onPressed:
+                                  isLoading
+                                      ? null
+                                      : () => _handleLogin(context),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: buttonColor,
                                 foregroundColor: Colors.white,
@@ -259,25 +243,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: isLoading
-                                  ? const SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('Login'),
+                              child:
+                                  isLoading
+                                      ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                      : const Text('Login'),
                             ),
                           ),
                           const SizedBox(height: 16),
                           Center(
                             child: TextButton(
                               onPressed: () {
-                                Navigator.of(context).pushNamed(
-                                  AppRoutes.register,
-                                );
+                                Navigator.of(
+                                  context,
+                                ).pushNamed(AppRoutes.register);
                               },
                               child: Text(
                                 'Register Here',

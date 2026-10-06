@@ -261,7 +261,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'Damn, this place looks empty. Where are the cards?',
+                                    'Your library is ready. Create your first deck or browse public decks to get started.',
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       fontStyle: FontStyle.italic,
                                       color: theme.textTheme.bodySmall?.color,
