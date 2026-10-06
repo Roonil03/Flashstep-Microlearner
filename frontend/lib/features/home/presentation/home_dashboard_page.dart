@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
@@ -68,7 +69,6 @@ class HomeDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
-
   Future<void> _refreshDashboard() async {
     await ref.read(deckSyncServiceProvider).syncNow();
     ref.invalidate(usernameProvider);
@@ -84,10 +84,9 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   }
 
   Future<void> _openDeckDetail(String deckId) async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.deckDetail,
-      arguments: deckId,
-    );
+    await Navigator.of(
+      context,
+    ).pushNamed(AppRoutes.deckDetail, arguments: deckId);
     if (!mounted) return;
     await _refreshDashboard();
   }
@@ -105,10 +104,10 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
       return dueCards > 0 ? 'Due now' : 'Not scheduled';
     }
     final diff = time.difference(DateTime.now());
-    if (diff.inMinutes <= 0){
+    if (diff.inMinutes <= 0) {
       return 'Due now';
     }
-    if (diff.inHours == 0){
+    if (diff.inHours == 0) {
       return 'In ${diff.inMinutes} min';
     }
     return 'In ${diff.inHours} h ${diff.inMinutes.remainder(60)} min';
@@ -139,7 +138,10 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                   IconButton(
                     tooltip: 'Analytics',
                     icon: const Icon(Icons.insights_outlined),
-                    onPressed: () => Navigator.of(context).pushNamed(AppRoutes.analytics),
+                    onPressed:
+                        () => Navigator.of(
+                          context,
+                        ).pushNamed(AppRoutes.analytics),
                   ),
                   IconButton(
                     tooltip: 'Settings',
@@ -155,123 +157,142 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                   builder: (context, ref, _) {
                     final dashboardAsync = ref.watch(homeDashboardProvider);
                     return dashboardAsync.when(
-                      loading: () => SliverList(
-                        delegate: SliverChildListDelegate(
-                          [
-                            _LoadingCard(isDark: isDark),
-                            const SizedBox(height: 16),
-                            _LoadingCard(isDark: isDark, short: true),
-                            const SizedBox(height: 16),
-                            _LoadingCard(isDark: isDark, short: true),
-                          ],
-                        ),
-                      ),
-                      error: (error, stack) => SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _ErrorState(
-                          message: 'Error loading dashboard: $error',
-                          onRetry: _refreshDashboard,
-                        ),
-                      ),
+                      loading:
+                          () => SliverList(
+                            delegate: SliverChildListDelegate([
+                              _LoadingCard(isDark: isDark),
+                              const SizedBox(height: 16),
+                              _LoadingCard(isDark: isDark, short: true),
+                              const SizedBox(height: 16),
+                              _LoadingCard(isDark: isDark, short: true),
+                            ]),
+                          ),
+                      error:
+                          (error, stack) => SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _ErrorState(
+                              message: 'Error loading dashboard: $error',
+                              onRetry: _refreshDashboard,
+                            ),
+                          ),
                       data: (data) {
                         return SliverList(
-                          delegate: SliverChildListDelegate(
-                            [
-                              _TopGreetingCard(
-                                displayName: data.displayName,
-                                isOffline: data.isOffline,
-                                isSyncing: data.isSyncing,
-                                lastSyncedAt: data.lastSyncedAt,
-                                dueToday: data.dueToday,
-                                decksCount: data.decksCount,
-                                reviewedToday: data.reviewedToday,
-                                streak: data.streak,
-                              ),
-                              const SizedBox(height: 16),
-                              if (data.deckOfTheDay != null)
-                                Column(
-                                  children: [
-                                    _DeckOfTheDayCard(
-                                      deck: data.deckOfTheDay!,
-                                      timeLabel: _timeLabel(
-                                        data.deckOfTheDay!.nextDueAt,
-                                        dueCards: data.deckOfTheDay!.dueCards,
-                                      ),
-                                      onStartReview: () => Navigator.of(context).pushNamed(
-                                        AppRoutes.review,
-                                        arguments: data.deckOfTheDay!.id,
-                                      ),
-                                      onOpenDeck: () => _openDeckDetail(data.deckOfTheDay!.id),
-                                    ),
-                                    const SizedBox(height: 16),
-                                  ],
-                                ),
-                              _QuickActionsGrid(
-                                onCreateDeck: _openCreateDeck,
-                                onStartReview: () => Navigator.of(context).pushNamed(AppRoutes.review),
-                                onBrowseDecks: () => Navigator.of(context).pushNamed(AppRoutes.browseDecks),
-                                onAnalytics: () => Navigator.of(context).pushNamed(AppRoutes.analytics),
-                              ),
-                              const SizedBox(height: 16),
-                              _MiniStatsRow(
-                                dueToday: data.dueToday,
-                                reviewedToday: data.reviewedToday,
-                                retentionRate: data.retentionRate,
-                              ),
-                              const SizedBox(height: 18),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          delegate: SliverChildListDelegate([
+                            _TopGreetingCard(
+                              displayName: data.displayName,
+                              isOffline: data.isOffline,
+                              isSyncing: data.isSyncing,
+                              lastSyncedAt: data.lastSyncedAt,
+                              dueToday: data.dueToday,
+                              decksCount: data.decksCount,
+                              reviewedToday: data.reviewedToday,
+                              streak: data.streak,
+                            ),
+                            const SizedBox(height: 16),
+                            if (data.deckOfTheDay != null)
+                              Column(
                                 children: [
-                                  Text(
-                                    'Your decks',
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.w800,
+                                  _DeckOfTheDayCard(
+                                    deck: data.deckOfTheDay!,
+                                    timeLabel: _timeLabel(
+                                      data.deckOfTheDay!.nextDueAt,
+                                      dueCards: data.deckOfTheDay!.dueCards,
                                     ),
+                                    onStartReview:
+                                        () => Navigator.of(context).pushNamed(
+                                          AppRoutes.review,
+                                          arguments: data.deckOfTheDay!.id,
+                                        ),
+                                    onOpenDeck:
+                                        () => _openDeckDetail(
+                                          data.deckOfTheDay!.id,
+                                        ),
                                   ),
-                                    if (data.decks.length > 5)
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.of(context).pushNamed(AppRoutes.browseDecks);
-                                        },
-                                        child: const Text('Explore all'),
-                                      ),
+                                  const SizedBox(height: 16),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              if (data.decks.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 24),
-                                  child: Center(
-                                    child: Text(
-                                      'Damn, this place looks empty. Where are the cards?',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                        color: theme.textTheme.bodySmall?.color,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                )
-                              else
-                                ...data.decks.take(5).map(
-                                  (deck) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _DeckCard(
-                                      deck: deck,
-                                      onTap: () => _openDeckDetail(deck.id),
-                                    ),
+                            _QuickActionsGrid(
+                              onCreateDeck: _openCreateDeck,
+                              onStartReview:
+                                  () => Navigator.of(
+                                    context,
+                                  ).pushNamed(AppRoutes.review),
+                              onBrowseDecks:
+                                  () => Navigator.of(
+                                    context,
+                                  ).pushNamed(AppRoutes.browseDecks),
+                              onAnalytics:
+                                  () => Navigator.of(
+                                    context,
+                                  ).pushNamed(AppRoutes.analytics),
+                            ),
+                            const SizedBox(height: 16),
+                            _MiniStatsRow(
+                              dueToday: data.dueToday,
+                              reviewedToday: data.reviewedToday,
+                              retentionRate: data.retentionRate,
+                            ),
+                            const SizedBox(height: 18),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Your decks',
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                              const SizedBox(height: 24),
-                              _SyncFooterCard(
-                                isOffline: data.isOffline,
-                                isSyncing: data.isSyncing,
-                                lastSyncedAt: data.lastSyncedAt,
-                                onForceSync: _refreshDashboard,
-                              ),
-                              const SizedBox(height: 18),
-                            ],
-                          ),
+                                if (data.decks.length > 5)
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.of(
+                                        context,
+                                      ).pushNamed(AppRoutes.browseDecks);
+                                    },
+                                    child: const Text('Explore all'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (data.decks.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 24,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Damn, this place looks empty. Where are the cards?',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontStyle: FontStyle.italic,
+                                      color: theme.textTheme.bodySmall?.color,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              )
+                            else
+                              ...data.decks
+                                  .take(5)
+                                  .map(
+                                    (deck) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: _DeckCard(
+                                        deck: deck,
+                                        onTap: () => _openDeckDetail(deck.id),
+                                      ),
+                                    ),
+                                  ),
+                            const SizedBox(height: 24),
+                            _SyncFooterCard(
+                              isOffline: data.isOffline,
+                              isSyncing: data.isSyncing,
+                              lastSyncedAt: data.lastSyncedAt,
+                              onForceSync: _refreshDashboard,
+                            ),
+                            const SizedBox(height: 18),
+                          ]),
                         );
                       },
                     );
@@ -341,9 +362,10 @@ class _TopGreetingCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF132238), const Color(0xFF1C2F4A)]
-              : [const Color(0xFFEAF6FF), const Color(0xFFF4ECFF)],
+          colors:
+              isDark
+                  ? [const Color(0xFF132238), const Color(0xFF1C2F4A)]
+                  : [const Color(0xFFEAF6FF), const Color(0xFFF4ECFF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -362,8 +384,9 @@ class _TopGreetingCard extends StatelessWidget {
                     Text(
                       'Welcome back,',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color:
-                            theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(
+                          0.7,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -380,13 +403,16 @@ class _TopGreetingCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: isDark
-                      ? const Color(0xFF1A3A52)
-                      : const Color(0xFFD5EEFF),
+                  color:
+                      isDark
+                          ? const Color(0xFF1A3A52)
+                          : const Color(0xFFD5EEFF),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -394,17 +420,15 @@ class _TopGreetingCard extends StatelessWidget {
                     Icon(
                       isSyncing ? Icons.sync : Icons.check_circle,
                       size: 14,
-                      color: isOffline
-                          ? Colors.orange
-                          : isSyncing
+                      color:
+                          isOffline
+                              ? Colors.orange
+                              : isSyncing
                               ? Colors.blue
                               : Colors.green,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      _syncText(),
-                      style: theme.textTheme.labelSmall,
-                    ),
+                    Text(_syncText(), style: theme.textTheme.labelSmall),
                   ],
                 ),
               ),
@@ -509,8 +533,9 @@ class _StatTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style:
-                theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -596,10 +621,7 @@ class _DeckOfTheDayCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              OutlinedButton(
-                onPressed: onOpenDeck,
-                child: const Text('Open'),
-              ),
+              OutlinedButton(onPressed: onOpenDeck, child: const Text('Open')),
             ],
           ),
         ],
@@ -612,10 +634,7 @@ class _DeckCard extends StatelessWidget {
   final DeckSummary deck;
   final VoidCallback onTap;
 
-  const _DeckCard({
-    required this.deck,
-    required this.onTap,
-  });
+  const _DeckCard({required this.deck, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -690,87 +709,53 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        _QuickActionButton(
-          icon: Icons.add_circle_outline,
-          label: 'New Deck',
-          onTap: onCreateDeck,
-          isDark: isDark,
-        ),
-        _QuickActionButton(
-          icon: Icons.play_circle_outline,
-          label: 'Start Review',
-          onTap: onStartReview,
-          isDark: isDark,
-        ),
-        _QuickActionButton(
-          icon: Icons.explore_outlined,
-          label: 'Browse',
-          onTap: onBrowseDecks,
-          isDark: isDark,
-        ),
-        _QuickActionButton(
-          icon: Icons.bar_chart_outlined,
-          label: 'Analytics',
-          onTap: onAnalytics,
-          isDark: isDark,
-        ),
-      ],
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
-          border: Border.all(
-            color: isDark ? const Color(0xFF2E4556) : const Color(0xFFE0E0E0),
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            constraints.maxWidth < 340 ||
+                    MediaQuery.textScalerOf(context).scale(1) > 1.4
+                ? 1
+                : 2;
+        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
           children: [
-            const Icon(Icons.circle, size: 0), // keeps layout stable
-            Icon(icon, size: 32, color: Colors.blue),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            SizedBox(
+              width: width,
+              child: LearningAction(
+                icon: Icons.add_circle_outline,
+                label: 'Create deck',
+                onPressed: onCreateDeck,
               ),
-              textAlign: TextAlign.center,
+            ),
+            SizedBox(
+              width: width,
+              child: LearningAction(
+                icon: Icons.play_circle_outline,
+                label: 'Start review',
+                onPressed: onStartReview,
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: LearningAction(
+                icon: Icons.explore_outlined,
+                label: 'Browse decks',
+                onPressed: onBrowseDecks,
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: LearningAction(
+                icon: Icons.bar_chart_outlined,
+                label: 'Analytics',
+                onPressed: onAnalytics,
+              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -852,7 +837,8 @@ class _SyncFooterCard extends StatelessWidget {
     final month = localSyncTime?.month.toString().padLeft(2, '0') ?? '00';
     final year = localSyncTime?.year.toString() ?? '0000';
     final now = DateTime.now();
-    final isToday = localSyncTime != null &&
+    final isToday =
+        localSyncTime != null &&
         localSyncTime.year == now.year &&
         localSyncTime.month == now.month &&
         localSyncTime.day == now.day;
@@ -870,7 +856,11 @@ class _SyncFooterCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isOffline ? 'Offline mode' : isSyncing ? 'Syncing...' : 'All synced',
+                isOffline
+                    ? 'Offline mode'
+                    : isSyncing
+                    ? 'Syncing...'
+                    : 'All synced',
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -880,18 +870,15 @@ class _SyncFooterCard extends StatelessWidget {
                 lastSyncedAt == null
                     ? 'Not synced yet'
                     : isToday
-                        ? 'Last sync: $hour:$minute'
-                        : 'Last sync: $day/$month/$year $hour:$minute',
+                    ? 'Last sync: $hour:$minute'
+                    : 'Last sync: $day/$month/$year $hour:$minute',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                 ),
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.sync),
-            onPressed: onForceSync,
-          ),
+          IconButton(icon: const Icon(Icons.sync), onPressed: onForceSync),
         ],
       ),
     );
@@ -902,10 +889,7 @@ class _LoadingCard extends StatelessWidget {
   final bool isDark;
   final bool short;
 
-  const _LoadingCard({
-    required this.isDark,
-    this.short = false,
-  });
+  const _LoadingCard({required this.isDark, this.short = false});
 
   @override
   Widget build(BuildContext context) {
@@ -923,10 +907,7 @@ class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

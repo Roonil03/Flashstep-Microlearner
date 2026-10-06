@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/storage/theme_storage.dart';
 
-final themeStorageProvider =
-    Provider<ThemeStorage>((ref) => const ThemeStorage());
+final themeStorageProvider = Provider<ThemeStorage>(
+  (ref) => const ThemeStorage(),
+);
 
-final appThemeModeProvider =
-    StateNotifierProvider<ThemeNotifier, ThemeMode>((ref) {
+final appThemeModeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((
+  ref,
+) {
   final storage = ref.read(themeStorageProvider);
   return ThemeNotifier(storage);
 });
@@ -34,6 +36,12 @@ class AppTheme {
   static ThemeData light() {
     return ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
       brightness: Brightness.light,
       scaffoldBackgroundColor: Colors.white,
       colorScheme: ColorScheme.fromSeed(
@@ -46,6 +54,12 @@ class AppTheme {
   static ThemeData dark() {
     return ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
       brightness: Brightness.dark,
       scaffoldBackgroundColor: Colors.black,
       colorScheme: ColorScheme.fromSeed(
