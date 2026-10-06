@@ -364,15 +364,22 @@ func (r *AnalyticsRepository) deckInsights(ctx context.Context, userID string) (
 }
 
 func (r *AnalyticsRepository) RefreshUserAnalytics(ctx context.Context, userID string, asOf time.Time) error {
-	asOf = utcDay(asOf)
-	from := asOf.AddDate(0, 0, -89)
-	windowDays := []int{7, 30, 90}
-
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer tx.Rollback()
+	if err := r.RefreshUserAnalyticsTx(ctx, tx, userID, asOf); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RefreshUserAnalyticsTx keeps derived data atomic with an upload.
+func (r *AnalyticsRepository) RefreshUserAnalyticsTx(ctx context.Context, tx *sql.Tx, userID string, asOf time.Time) error {
+	asOf = utcDay(asOf)
+	from := asOf.AddDate(0, 0, -89)
+	windowDays := []int{7, 30, 90}
 
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM analytics_daily_stats
@@ -421,9 +428,6 @@ func (r *AnalyticsRepository) RefreshUserAnalytics(ctx context.Context, userID s
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
 	return nil
 }
 

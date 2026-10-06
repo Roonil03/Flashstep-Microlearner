@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const maxCardsPerDeck = 50
@@ -409,7 +410,7 @@ func SyncUpload(c *gin.Context) {
 	impactedCardIDs := make(map[string]struct{})
 	impactedDeckIDs := make(map[string]struct{})
 
-	tx, err := db.DB.Begin()
+	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -418,8 +419,52 @@ func SyncUpload(c *gin.Context) {
 		_ = tx.Rollback()
 	}()
 
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, userID.String()); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	lockIDs := []string{}
+	cardIDs := []string{}
 	for _, d := range decks {
-		_, err := tx.Exec(`
+		lockIDs = append(lockIDs, d.ID.String())
+	}
+	for _, card := range cards {
+		lockIDs = append(lockIDs, card.DeckID.String())
+		cardIDs = append(cardIDs, card.ID.String())
+	}
+	locked, err := tx.QueryContext(ctx, `SELECT id FROM decks WHERE user_id=$1 AND
+ (id=ANY($2::uuid[]) OR id IN (SELECT deck_id FROM cards WHERE id=ANY($3::uuid[]))) ORDER BY id FOR UPDATE`, userID, pq.Array(lockIDs), pq.Array(cardIDs))
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	for locked.Next() {
+		var id uuid.UUID
+		if err := locked.Scan(&id); err != nil {
+			locked.Close()
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	err = locked.Err()
+	locked.Close()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	for _, d := range decks {
+		var owner uuid.UUID
+		err := tx.QueryRowContext(ctx, `SELECT user_id FROM decks WHERE id=$1`, d.ID).Scan(&owner)
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if err == nil && owner != userID {
+			c.JSON(400, gin.H{"error": "deck id belongs to another account"})
+			return
+		}
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO decks (
 				id, user_id, title, description, is_public,
 				created_at, updated_at, version, is_deleted
@@ -450,8 +495,9 @@ func SyncUpload(c *gin.Context) {
 			return
 		}
 
-		if d.IsDeleted {
-			if _, err := tx.Exec(`
+		changed, _ := result.RowsAffected()
+		if d.IsDeleted && changed > 0 {
+			if _, err := tx.ExecContext(ctx, `
 				UPDATE cards
 				SET is_deleted=true,
 				    updated_at=CASE
@@ -474,7 +520,7 @@ func SyncUpload(c *gin.Context) {
 	for _, card := range cards {
 		var deckUpdatedAt time.Time
 		var deckIsDeleted bool
-		err := tx.QueryRow(`
+		err := tx.QueryRowContext(ctx, `
 			SELECT updated_at, is_deleted
 			FROM decks
 			WHERE id=$1 AND user_id=$2
@@ -498,11 +544,11 @@ func SyncUpload(c *gin.Context) {
 
 		var existingUpdatedAt sql.NullTime
 		var existingDeleted sql.NullBool
-		err = tx.QueryRow(`
-			SELECT updated_at, is_deleted
-			FROM cards
-			WHERE id=$1
-		`, card.ID).Scan(&existingUpdatedAt, &existingDeleted)
+		var existingDeckID, existingOwner uuid.UUID
+		err = tx.QueryRowContext(ctx, `
+			SELECT c.updated_at, c.is_deleted, c.deck_id, d.user_id
+ FROM cards c JOIN decks d ON d.id=c.deck_id WHERE c.id=$1
+		`, card.ID).Scan(&existingUpdatedAt, &existingDeleted, &existingDeckID, &existingOwner)
 
 		cardExists := true
 		if err == sql.ErrNoRows {
@@ -512,9 +558,16 @@ func SyncUpload(c *gin.Context) {
 			return
 		}
 
-		if !cardExists && !card.IsDeleted {
+		if cardExists && existingOwner != userID {
+			c.JSON(400, gin.H{"error": "card id belongs to another account"})
+			return
+		}
+		if cardExists && !card.UpdatedAt.After(existingUpdatedAt.Time) {
+			continue
+		}
+		if !card.IsDeleted && (!cardExists || existingDeleted.Bool || existingDeckID != card.DeckID) {
 			var activeCount int
-			err = tx.QueryRow(`
+			err = tx.QueryRowContext(ctx, `
 				SELECT COUNT(*)
 				FROM cards
 				WHERE deck_id=$1 AND is_deleted=false
@@ -529,7 +582,7 @@ func SyncUpload(c *gin.Context) {
 			}
 		}
 
-		_, err = tx.Exec(`
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO cards (
 				id, deck_id, front, back, state,
 				interval, ease_factor, repetition_count,
@@ -571,11 +624,19 @@ func SyncUpload(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		changed, _ := result.RowsAffected()
+		if changed > 0 {
+			impactedCardIDs[card.ID.String()] = struct{}{}
+			impactedDeckIDs[card.DeckID.String()] = struct{}{}
+			if cardExists && existingDeckID != card.DeckID {
+				impactedDeckIDs[existingDeckID.String()] = struct{}{}
+			}
+		}
 	}
 
 	for _, logItem := range reviewLogs {
 		var deckID uuid.UUID
-		err := tx.QueryRow(`
+		err := tx.QueryRowContext(ctx, `
         SELECT c.deck_id
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
@@ -596,7 +657,20 @@ func SyncUpload(c *gin.Context) {
 			return
 		}
 
-		_, err = tx.Exec(`
+		var priorUser, priorCard uuid.UUID
+		err = tx.QueryRowContext(ctx, `SELECT user_id, card_id FROM review_logs WHERE id=$1`, logItem.ID).Scan(&priorUser, &priorCard)
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if err == nil {
+			if priorUser != userID || priorCard != logItem.CardID {
+				c.JSON(400, gin.H{"error": "review log id collision"})
+				return
+			}
+			continue
+		}
+		result, err := tx.ExecContext(ctx, `
         INSERT INTO review_logs (
             id, user_id, card_id, rating,
             previous_interval, new_interval,
@@ -619,6 +693,10 @@ func SyncUpload(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		changed, _ := result.RowsAffected()
+		if changed == 0 {
+			continue
+		}
 		impactedCardIDs[logItem.CardID.String()] = struct{}{}
 		impactedDeckIDs[deckID.String()] = struct{}{}
 	}
@@ -636,12 +714,14 @@ func SyncUpload(c *gin.Context) {
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	if len(impactedCardIDs) > 0 {
+		if err := analyticsRepo.RefreshUserAnalyticsTx(ctx, tx, userID.String(), time.Now().UTC()); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	}
-	if err := analyticsRepo.RefreshUserAnalytics(ctx, userID.String(), time.Now().UTC()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
