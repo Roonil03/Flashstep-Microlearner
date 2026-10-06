@@ -70,10 +70,22 @@ class DailyReviewLimitTile extends StatelessWidget {
 class AnalyticsRangeControl extends StatelessWidget {
   final int currentValue;
   final ValueChanged<int> onChanged;
-  const AnalyticsRangeControl({super.key, required this.currentValue, required this.onChanged});
+  const AnalyticsRangeControl({
+    super.key,
+    required this.currentValue,
+    required this.onChanged,
+  });
   @override
-  Widget build(BuildContext context) => Wrap(spacing: 10, runSpacing: 8, children: [
-    for (final value in const [7, 30, 90])
-      ChoiceChip(label: Text('$value days'), selected: currentValue == value, onSelected: (_) => onChanged(value)),
-  ]);
+  Widget build(BuildContext context) => Wrap(
+    spacing: 10,
+    runSpacing: 8,
+    children: [
+      for (final value in const [7, 30, 90])
+        ChoiceChip(
+          label: Text('$value days'),
+          selected: currentValue == value,
+          onSelected: (_) => onChanged(value),
+        ),
+    ],
+  );
 }

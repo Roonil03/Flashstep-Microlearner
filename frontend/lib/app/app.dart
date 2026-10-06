@@ -1,3 +1,4 @@
+import '../features/onboarding/presentation/navigation_tour_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -37,6 +38,7 @@ class App extends ConsumerWidget {
         AppRoutes.home: (_) => const HomeDashboardPage(),
         AppRoutes.analytics: (_) => const AnalyticsPage(),
         AppRoutes.settings: (_) => const SettingsPage(),
+        AppRoutes.navigationTour: (_) => const NavigationTourPage(),
         AppRoutes.browseDecks: (_) => const BrowseDecksPage(),
         AppRoutes.review: (_) => const StartReviewPage(),
         AppRoutes.createDeck: (_) => const CreateDeckPage(),

@@ -296,22 +296,21 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                                 ),
                                 const SizedBox(height: 12),
                                 downloading
-                                  ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                                    ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : LearningAction(
+                                      onPressed: () => _downloadDeck(deck),
+                                      icon: Icons.download_rounded,
+                                      label: 'Add to my decks',
                                     ),
-                                  )
-                                  : LearningAction(
-                                    onPressed: () => _downloadDeck(deck),
-                                    icon: Icons.download_rounded,
-                                    label: 'Add to my decks',
-                                  ),
                               ],
                             ),
                           ),
-
                         ),
                       );
                     },

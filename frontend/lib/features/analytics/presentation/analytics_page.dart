@@ -21,9 +21,7 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
     ref.invalidate(analyticsDashboardProvider(_rangeDays));
     try {
       await ref.read(analyticsDashboardProvider(_rangeDays).future);
-    } catch (_) {
-
-    }
+    } catch (_) {}
   }
 
   @override
@@ -46,18 +44,19 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
         child: RefreshIndicator(
           onRefresh: _refresh,
           child: analyticsAsync.when(
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: const [
-                _SkeletonCard(height: 220),
-                SizedBox(height: 16),
-                _SkeletonCard(height: 220),
-                SizedBox(height: 16),
-                _SkeletonCard(height: 220),
-              ],
-            ),
-             error: (error, _) {
+            loading:
+                () => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  children: const [
+                    _SkeletonCard(height: 220),
+                    SizedBox(height: 16),
+                    _SkeletonCard(height: 220),
+                    SizedBox(height: 16),
+                    _SkeletonCard(height: 220),
+                  ],
+                ),
+            error: (error, _) {
               final resolved = _resolveAnalyticsError(error);
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -72,108 +71,111 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
                 ],
               );
             },
-            data: (data) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: [
-                _AnalyticsHeroCard(data: data, isDark: isDark),
-                const SizedBox(height: 16),
-                AnalyticsRangeControl(
-                  currentValue: _rangeDays,
-                  onChanged: (value) {
-                    if (value == _rangeDays) return;
-                    setState(() => _rangeDays = value);
-                  },
-                ),
-                const SizedBox(height: 16),
-                _MetricWrap(data: data),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Study rhythm',
-                  subtitle:
-                      '${data.reviewsInRange} reviews across ${data.rangeDays} days',
-                  child: _ReviewBarChart(
-                    points: data.reviewActivity,
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Retention trend',
-                  subtitle:
-                      '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
-                  child: _AccuracyLineChart(
-                    points: data.accuracyTrend,
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Learning pipeline',
-                  subtitle: 'Current card distribution from your synced database state',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _StateDistributionBar(data: data),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
+            data:
+                (data) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  children: [
+                    _AnalyticsHeroCard(data: data, isDark: isDark),
+                    const SizedBox(height: 16),
+                    AnalyticsRangeControl(
+                      currentValue: _rangeDays,
+                      onChanged: (value) {
+                        if (value == _rangeDays) return;
+                        setState(() => _rangeDays = value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _MetricWrap(data: data),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Study rhythm',
+                      subtitle:
+                          '${data.reviewsInRange} reviews across ${data.rangeDays} days',
+                      child: _ReviewBarChart(
+                        points: data.reviewActivity,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Retention trend',
+                      subtitle:
+                          '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
+                      child: _AccuracyLineChart(
+                        points: data.accuracyTrend,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Learning pipeline',
+                      subtitle:
+                          'Current card distribution from your synced database state',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _InfoPill(
-                            label: 'Learned',
-                            value: '${data.learnedCards}',
-                            icon: Icons.school_outlined,
-                          ),
-                          _InfoPill(
-                            label: 'Mature',
-                            value: '${data.matureCards}',
-                            icon: Icons.psychology_alt_outlined,
-                          ),
-                          _InfoPill(
-                            label: 'Due in 24h',
-                            value: '${data.dueNext24Hours}',
-                            icon: Icons.schedule_outlined,
-                          ),
-                          _InfoPill(
-                            label: 'Longest interval',
-                            value: '${data.longestIntervalDays.toStringAsFixed(0)} d',
-                            icon: Icons.timeline_outlined,
+                          _StateDistributionBar(data: data),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _InfoPill(
+                                label: 'Learned',
+                                value: '${data.learnedCards}',
+                                icon: Icons.school_outlined,
+                              ),
+                              _InfoPill(
+                                label: 'Mature',
+                                value: '${data.matureCards}',
+                                icon: Icons.psychology_alt_outlined,
+                              ),
+                              _InfoPill(
+                                label: 'Due in 24h',
+                                value: '${data.dueNext24Hours}',
+                                icon: Icons.schedule_outlined,
+                              ),
+                              _InfoPill(
+                                label: 'Longest interval',
+                                value:
+                                    '${data.longestIntervalDays.toStringAsFixed(0)} d',
+                                icon: Icons.timeline_outlined,
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Review answer mix',
+                      subtitle:
+                          'Again resets the card. Hard, Good and Easy count as successful recall.',
+                      child: _RatingBreakdownCard(
+                        breakdown: data.ratingBreakdown,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Deck insights',
+                      subtitle:
+                          'Workload and performance across your active decks',
+                      child: _DeckInsightList(
+                        insights: data.deckInsights,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'What this means',
+                      subtitle:
+                          'Plain-language summary of what to focus on next',
+                      child: _InsightSummary(data: data, isDark: isDark),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Review answer mix',
-                  subtitle: 'Again resets the card. Hard, Good and Easy count as successful recall.',
-                  child: _RatingBreakdownCard(
-                    breakdown: data.ratingBreakdown,
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'Deck insights',
-                  subtitle: 'Workload and performance across your active decks',
-                  child: _DeckInsightList(
-                    insights: data.deckInsights,
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SectionCard(
-                  title: 'What this means',
-                  subtitle: 'Plain-language summary of what to focus on next',
-                  child: _InsightSummary(
-                    data: data,
-                    isDark: isDark,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -224,10 +226,7 @@ class _AnalyticsHeroCard extends StatelessWidget {
   final AnalyticsDashboardData data;
   final bool isDark;
 
-  const _AnalyticsHeroCard({
-    required this.data,
-    required this.isDark,
-  });
+  const _AnalyticsHeroCard({required this.data, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -238,9 +237,10 @@ class _AnalyticsHeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: LinearGradient(
-          colors: isDark
-              ? const [Color(0xFF1D1536), Color(0xFF0F1A30)]
-              : const [Color(0xFFF4ECFF), Color(0xFFEAF6FF)],
+          colors:
+              isDark
+                  ? const [Color(0xFF1D1536), Color(0xFF0F1A30)]
+                  : const [Color(0xFFF4ECFF), Color(0xFFEAF6FF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -256,15 +256,17 @@ class _AnalyticsHeroCard extends StatelessWidget {
                 height: 64,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.08)
-                      : Colors.white.withOpacity(0.82),
+                  color:
+                      isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.white.withOpacity(0.82),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Image.asset(
                   'assets/LogoWithText_WithoutBG.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.auto_stories_rounded),
+                  errorBuilder:
+                      (_, __, ___) => const Icon(Icons.auto_stories_rounded),
                 ),
               ),
               const SizedBox(width: 14),
@@ -280,9 +282,13 @@ class _AnalyticsHeroCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      data.username.isEmpty ? 'Flashapp learner' : data.username,
+                      data.username.isEmpty
+                          ? 'Flashapp learner'
+                          : data.username,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.72),
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.72,
+                        ),
                       ),
                     ),
                   ],
@@ -302,9 +308,19 @@ class _AnalyticsHeroCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _HeroChip(icon: Icons.local_fire_department_outlined, label: '${data.currentStreak} day streak'),
-              _HeroChip(icon: Icons.auto_graph_outlined, label: '${(data.retentionRate * 100).toStringAsFixed(1)}% retention'),
-              _HeroChip(icon: Icons.today_outlined, label: '${data.reviewsToday} reviewed today'),
+              _HeroChip(
+                icon: Icons.local_fire_department_outlined,
+                label: '${data.currentStreak} day streak',
+              ),
+              _HeroChip(
+                icon: Icons.auto_graph_outlined,
+                label:
+                    '${(data.retentionRate * 100).toStringAsFixed(1)}% retention',
+              ),
+              _HeroChip(
+                icon: Icons.today_outlined,
+                label: '${data.reviewsToday} reviewed today',
+              ),
             ],
           ),
         ],
@@ -326,15 +342,14 @@ class _HeroChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.82),
+        color:
+            isDark
+                ? Colors.white.withOpacity(0.08)
+                : Colors.white.withOpacity(0.82),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
+        children: [Icon(icon, size: 16), const SizedBox(width: 8), Text(label)],
       ),
     );
   }
@@ -377,18 +392,13 @@ class _MetricWrap extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 520;
-        final tileWidth = compact
-            ? constraints.maxWidth
-            : (constraints.maxWidth - 12) / 2;
+        final tileWidth =
+            compact ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
         return Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            for (final item in items)
-              SizedBox(
-                width: tileWidth,
-                child: item,
-              ),
+            for (final item in items) SizedBox(width: tileWidth, child: item),
           ],
         );
       },
@@ -485,7 +495,9 @@ class _SectionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -515,7 +527,10 @@ class _ReviewBarChart extends StatelessWidget {
       return const _ChartEmptyState(label: 'No review activity yet');
     }
 
-    final peak = points.fold<int>(0, (max, point) => math.max(max, point.count));
+    final peak = points.fold<int>(
+      0,
+      (max, point) => math.max(max, point.count),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -531,7 +546,10 @@ class _ReviewBarChart extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(_shortDate(points.first.date)),
-            Text('Peak $peak reviews', style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              'Peak $peak reviews',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             Text(_shortDate(points.last.date)),
           ],
         ),
@@ -552,7 +570,10 @@ class _AccuracyLineChart extends StatelessWidget {
       return const _ChartEmptyState(label: 'No graded reviews yet');
     }
 
-    final highest = points.fold<double>(0, (max, point) => math.max(max, point.accuracy));
+    final highest = points.fold<double>(
+      0,
+      (max, point) => math.max(max, point.accuracy),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -568,7 +589,10 @@ class _AccuracyLineChart extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(_shortDate(points.first.date)),
-            Text('Best ${(highest * 100).toStringAsFixed(0)}%', style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              'Best ${(highest * 100).toStringAsFixed(0)}%',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             Text(_shortDate(points.last.date)),
           ],
         ),
@@ -592,12 +616,7 @@ class _StateDistributionBar extends StatelessWidget {
 
     void addSegment(int value, Color color) {
       if (value <= 0) return;
-      segments.add(
-        Expanded(
-          flex: value,
-          child: Container(color: color),
-        ),
-      );
+      segments.add(Expanded(flex: value, child: Container(color: color)));
     }
 
     addSegment(data.newCards, const Color(0xFF7C4DFF));
@@ -616,9 +635,21 @@ class _StateDistributionBar extends StatelessWidget {
           spacing: 12,
           runSpacing: 10,
           children: [
-            _LegendItem(color: const Color(0xFF7C4DFF), label: 'New', value: data.newCards),
-            _LegendItem(color: const Color(0xFFFFA726), label: 'Learning', value: data.learningCards),
-            _LegendItem(color: const Color(0xFF26A69A), label: 'Review', value: data.reviewCards),
+            _LegendItem(
+              color: const Color(0xFF7C4DFF),
+              label: 'New',
+              value: data.newCards,
+            ),
+            _LegendItem(
+              color: const Color(0xFFFFA726),
+              label: 'Learning',
+              value: data.learningCards,
+            ),
+            _LegendItem(
+              color: const Color(0xFF26A69A),
+              label: 'Review',
+              value: data.reviewCards,
+            ),
           ],
         ),
       ],
@@ -631,7 +662,11 @@ class _LegendItem extends StatelessWidget {
   final String label;
   final int value;
 
-  const _LegendItem({required this.color, required this.label, required this.value});
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -640,12 +675,17 @@ class _LegendItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8F9FD),
+        color:
+            isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8F9FD),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
           Text('$label · $value'),
         ],
@@ -659,7 +699,11 @@ class _InfoPill extends StatelessWidget {
   final String value;
   final IconData icon;
 
-  const _InfoPill({required this.label, required this.value, required this.icon});
+  const _InfoPill({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -681,7 +725,12 @@ class _InfoPill extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: theme.textTheme.bodySmall),
-              Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+              Text(
+                value,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
         ],
@@ -712,13 +761,26 @@ class _RatingBreakdownCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
             const SizedBox(height: 10),
             Text(label),
             const SizedBox(height: 6),
-            Text('$value', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+            Text(
+              '$value',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
-            Text('${percent.toStringAsFixed(0)}% of answers', maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(
+              '${percent.toStringAsFixed(0)}% of answers',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       );
@@ -777,7 +839,12 @@ class _DeckInsightTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(insight.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text(
+            insight.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 10,
@@ -786,7 +853,10 @@ class _DeckInsightTile extends StatelessWidget {
               _MiniStat(label: 'Cards', value: '${insight.totalCards}'),
               _MiniStat(label: 'Due', value: '${insight.dueCards}'),
               _MiniStat(label: 'Reviewed', value: '${insight.reviewedCount}'),
-              _MiniStat(label: 'Accuracy', value: '${(insight.accuracy * 100).toStringAsFixed(0)}%'),
+              _MiniStat(
+                label: 'Accuracy',
+                value: '${(insight.accuracy * 100).toStringAsFixed(0)}%',
+              ),
               _MiniStat(label: 'Mature', value: '${insight.matureCards}'),
             ],
           ),
@@ -826,21 +896,33 @@ class _InsightSummary extends StatelessWidget {
     final messages = <String>[];
 
     if (data.dueNow > math.max(10, data.reviewsToday * 2)) {
-      messages.add('Your due queue is building up. A shorter catch-up session today will make tomorrow easier.');
+      messages.add(
+        'Your due queue is building up. A shorter catch-up session today will make tomorrow easier.',
+      );
     } else {
-      messages.add('Your due queue looks manageable. You are keeping the review load under control.');
+      messages.add(
+        'Your due queue looks manageable. You are keeping the review load under control.',
+      );
     }
 
     if (data.retentionRate < 0.75) {
-      messages.add('Retention has dipped a bit. Consider trimming card density or adding more context to difficult cards.');
+      messages.add(
+        'Retention has dipped a bit. Consider trimming card density or adding more context to difficult cards.',
+      );
     } else {
-      messages.add('Retention is strong. Your recent review quality suggests the spacing is working well.');
+      messages.add(
+        'Retention is strong. Your recent review quality suggests the spacing is working well.',
+      );
     }
 
     if (data.matureCards > 0) {
-      messages.add('${data.matureCards} cards have reached mature status, which means your long-term knowledge base is growing.');
+      messages.add(
+        '${data.matureCards} cards have reached mature status, which means your long-term knowledge base is growing.',
+      );
     } else {
-      messages.add('You are still building toward mature cards. A few more consistent review days will start that curve.');
+      messages.add(
+        'You are still building toward mature cards. A few more consistent review days will start that curve.',
+      );
     }
 
     return messages.take(3).toList(growable: false);
@@ -865,11 +947,19 @@ class _InsightTile extends StatelessWidget {
   final int index;
   final bool isDark;
 
-  const _InsightTile({required this.message, required this.index, required this.isDark});
+  const _InsightTile({
+    required this.message,
+    required this.index,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colors = [const Color(0xFF7C4DFF), const Color(0xFFFFA726), const Color(0xFF26A69A)];
+    final colors = [
+      const Color(0xFF7C4DFF),
+      const Color(0xFFFFA726),
+      const Color(0xFF26A69A),
+    ];
     final color = colors[index % colors.length];
     return Container(
       padding: const EdgeInsets.all(16),
@@ -880,7 +970,12 @@ class _InsightTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(width: 12, height: 12, margin: const EdgeInsets.only(top: 4), decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 12,
+            height: 12,
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 12),
           Expanded(child: Text(message)),
         ],
@@ -903,20 +998,25 @@ class _BarChartPainter extends CustomPainter {
 
     final chartHeight = size.height - bottomPadding - topPadding;
     final chartWidth = size.width - leftPadding;
-    final maxValue = points.fold<int>(0, (max, point) => math.max(max, point.count));
+    final maxValue = points.fold<int>(
+      0,
+      (max, point) => math.max(max, point.count),
+    );
     final safeMax = maxValue == 0 ? 1 : maxValue;
     final slotWidth = chartWidth / points.length;
     final barWidth = math.max(4.0, slotWidth * 0.55);
 
-    final gridPaint = Paint()
-      ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
-      ..strokeWidth = 1;
-    final barPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF7C4DFF), Color(0xFFFF5BB2)],
-        begin: Alignment.bottomCenter,
-        end: Alignment.topCenter,
-      ).createShader(Rect.fromLTWH(0, topPadding, size.width, chartHeight));
+    final gridPaint =
+        Paint()
+          ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
+          ..strokeWidth = 1;
+    final barPaint =
+        Paint()
+          ..shader = const LinearGradient(
+            colors: [Color(0xFF7C4DFF), Color(0xFFFF5BB2)],
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+          ).createShader(Rect.fromLTWH(0, topPadding, size.width, chartHeight));
 
     for (var i = 0; i < 4; i++) {
       final y = topPadding + (chartHeight / 3) * i;
@@ -929,7 +1029,12 @@ class _BarChartPainter extends CustomPainter {
       final barHeight = chartHeight * normalized;
       final dx = leftPadding + slotWidth * index + (slotWidth - barWidth) / 2;
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(dx, size.height - bottomPadding - barHeight, barWidth, math.max(3, barHeight)),
+        Rect.fromLTWH(
+          dx,
+          size.height - bottomPadding - barHeight,
+          barWidth,
+          math.max(3, barHeight),
+        ),
         const Radius.circular(999),
       );
       canvas.drawRRect(rect, barPaint);
@@ -957,17 +1062,25 @@ class _LineChartPainter extends CustomPainter {
 
     final chartHeight = size.height - topPadding - bottomPadding;
     final chartWidth = size.width - leftPadding - rightPadding;
-    final gridPaint = Paint()
-      ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
-      ..strokeWidth = 1;
+    final gridPaint =
+        Paint()
+          ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
+          ..strokeWidth = 1;
 
     for (var i = 0; i < 4; i++) {
       final y = topPadding + (chartHeight / 3) * i;
-      canvas.drawLine(Offset(leftPadding, y), Offset(size.width - rightPadding, y), gridPaint);
+      canvas.drawLine(
+        Offset(leftPadding, y),
+        Offset(size.width - rightPadding, y),
+        gridPaint,
+      );
     }
 
     if (points.length == 1) {
-      final center = Offset(size.width / 2, topPadding + chartHeight * (1 - points.first.accuracy));
+      final center = Offset(
+        size.width / 2,
+        topPadding + chartHeight * (1 - points.first.accuracy),
+      );
       final pointPaint = Paint()..color = const Color(0xFF26A69A);
       canvas.drawCircle(center, 5, pointPaint);
       return;
@@ -980,7 +1093,8 @@ class _LineChartPainter extends CustomPainter {
     Offset toOffset(AccuracyPoint point) {
       final dayOffset = point.date.difference(minDate).inDays;
       final dx = leftPadding + (dayOffset / totalDays) * chartWidth;
-      final dy = topPadding + chartHeight * (1 - point.accuracy.clamp(0.0, 1.0));
+      final dy =
+          topPadding + chartHeight * (1 - point.accuracy.clamp(0.0, 1.0));
       return Offset(dx, dy);
     }
 
@@ -1001,30 +1115,33 @@ class _LineChartPainter extends CustomPainter {
     areaPath.lineTo(lastOffset.dx, size.height - bottomPadding);
     areaPath.close();
 
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFF26A69A).withOpacity(0.28),
-          const Color(0xFF26A69A).withOpacity(0.02),
-        ],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    final fillPaint =
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              const Color(0xFF26A69A).withOpacity(0.28),
+              const Color(0xFF26A69A).withOpacity(0.02),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    final linePaint = Paint()
-      ..color = const Color(0xFF26A69A)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final linePaint =
+        Paint()
+          ..color = const Color(0xFF26A69A)
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
 
     canvas.drawPath(areaPath, fillPaint);
     canvas.drawPath(linePath, linePaint);
 
     final dotPaint = Paint()..color = const Color(0xFF26A69A);
-    final dotOutline = Paint()
-      ..color = isDark ? const Color(0xFF111523) : Colors.white
-      ..style = PaintingStyle.fill;
+    final dotOutline =
+        Paint()
+          ..color = isDark ? const Color(0xFF111523) : Colors.white
+          ..style = PaintingStyle.fill;
 
     for (final point in points) {
       final offset = toOffset(point);
@@ -1052,7 +1169,10 @@ class _ChartEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 30),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8F9FD),
+        color:
+            theme.brightness == Brightness.dark
+                ? Colors.white.withOpacity(0.03)
+                : const Color(0xFFF8F9FD),
       ),
       child: Column(
         children: [
@@ -1102,9 +1222,10 @@ class _ErrorState extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF171B2E)
-            : Colors.white,
+        color:
+            Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF171B2E)
+                : Colors.white,
       ),
       child: Column(
         children: [
@@ -1112,16 +1233,12 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             title,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
+          Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: onRetry,
@@ -1135,6 +1252,19 @@ class _ErrorState extends StatelessWidget {
 }
 
 String _shortDate(DateTime date) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return '${months[date.month - 1]} ${date.day}';
 }
