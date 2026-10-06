@@ -46,3 +46,4 @@ app.*.map.json
 **/api_client.dart
 /windows/
 /web/
+**/test/
