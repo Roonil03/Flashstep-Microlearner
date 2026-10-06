@@ -1,3 +1,4 @@
+import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
@@ -135,7 +136,10 @@ class _MainSettings extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text('Version 1.0.0', style: theme.textTheme.bodySmall),
+              Text(
+                'Version ${AppVersion.name}',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ),
           const SizedBox(height: 24),

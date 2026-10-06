@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:frontend/app/app_version.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,13 @@ import 'package:frontend/app/theme/app_theme.dart';
 import 'navigation_tour_storage_test.dart' show MemorySessionStorage;
 
 void main() {
+  test('Settings release version matches Flutter package version', () {
+    final match = RegExp(
+      r'^version: (.+)$',
+      multiLine: true,
+    ).firstMatch(File('pubspec.yaml').readAsStringSync());
+    expect(match!.group(1)!.trim(), '${AppVersion.name}+2');
+  });
   testWidgets('Settings can replay the tour and return without a database', (
     tester,
   ) async {
