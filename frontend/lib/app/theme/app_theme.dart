@@ -22,8 +22,12 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
   }
 
   Future<void> _load() async {
-    final mode = await _storage.readThemeMode();
-    state = mode;
+    try {
+      final mode = await _storage.readThemeMode();
+      if (mounted) state = mode;
+    } catch (_) {
+      // Keep the usable default when device preference storage is unavailable.
+    }
   }
 
   Future<void> setTheme(ThemeMode mode) async {
