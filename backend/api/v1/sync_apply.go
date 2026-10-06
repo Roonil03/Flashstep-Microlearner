@@ -58,8 +58,12 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		return err
 	}
 	deckIDs, cardIDs, logIDs := []string{}, []string{}, []string{}
+	deletedDeckIDs := []string{}
 	for _, d := range decks {
 		deckIDs = append(deckIDs, d.ID.String())
+		if d.IsDeleted {
+			deletedDeckIDs = append(deletedDeckIDs, d.ID.String())
+		}
 	}
 	for _, c := range cards {
 		deckIDs = append(deckIDs, c.DeckID.String())
@@ -116,7 +120,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	counts := map[uuid.UUID]int{}
 	rows, err = tx.QueryContext(ctx, `SELECT c.id,c.deck_id,d.user_id,c.updated_at,c.is_deleted,
  EXISTS(SELECT 1 FROM review_logs rl WHERE rl.card_id=c.id AND rl.user_id=$1)
- FROM cards c JOIN decks d ON d.id=c.deck_id WHERE c.deck_id=ANY($2::uuid[]) OR c.id=ANY($3::uuid[])`, user, pq.Array(ownedIDs), pq.Array(cardIDs))
+	 FROM cards c JOIN decks d ON d.id=c.deck_id WHERE c.deck_id=ANY($2::uuid[]) OR c.id=ANY($3::uuid[])`, user, pq.Array(deletedDeckIDs), pq.Array(cardIDs))
 	if err != nil {
 		return err
 	}
@@ -128,9 +132,25 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			return err
 		}
 		cardState[id] = c
-		if !c.deleted {
-			counts[c.deck]++
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	// Counts cover whole decks without materializing unrelated card revisions.
+	rows, err = tx.QueryContext(ctx, `SELECT deck_id,count(*) FROM cards WHERE deck_id=ANY($1::uuid[]) AND NOT is_deleted GROUP BY deck_id`, pq.Array(ownedIDs))
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id uuid.UUID
+		var count int
+		if err = rows.Scan(&id, &count); err != nil {
+			rows.Close()
+			return err
 		}
+		counts[id] = count
 	}
 	err = rows.Err()
 	rows.Close()
