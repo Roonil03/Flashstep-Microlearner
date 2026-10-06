@@ -46,4 +46,6 @@ app.*.map.json
 **/api_client.dart
 /windows/
 /web/
-**/test/
+
+# Generated Kotlin incremental build cache
+/android/.kotlin/

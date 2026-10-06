@@ -52,4 +52,33 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'Analytics range supports selection without changing the available ranges',
+    (tester) async {
+      var selected = 30;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder:
+                  (context, setState) => AnalyticsRangeControl(
+                    currentValue: selected,
+                    onChanged: (value) => setState(() => selected = value),
+                  ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('7 days'));
+      await tester.pump();
+      expect(selected, 7);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '7 days'))
+            .selected,
+        isTrue,
+      );
+      expect(find.text('90 days'), findsOneWidget);
+    },
+  );
 }

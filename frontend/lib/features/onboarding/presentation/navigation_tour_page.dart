@@ -34,7 +34,7 @@ const navigationTourScenes = <TourScene>[
     4,
     'Browse your decks',
     'Home → Browse decks',
-    'Browse decks opens your library. Search by title, open a deck to see its cards, or choose Public decks to discover shared decks.',
+    'Browse decks opens your library. Search by title, open a deck to see its cards, or choose Browse public decks to discover shared decks.',
   ),
   TourScene(
     5,
@@ -93,6 +93,8 @@ class NavigationTourPage extends StatefulWidget {
 class _NavigationTourPageState extends State<NavigationTourPage> {
   late int _scene;
   final _target = GlobalKey();
+  final _instructions = GlobalKey();
+  double _viewportHeight = 0;
   final _nextFocus = FocusNode(debugLabel: 'Tour next step');
   Future<void> _writes = Future<void>.value();
   bool _closing = false;
@@ -125,10 +127,23 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final targetContext = _target.currentContext;
       if (!mounted || targetContext == null) return;
+      final targetBox = targetContext.findRenderObject() as RenderBox?;
+      final instructionContext = _instructions.currentContext;
+      final instructionBox =
+          instructionContext?.findRenderObject() as RenderBox?;
+      // Keep the explanation readable when a large preview cannot fit beside it.
+      final fits =
+          (targetBox?.size.height ?? 0) +
+              (instructionBox?.size.height ?? 0) +
+              36 <=
+          _viewportHeight;
       Scrollable.ensureVisible(
-        targetContext,
+        fits ? targetContext : (instructionContext ?? targetContext),
         duration: Duration.zero,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        alignmentPolicy:
+            fits
+                ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+                : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
       );
     });
   }
@@ -205,7 +220,7 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           title: Text('Everyday Spanish'),
           subtitle: Text('2 cards • Private deck'),
         ),
-        _action(Icons.public, 'Public decks'),
+        _action(Icons.public, 'Browse public decks'),
       ],
       4 => <Widget>[
         const ListTile(
@@ -307,60 +322,63 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           ),
           body: SafeArea(
             child: LayoutBuilder(
-              builder:
-                  (context, constraints) => SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Safe preview • Examples are never saved',
-                          textAlign: TextAlign.center,
+              builder: (context, constraints) {
+                _viewportHeight = constraints.maxHeight;
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Safe preview • Examples are never saved',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Semantics(
+                        liveRegion: true,
+                        header: true,
+                        child: Text(
+                          'Step ${scene.step} of 9: ${scene.title}',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        const SizedBox(height: 12),
-                        Semantics(
-                          liveRegion: true,
-                          header: true,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(scene.path),
+                      const SizedBox(height: 12),
+                      Card(
+                        key: _instructions,
+                        color: scheme.secondaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
                           child: Text(
-                            'Step ${scene.step} of 9: ${scene.title}',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(scene.path),
-                        const SizedBox(height: 12),
-                        Card(
-                          color: scheme.secondaryContainer,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              scene.instruction,
-                              style: TextStyle(
-                                color: scheme.onSecondaryContainer,
-                              ),
+                            scene.instruction,
+                            style: TextStyle(
+                              color: scheme.onSecondaryContainer,
                             ),
                           ),
                         ),
-                        // The connector is in the same scroll layout as its instruction and
-                        // target, so it stays attached through resizing and text scaling.
-                        SizedBox(
-                          height: 36,
-                          child: CustomPaint(
-                            painter: TourArrowPainter(scheme.primary),
-                          ),
+                      ),
+                      // The connector is in the same scroll layout as its instruction and
+                      // target, so it stays attached through resizing and text scaling.
+                      SizedBox(
+                        height: 36,
+                        child: CustomPaint(
+                          painter: TourArrowPainter(scheme.primary),
                         ),
-                        Container(
-                          key: _target,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: scheme.primary, width: 3),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: _preview(),
+                      ),
+                      Container(
+                        key: _target,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: scheme.primary, width: 3),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      ],
-                    ),
+                        child: _preview(),
+                      ),
+                    ],
                   ),
+                );
+              },
             ),
           ),
           bottomNavigationBar: SafeArea(

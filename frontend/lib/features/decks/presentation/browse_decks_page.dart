@@ -226,6 +226,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
         actions: [
           if (_isSearching)
             IconButton(
+              tooltip: 'Close deck search',
               icon: const Icon(Icons.close),
               onPressed: () {
                 setState(() {
@@ -293,7 +294,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                   Icon(Icons.style_outlined, size: 52),
                   SizedBox(height: 16),
                   Text(
-                    'No decks yet. Create a deck with the button below, or browse public decks.',
+                    'No decks yet. Create a deck from Home, or browse public decks below.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),

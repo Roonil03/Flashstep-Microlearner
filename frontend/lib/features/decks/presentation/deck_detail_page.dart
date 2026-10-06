@@ -646,7 +646,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                                 : Text(
                                                   hasReachedLimit
                                                       ? 'Card limit reached'
-                                                      : 'Save Card',
+                                                      : 'Save card',
                                                 ),
                                       ),
                                     ),

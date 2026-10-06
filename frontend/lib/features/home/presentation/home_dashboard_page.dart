@@ -1,3 +1,4 @@
+import '../../../core/network/providers.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
@@ -412,34 +413,41 @@ class _TopGreetingCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color:
-                      isDark
-                          ? const Color(0xFF1A3A52)
-                          : const Color(0xFFD5EEFF),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isSyncing ? Icons.sync : Icons.check_circle,
-                      size: 14,
-                      color:
-                          isOffline
-                              ? Colors.orange
-                              : isSyncing
-                              ? Colors.blue
-                              : Colors.green,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(_syncText(), style: theme.textTheme.labelSmall),
-                  ],
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color:
+                        isDark
+                            ? const Color(0xFF1A3A52)
+                            : const Color(0xFFD5EEFF),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSyncing ? Icons.sync : Icons.check_circle,
+                        size: 14,
+                        color:
+                            isOffline
+                                ? Colors.orange
+                                : isSyncing
+                                ? Colors.blue
+                                : Colors.green,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          _syncText(),
+                          style: theme.textTheme.labelSmall,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
