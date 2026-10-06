@@ -13,6 +13,7 @@ Flashstep Microlearner is a full-stack flashcard learning platform with:
 - a Go backend with PostgreSQL
 - local-first data storage through Drift on the device
 - cloud sync for decks, cards, review history, and analytics
+- bounded sync uploads and paged reconciliation that finds late offline changes across devices
 - spaced repetition review workflows
 - public deck browsing and editable personal copies
 - a safe, nine-step navigation guide for new signups, replayable from Settings
@@ -21,6 +22,8 @@ Flashstep Microlearner is a full-stack flashcard learning platform with:
 The goal of the project is to make short, repeatable learning sessions feel smooth, fast, and reliable, even when connectivity is inconsistent.
 
 Current release: **1.1.0**.
+
+Version 1.1.0 includes backend sync optimizations and additive manifest/fetch APIs. Deploy the updated backend before distributing the frontend; existing clients remain compatible, and no database migration is required. See the release notes for local benchmark results and validation limits.
 
 ## Documentation
 
