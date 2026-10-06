@@ -31,6 +31,13 @@ android {
     }
 
     buildTypes {
+        // Opt-in package isolation for device tests; regular builds keep their ID.
+        configureEach {
+            if (name != "release" && providers.gradleProperty("flashstepDeviceTest").orNull == "true") {
+                applicationIdSuffix = ".uitest"
+            }
+        }
+
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

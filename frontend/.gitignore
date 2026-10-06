@@ -52,3 +52,4 @@ app.*.map.json
 
 # Keep local test suites out of Git
 /test/
+/integration_test/
