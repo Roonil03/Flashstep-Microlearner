@@ -49,10 +49,6 @@ void main() {
             findsOneWidget,
           );
           expect(
-            find.byType(TourArrowPainter),
-            findsNothing,
-          ); // painter is mounted on CustomPaint, not a widget.
-          expect(
             find.byWidgetPredicate(
               (widget) =>
                   widget is CustomPaint && widget.painter is TourArrowPainter,

@@ -12,7 +12,8 @@ class AuthApiException implements Exception {
   const AuthApiException(this.message, {this.statusCode});
 
   @override
-  String toString() => 'AuthApiException(statusCode: $statusCode, message: $message)';
+  String toString() =>
+      'AuthApiException(statusCode: $statusCode, message: $message)';
 }
 
 class AuthSession {
@@ -42,7 +43,8 @@ class AuthSession {
 
     return AuthSession(
       token: json['token'] as String? ?? '',
-      userId: json['userId'] as String? ??
+      userId:
+          json['userId'] as String? ??
           json['user_id'] as String? ??
           nestedUserId,
       email: json['email'] as String? ?? nestedEmail,
@@ -57,9 +59,7 @@ class AuthApi {
   AuthApi(this._client);
 
   Map<String, String> _jsonHeaders([String? token]) {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
 
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
@@ -90,7 +90,7 @@ class AuthApi {
     return fallback;
   }
 
-  Future<void> register({
+  Future<AuthSession?> register({
     required String email,
     required String username,
     required String password,
@@ -111,6 +111,15 @@ class AuthApi {
         statusCode: response.statusCode,
       );
     }
+    // A successful signup must remain successful if optional tour metadata is unavailable.
+    try {
+      final decoded = jsonDecode(response.body);
+      return decoded is Map<String, dynamic>
+          ? AuthSession.fromJson(decoded)
+          : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<AuthSession> login({
@@ -120,10 +129,7 @@ class AuthApi {
     final response = await http.post(
       _client.uri(ApiEndpoints.login),
       headers: _jsonHeaders(),
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-      }),
+      body: jsonEncode({'email': email, 'password': password}),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -144,9 +150,7 @@ class AuthApi {
   Future<bool> validateToken(String token) async {
     final response = await http.get(
       _client.uri(ApiEndpoints.me),
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Authorization': 'Bearer $token'},
     );
 
     return response.statusCode >= 200 && response.statusCode < 300;
@@ -155,9 +159,7 @@ class AuthApi {
   Future<AuthSession> getMe(String token) async {
     final response = await http.get(
       _client.uri(ApiEndpoints.me),
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -204,9 +206,7 @@ class AuthApi {
     final response = await http.put(
       _client.uri(ApiEndpoints.changeUsername),
       headers: _jsonHeaders(token),
-      body: jsonEncode({
-        'username': username,
-      }),
+      body: jsonEncode({'username': username}),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -217,9 +217,7 @@ class AuthApi {
     }
   }
 
-  Future<void> deleteAccount({
-    required String token,
-  }) async {
+  Future<void> deleteAccount({required String token}) async {
     final response = await http.delete(
       _client.uri(ApiEndpoints.deleteAccount),
       headers: _jsonHeaders(token),

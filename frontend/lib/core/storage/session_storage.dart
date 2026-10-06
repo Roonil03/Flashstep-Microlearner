@@ -13,8 +13,8 @@ class SessionStorage {
   const SessionStorage();
 
   FlutterSecureStorage get _storage => const FlutterSecureStorage(
-        aOptions: AndroidOptions(encryptedSharedPreferences: true),
-      );
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   String _lastSyncKeyFor(String userId) => '$_lastSyncAtKeyPrefix::$userId';
 
@@ -83,10 +83,12 @@ class SessionStorage {
     await _storage.delete(key: _deviceIdKey);
   }
 
-
   Future<void> writeDailyReviewLimit(int limit) async {
     final normalized = limit.clamp(1, 500) as int;
-    await _storage.write(key: _dailyReviewLimitKey, value: normalized.toString());
+    await _storage.write(
+      key: _dailyReviewLimitKey,
+      value: normalized.toString(),
+    );
   }
 
   Future<int> readDailyReviewLimit() async {
@@ -114,16 +116,22 @@ class SessionStorage {
   }
 
   Future<void> writeBypassSrs(bool value) async {
-    await _storage.write(
-      key: _bypassSrsKey,
-      value: value ? 'true' : 'false',
-    );
+    await _storage.write(key: _bypassSrsKey, value: value ? 'true' : 'false');
   }
 
   Future<bool> readBypassSrs() async {
     final value = await _storage.read(key: _bypassSrsKey);
     return value?.toLowerCase() == 'true';
   }
+
+  String _tourKey(String userId) => 'navigation_tour::1.1.0::$userId';
+
+  Future<String?> readNavigationTour(String userId) =>
+      _storage.read(key: _tourKey(userId));
+  Future<void> writeNavigationTour(String userId, String value) =>
+      _storage.write(key: _tourKey(userId), value: value);
+  Future<void> clearNavigationTour(String userId) =>
+      _storage.delete(key: _tourKey(userId));
 
   Future<void> clearAll() async {
     await clearToken();

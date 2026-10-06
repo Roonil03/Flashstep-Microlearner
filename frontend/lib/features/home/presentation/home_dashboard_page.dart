@@ -1,3 +1,4 @@
+import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +70,15 @@ class HomeDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted)
+        launchNavigationTour(context, ref.read(sessionStorageProvider));
+    });
+  }
+
   Future<void> _refreshDashboard() async {
     await ref.read(deckSyncServiceProvider).syncNow();
     ref.invalidate(usernameProvider);

@@ -310,53 +310,56 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
               builder:
                   (context, constraints) => SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      const Text(
-                        'Safe preview • Examples are never saved',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Semantics(
-                        liveRegion: true,
-                        header: true,
-                        child: Text(
-                          'Step ${scene.step} of 9: ${scene.title}',
-                          style: Theme.of(context).textTheme.titleLarge,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Safe preview • Examples are never saved',
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(scene.path),
-                      const SizedBox(height: 12),
-                      Card(
-                        color: scheme.secondaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
+                        const SizedBox(height: 12),
+                        Semantics(
+                          liveRegion: true,
+                          header: true,
                           child: Text(
-                            scene.instruction,
-                            style: TextStyle(
-                              color: scheme.onSecondaryContainer,
+                            'Step ${scene.step} of 9: ${scene.title}',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(scene.path),
+                        const SizedBox(height: 12),
+                        Card(
+                          color: scheme.secondaryContainer,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              scene.instruction,
+                              style: TextStyle(
+                                color: scheme.onSecondaryContainer,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      // The connector is in the same scroll layout as its instruction and
-                      // target, so it stays attached through resizing and text scaling.
-                      SizedBox(
-                        height: 36,
-                        child: CustomPaint(
-                          painter: TourArrowPainter(scheme.primary),
+                        // The connector is in the same scroll layout as its instruction and
+                        // target, so it stays attached through resizing and text scaling.
+                        SizedBox(
+                          height: 36,
+                          child: CustomPaint(
+                            painter: TourArrowPainter(scheme.primary),
+                          ),
                         ),
-                      ),
-                      Container(
-                        key: _target,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: scheme.primary, width: 3),
-                          borderRadius: BorderRadius.circular(16),
+                        Container(
+                          key: _target,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: scheme.primary, width: 3),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: _preview(),
                         ),
-                        child: _preview(),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ),
             ),
           ),

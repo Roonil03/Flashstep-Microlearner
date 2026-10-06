@@ -1,3 +1,4 @@
+import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,6 +61,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
+          onReplayTour:
+              () => launchNavigationTour(
+                context,
+                ref.read(sessionStorageProvider),
+                replay: true,
+              ),
         );
     }
   }
@@ -69,11 +76,13 @@ class _MainSettings extends StatelessWidget {
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
+  final VoidCallback onReplayTour;
 
   const _MainSettings({
     required this.onAccountTap,
     required this.onSystemTap,
     required this.onLogout,
+    required this.onReplayTour,
   });
 
   @override
@@ -103,6 +112,16 @@ class _MainSettings extends StatelessWidget {
                 onTap: onSystemTap,
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.route_outlined),
+            title: const Text('Relearn app navigation'),
+            subtitle: const Text(
+              'Replay the nine-step guide with safe examples.',
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: onReplayTour,
           ),
           const SizedBox(height: 24),
           Column(
