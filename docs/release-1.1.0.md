@@ -31,6 +31,7 @@ The guide is a presentation-only preview: it never saves example decks/cards, in
 - System Settings scrolls on small screens and with enlarged text. Daily-limit text explains the Review all cards override.
 - Analytics range controls share their presentation with the guide and wrap consistently.
 - Login proceeds to Home without the previous artificial welcome delay.
+- Theme preference loading retains a usable default if device storage fails and avoids updating a disposed theme controller.
 - The app package and Settings display now report version **1.1.0** (build **2**).
 
 ## Technical Notes
@@ -40,17 +41,19 @@ The guide is a presentation-only preview: it never saves example decks/cards, in
 - Tour state uses existing device secure storage, keyed by account and tour version. It does not sync across devices. Accounts registered elsewhere can replay the guide manually. Reinstallation or unavailable local metadata can remove automatic eligibility.
 - Tour-storage failures are nonfatal. Missing or malformed progress does not enroll an existing account or block login.
 - Highlight and arrow geometry follows the current layout. Large previews remain scrollable so instructions and controls stay reachable. The guide introduces no timers or global layout listeners during ordinary app use.
-- Tests are now included in version control; generated Kotlin build caches remain ignored.
+- Frontend `test/` and `integration_test/` suites are ignored and remain available locally; previously tracked tests were removed from Git without deleting local files. Generated Kotlin build caches remain ignored.
+- Local Android device tests can opt into the separate `.uitest` application ID with `flashstepDeviceTest=true` in `android/gradle.properties`. The committed default is `false`, and release builds always retain the regular application ID. The integration-test dependency is development-only.
 
 ## Validation
 
-- `flutter test --no-pub`: **22 tests passed**, with the optional local screenshot-capture test skipped in ordinary runs.
+- `flutter test --no-pub`: **24 tests passed**, with the optional local screenshot-capture test skipped in ordinary runs.
 - Additional visual QA: all 10 guide scenes rendered and inspected in both light and dark themes (20 screens), with proper text and icon fonts. Capture outputs remain outside the repository.
+- Connected Motorola Edge 20 Fusion (Android 13): **21 device tests passed**, with two host-only file checks skipped. The device layout matrix exercised all 10 guide scenes across portrait/landscape, light/dark themes, and text scales 1.0/1.5/2.0: 120 scene visits without layout exceptions. An ADB screenshot of the guide was visually inspected.
 - Coverage includes tour completion and substeps, account isolation, resume, skip/back exit, duplicate-launch prevention, Settings replay, storage failure, keyboard navigation, enlarged-text layouts, signup response parsing, deck/card validation and failed-save recovery, public-copy confirmation, CSV cancellation/validation/capacity, analytics range selection, and saved review preferences.
 - `flutter analyze --no-pub`: no errors; 42 pre-existing warnings/information notices remain, including the missing `flutter_lints` include, unused imports/cast, and existing Flutter deprecations. The obsolete counter test error was removed.
-- Android debug smoke build succeeds using a non-production API URL. Existing Android SDK/Java tooling warnings remain.
+- Android debug builds succeed for the isolated device test package using a non-production API URL and for the restored default application configuration. Existing Android SDK/Java tooling warnings remain.
 - Git diff checked for whitespace errors, unexpected backend/schema changes, and unrelated generated artifacts. No supplied documents or extracted course content were added.
 
 ## Verification Limits
 
-No Android device was connected for this release work. Physical-device frame timing, TalkBack behavior, and live production integration were not verified. Widget semantics and keyboard behavior were tested, and the existing scheduling/sync implementations were preserved. Before publishing, smoke-test sign-in, sync, reviews, deletion/Undo, and accessibility on the intended device; no production deployment was performed as part of this change.
+TalkBack behavior, production frame-timing comparisons, and live production integration were not verified. Device tests use isolated fixtures rather than creating or modifying production accounts or learning data. Widget semantics and keyboard behavior were tested, and the existing scheduling/sync implementations were preserved. Before publishing, smoke-test live sign-in, sync, reviews, deletion/Undo, and TalkBack on the intended device; no production deployment was performed as part of this change.
