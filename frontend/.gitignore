@@ -49,3 +49,6 @@ app.*.map.json
 
 # Generated Kotlin incremental build cache
 /android/.kotlin/
+
+# Keep local test suites out of Git
+/test/
