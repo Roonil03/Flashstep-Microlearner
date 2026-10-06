@@ -352,7 +352,20 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		impactedDecks[card.deck] = true
 	}
 	cardRows := [][]any{}
-	for _, id := range sortedSyncIDs(acceptedCards) {
+	cardWriteIDs := sortedSyncIDs(acceptedCards)
+	// Preserve validated mutation order: a deletion/move may free capacity
+	// needed by a later insertion. UUID sorting alone breaks existing triggers.
+	sort.SliceStable(cardWriteIDs, func(i, j int) bool {
+		a, b := acceptedCards[cardWriteIDs[i]], acceptedCards[cardWriteIDs[j]]
+		if !a.UpdatedAt.Equal(b.UpdatedAt) {
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		}
+		if !a.CreatedAt.Equal(b.CreatedAt) {
+			return a.CreatedAt.Before(b.CreatedAt)
+		}
+		return a.ID.String() < b.ID.String()
+	})
+	for _, id := range cardWriteIDs {
 		c := acceptedCards[id]
 		cardRows = append(cardRows, []any{c.ID, c.DeckID, c.Front, c.Back, c.State, c.Interval, c.EaseFactor, c.RepetitionCount, nullableTimeValue(c.DueTimestamp), nullableTimeValue(c.LastReviewedAt), c.CreatedAt, c.UpdatedAt, c.Version, c.IsDeleted})
 	}
