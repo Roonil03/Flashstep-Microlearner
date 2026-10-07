@@ -21,9 +21,9 @@ Flashstep Microlearner is a full-stack flashcard learning platform with:
 
 The goal of the project is to make short, repeatable learning sessions feel smooth, fast, and reliable, even when connectivity is inconsistent.
 
-Current release: **1.1.0**.
+<!-- Current release: **1.1.0**.
 
-Version 1.1.0 includes backend sync optimizations and additive manifest/fetch APIs. Deploy the updated backend before distributing the frontend; existing clients remain compatible, and no database migration is required. See the release notes for local benchmark results and validation limits.
+Version 1.1.0 includes backend sync optimizations and additive manifest/fetch APIs. Deploy the updated backend before distributing the frontend; existing clients remain compatible, and no database migration is required. See the release notes for local benchmark results and validation limits. -->
 
 ## Documentation
 
