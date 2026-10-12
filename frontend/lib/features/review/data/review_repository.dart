@@ -36,10 +36,61 @@ class ReviewRepository {
   ReviewRepository({
     required db.AppDatabase database,
     required SessionStorage storage,
-  })  : _database = database,
-        _storage = storage;
+  }) : _database = database,
+       _storage = storage;
 
   String _newId() => _uuid.v4();
+
+  Future<ReviewDailyCounts> getDailyCounts() async {
+    final userId = await _storage.readUserId();
+    if (userId == null || userId.isEmpty) throw StateError('Not signed in.');
+    final now = DateTime.now().toUtc();
+    final start = DateTime.utc(now.year, now.month, now.day);
+    final reviewed = _database.reviewLogs.cardId.count(distinct: true);
+    final row =
+        await (_database.selectOnly(_database.reviewLogs)
+              ..addColumns([reviewed])
+              ..where(
+                _database.reviewLogs.userId.equals(userId) &
+                    _database.reviewLogs.reviewedAt.isBiggerOrEqualValue(
+                      start,
+                    ) &
+                    _database.reviewLogs.reviewedAt.isSmallerThanValue(
+                      start.add(const Duration(days: 1)),
+                    ),
+              ))
+            .getSingle();
+    final done = row.read(reviewed) ?? 0;
+    final bypass = await _storage.readBypassSrs();
+    final limited = !bypass && await _storage.readSelectiveReviewDecksOnly();
+    final count = _database.cards.id.count();
+    final query =
+        _database.selectOnly(_database.cards)
+          ..join([
+            innerJoin(
+              _database.decks,
+              _database.decks.id.equalsExp(_database.cards.deckId),
+            ),
+          ])
+          ..addColumns([count])
+          ..where(
+            _database.decks.userId.equals(userId) &
+                _database.decks.isDeleted.equals(false) &
+                _database.cards.isDeleted.equals(false),
+          );
+    if (!bypass)
+      query.where(
+        _database.cards.dueTimestamp.isNull() |
+            _database.cards.dueTimestamp.isSmallerOrEqualValue(now),
+      );
+    final due = (await query.getSingle()).read(count) ?? 0;
+    final remaining = (await _storage.readDailyReviewLimit()) - done;
+    final available =
+        limited
+            ? (remaining < 0 ? 0 : (due < remaining ? due : remaining))
+            : due;
+    return ReviewDailyCounts(done, available, limited);
+  }
 
   Future<int> _dailyAllowanceRemaining() async {
     final userId = await _storage.readUserId();
@@ -52,15 +103,22 @@ class ReviewRepository {
     final startOfDay = DateTime.utc(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    final distinctCardsExpression = _database.reviewLogs.cardId.count(distinct: true);
-    final row = await (_database.selectOnly(_database.reviewLogs)
-          ..addColumns([distinctCardsExpression])
-          ..where(
-            _database.reviewLogs.userId.equals(userId) &
-                _database.reviewLogs.reviewedAt.isBiggerOrEqualValue(startOfDay) &
-                _database.reviewLogs.reviewedAt.isSmallerThanValue(endOfDay),
-          ))
-        .getSingle();
+    final distinctCardsExpression = _database.reviewLogs.cardId.count(
+      distinct: true,
+    );
+    final row =
+        await (_database.selectOnly(_database.reviewLogs)
+              ..addColumns([distinctCardsExpression])
+              ..where(
+                _database.reviewLogs.userId.equals(userId) &
+                    _database.reviewLogs.reviewedAt.isBiggerOrEqualValue(
+                      startOfDay,
+                    ) &
+                    _database.reviewLogs.reviewedAt.isSmallerThanValue(
+                      endOfDay,
+                    ),
+              ))
+            .getSingle();
 
     final reviewedDistinctCards = row.read(distinctCardsExpression) ?? 0;
     final remaining = maxCards - reviewedDistinctCards;
@@ -74,7 +132,8 @@ class ReviewRepository {
       return [];
     }
     final bypassSrs = await _storage.readBypassSrs();
-    final useSelectiveDecksOnly = bypassSrs ? false : await _storage.readSelectiveReviewDecksOnly();
+    final useSelectiveDecksOnly =
+        bypassSrs ? false : await _storage.readSelectiveReviewDecksOnly();
     int remainingAllowance = 0;
     if (useSelectiveDecksOnly) {
       remainingAllowance = await _dailyAllowanceRemaining();
@@ -82,34 +141,53 @@ class ReviewRepository {
         return [];
       }
     }
-    final decks = await (_database.select(_database.decks)
-      ..where((tbl) => tbl.userId.equals(currentUserId) & tbl.isDeleted.equals(false))
-      ..orderBy([
-        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.desc),
-      ])).get();
+    final decks =
+        await (_database.select(_database.decks)
+              ..where(
+                (tbl) =>
+                    tbl.userId.equals(currentUserId) &
+                    tbl.isDeleted.equals(false),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm(
+                  expression: tbl.updatedAt,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
     final summaries = <ReviewDeckSummary>[];
     for (final deck in decks) {
       if (useSelectiveDecksOnly && remainingAllowance <= 0) {
         break;
       }
-      final dueCardsQuery = _database.select(_database.cards)
-        ..where((tbl) => tbl.deckId.equals(deck.id) & tbl.isDeleted.equals(false));
-      
+      final dueCardsQuery = _database.select(_database.cards)..where(
+        (tbl) => tbl.deckId.equals(deck.id) & tbl.isDeleted.equals(false),
+      );
+
       if (!bypassSrs) {
-        dueCardsQuery.where((tbl) => tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now));
+        dueCardsQuery.where(
+          (tbl) =>
+              tbl.dueTimestamp.isNull() |
+              tbl.dueTimestamp.isSmallerOrEqualValue(now),
+        );
       }
-      
+
       dueCardsQuery.orderBy([
-        (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
+        (tbl) =>
+            OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
+        (tbl) =>
+            OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
       ]);
-      
+
       final dueCards = await dueCardsQuery.get();
-      
+
       if (dueCards.isEmpty) continue;
-      final visibleCount = useSelectiveDecksOnly
-          ? (dueCards.length > remainingAllowance ? remainingAllowance : dueCards.length)
-          : dueCards.length;
+      final visibleCount =
+          useSelectiveDecksOnly
+              ? (dueCards.length > remainingAllowance
+                  ? remainingAllowance
+                  : dueCards.length)
+              : dueCards.length;
       if (visibleCount <= 0) continue;
       summaries.add(
         ReviewDeckSummary(
@@ -130,11 +208,20 @@ class ReviewRepository {
     final bypassSrs = await _storage.readBypassSrs();
     if (bypassSrs) {
       return (_database.select(_database.cards)
-        ..where((tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false))
-        ..orderBy([
-          (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-          (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
-        ])).get();
+            ..where(
+              (tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
+            )
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                expression: tbl.dueTimestamp,
+                mode: OrderingMode.asc,
+              ),
+              (tbl) => OrderingTerm(
+                expression: tbl.updatedAt,
+                mode: OrderingMode.asc,
+              ),
+            ]))
+          .get();
     }
 
     final useSelectiveDecksOnly = await _storage.readSelectiveReviewDecksOnly();
@@ -145,15 +232,26 @@ class ReviewRepository {
         return [];
       }
     }
-    final cards = await (_database.select(_database.cards)
-      ..where((tbl) =>
-          tbl.deckId.equals(deckId) &
-          tbl.isDeleted.equals(false) &
-          (tbl.dueTimestamp.isNull() | tbl.dueTimestamp.isSmallerOrEqualValue(now)))
-      ..orderBy([
-        (tbl) => OrderingTerm(expression: tbl.dueTimestamp, mode: OrderingMode.asc),
-        (tbl) => OrderingTerm(expression: tbl.updatedAt, mode: OrderingMode.asc),
-      ])).get();
+    final cards =
+        await (_database.select(_database.cards)
+              ..where(
+                (tbl) =>
+                    tbl.deckId.equals(deckId) &
+                    tbl.isDeleted.equals(false) &
+                    (tbl.dueTimestamp.isNull() |
+                        tbl.dueTimestamp.isSmallerOrEqualValue(now)),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm(
+                  expression: tbl.dueTimestamp,
+                  mode: OrderingMode.asc,
+                ),
+                (tbl) => OrderingTerm(
+                  expression: tbl.updatedAt,
+                  mode: OrderingMode.asc,
+                ),
+              ]))
+            .get();
     if (!useSelectiveDecksOnly) {
       return cards;
     }
@@ -194,7 +292,8 @@ class ReviewRepository {
     );
 
     await _database.transaction(() async {
-      await (_database.update(_database.cards)..where((tbl) => tbl.id.equals(card.id))).write(
+      await (_database.update(_database.cards)
+        ..where((tbl) => tbl.id.equals(card.id))).write(
         db.CardsCompanion(
           state: Value(outcome.nextState),
           interval: Value(outcome.interval),
@@ -207,7 +306,9 @@ class ReviewRepository {
         ),
       );
 
-      await _database.into(_database.reviewLogs).insert(
+      await _database
+          .into(_database.reviewLogs)
+          .insert(
             db.ReviewLogsCompanion.insert(
               id: reviewLogId,
               userId: userId,
@@ -221,7 +322,9 @@ class ReviewRepository {
             ),
           );
 
-      await _database.into(_database.syncQueueItems).insert(
+      await _database
+          .into(_database.syncQueueItems)
+          .insert(
             db.SyncQueueItemsCompanion.insert(
               operationId: cardOperationId,
               type: 'update',
@@ -247,7 +350,9 @@ class ReviewRepository {
             ),
           );
 
-      await _database.into(_database.syncQueueItems).insert(
+      await _database
+          .into(_database.syncQueueItems)
+          .insert(
             db.SyncQueueItemsCompanion.insert(
               operationId: reviewOperationId,
               type: 'review',
@@ -269,4 +374,10 @@ class ReviewRepository {
           );
     });
   }
+}
+
+class ReviewDailyCounts {
+  final int reviewed, available;
+  final bool limited;
+  const ReviewDailyCounts(this.reviewed, this.available, this.limited);
 }

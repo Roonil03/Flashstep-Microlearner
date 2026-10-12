@@ -16,6 +16,17 @@ class AnalyticsPage extends ConsumerStatefulWidget {
 
 class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
   int _rangeDays = 30;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(analyticsDashboardProvider(_rangeDays));
+      setState(() => _ready = true);
+    });
+  }
 
   Future<void> _refresh() async {
     ref.invalidate(analyticsDashboardProvider(_rangeDays));
@@ -26,7 +37,9 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final analyticsAsync = ref.watch(analyticsDashboardProvider(_rangeDays));
+    final analyticsAsync = _ready
+        ? ref.watch(analyticsDashboardProvider(_rangeDays))
+        : const AsyncValue<AnalyticsDashboardData>.loading();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -367,7 +380,10 @@ class _MetricWrap extends StatelessWidget {
         icon: Icons.analytics_outlined,
         label: 'Reviews',
         value: '${data.reviewsInRange}',
-        note: '${data.reviewsToday} today',
+        note:
+            data.cardsReviewedToday == null
+                ? '${data.reviewsToday} today'
+                : '${data.cardsReviewedToday} cards today · ${data.reviewsToday} reviews',
       ),
       _MetricCard(
         icon: Icons.track_changes_outlined,
@@ -377,9 +393,9 @@ class _MetricWrap extends StatelessWidget {
       ),
       _MetricCard(
         icon: Icons.hourglass_bottom_outlined,
-        label: 'Due now',
-        value: '${data.dueNow}',
-        note: '${data.dueNext24Hours} in 24h',
+        label: data.dailyLimitApplied ? 'Due today' : 'Available to review',
+        value: '${data.cardsAvailableToday ?? data.dueNow}',
+        note: '${data.dueNow} due now · ${data.dueNext24Hours} in 24h',
       ),
       _MetricCard(
         icon: Icons.speed_outlined,

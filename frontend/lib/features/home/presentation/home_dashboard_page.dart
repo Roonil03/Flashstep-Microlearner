@@ -36,7 +36,17 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
 
   final dailyReviewLimit = await sessionStorage.readDailyReviewLimit();
   final rawDueToday = decks.fold<int>(0, (sum, deck) => sum + deck.dueCards);
-  final dueToday = math.min(rawDueToday, dailyReviewLimit);
+  final bypass = await sessionStorage.readBypassSrs();
+  final selective = await sessionStorage.readSelectiveReviewDecksOnly();
+  final dueToday =
+      bypass
+          ? decks.fold<int>(0, (sum, deck) => sum + deck.totalCards)
+          : selective
+          ? math.min(
+            rawDueToday,
+            math.max(0, dailyReviewLimit - dashboardStats.reviewedToday),
+          )
+          : rawDueToday;
   final lastSyncedAt = await sessionStorage.readLastSyncAt();
 
   DeckSummary? deckOfTheDay;

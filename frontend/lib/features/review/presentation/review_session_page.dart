@@ -25,6 +25,7 @@ class ReviewSessionPage extends ConsumerStatefulWidget {
 class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   bool _loading = true;
   bool _revealed = false;
+  bool _saving = false;
   int _countdown = 3;
   int _index = 0;
   List<db.Card> _cards = const [];
@@ -62,14 +63,29 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   }
 
   Future<void> _rateCard(String rating) async {
-    if (_index >= _cards.length) return;
+    if (_saving || _index >= _cards.length) return;
+    setState(() => _saving = true);
     final current = _cards[_index];
-    await ref.read(reviewRepositoryProvider).applyReview(card: current, rating: rating);
-    if (!mounted) return;
-    setState(() {
-      _revealed = false;
-      _index += 1;
-    });
+    try {
+      await ref
+          .read(reviewRepositoryProvider)
+          .applyReview(card: current, rating: rating);
+      if (!mounted) return;
+      setState(() {
+        _revealed = false;
+        _index += 1;
+      });
+      ref.invalidate(reviewDecksProvider);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save this review. Please try again.'),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _shuffleRemaining() {
@@ -286,7 +302,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
 
   Widget _ratingButton(BuildContext context, String value, String label) {
     return ElevatedButton(
-      onPressed: () => _rateCard(value),
+      onPressed: _saving ? null : () => _rateCard(value),
       child: Text(label),
     );
   }
