@@ -32,7 +32,7 @@ The goal of the project is to make short, repeatable learning sessions feel smoo
 ## License
 
 - This project is licensed under the terms described in [MIT License](LICENSE).
-- Logo images and variants were created by Roonil03 and are licensed under [CC BY-SA 4.0](./frontend/assets/LICENSE). Their source is in [frontend/assets](./frontend/assets).
+- Logo images and variants were created by Roonil03 and are licensed under [CC BY-SA 4.0](./frontend/assets/LICENSE).
 
 ## Contributors:
 - Project Creator and maintainer: [Roonil03](https://github.com/Roonil03)
