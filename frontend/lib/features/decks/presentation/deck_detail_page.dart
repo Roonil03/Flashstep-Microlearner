@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
+import '../../../app/router.dart';
 import '../data/data_sync_service.dart';
 import '../data/deck_repository.dart';
 import 'csv_import_page.dart';
@@ -362,6 +363,11 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
         ),
         title: const Text('Deck'),
         actions: [
+          IconButton(
+            tooltip: 'Start review',
+            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.review),
+            icon: const Icon(Icons.school_outlined),
+          ),
           IconButton(
             tooltip: 'Sync now',
             onPressed: () => ref.read(deckSyncServiceProvider).syncNow(),
