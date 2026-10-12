@@ -9,6 +9,8 @@ Flashstep Microlearner 1.1.0 introduces guided navigation, a more consistent int
 - **Replay from Settings**: Choose **Settings → Relearn app navigation** to revisit the walkthrough at any time, starting from the first step.
 - **Saved Guide Progress**: An interrupted walkthrough resumes where you left off. Finishing, skipping, or exiting the guide prevents it from reopening automatically. Progress is saved separately for each account on your device.
 - **Selective Deck Sync**: Sync checks for changes across your library and downloads only missing or changed decks, improving efficiency for larger collections and repeated syncs.
+- **Review Shortcut in Deck Details**: Open **Start review** directly from a deck's details while browsing or managing its cards.
+- **Review Completion Actions**: After finishing a deck's review session, choose **Back to Home** or **Choose another deck** to return to the review selection page.
 
 ## Navigation Guide
 
@@ -28,7 +30,7 @@ The guide uses sample screens so you can explore the controls without changing y
 
 ## Improvements
 
-- **Consistent Themes and Forms**: Registration follows your selected theme, with clearer validation, password visibility controls, and input preserved after errors. Deck and card forms use more consistent styling and helpful hints.
+- **Distinct Account Screens**: Login follows your app or device theme, while registration uses the opposite light/dark theme to distinguish account creation. Forms provide clearer validation, independent password visibility controls, and input preserved after errors.
 - **Clearer Home Navigation**: Dashboard actions use explicit labels such as **Create deck**, **Browse decks**, and **Start review**, with larger touch targets and keyboard-accessible controls.
 - **Responsive Layouts**: Dashboard actions adapt to narrow screens and larger text. System Settings remains scrollable, and analytics date-range controls wrap to fit the available space.
 - **Helpful Empty States**: Empty deck libraries and decks without cards explain how to get started.
@@ -37,6 +39,8 @@ The guide uses sample screens so you can explore the controls without changing y
 - **Clearer Review Settings**: Daily-limit descriptions explain how **Review all cards** overrides daily limits and due dates.
 - **Quicker Login Navigation**: Successful login opens Home without the previous welcome delay.
 - **More Resilient Theme Loading**: The app keeps a usable default theme if a saved preference cannot be loaded.
+
+This release also includes bug fixes for account registration, review handling, and analytics updates.
 
 ## Sync and Reliability
 
