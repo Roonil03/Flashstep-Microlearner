@@ -150,6 +150,7 @@ class DeckRepository {
     required DateTime updatedAt,
     required int version,
     required bool isDeleted,
+    bool fromDeckDeletion = false,
   }) {
     return {
       'id': id,
@@ -166,6 +167,7 @@ class DeckRepository {
       'updated_at': updatedAt.toUtc().toIso8601String(),
       'version': version,
       'is_deleted': isDeleted,
+      if (fromDeckDeletion) 'from_deck_deletion': true,
     };
   }
 
@@ -843,6 +845,7 @@ class DeckRepository {
             updatedAt: now,
             version: nextVersion,
             isDeleted: true,
+            fromDeckDeletion: true,
           ),
           createdAt: now,
         );

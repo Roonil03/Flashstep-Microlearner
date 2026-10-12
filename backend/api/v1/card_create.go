@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"database/sql"
 	"net/http"
 	"strings"
 
@@ -43,25 +44,26 @@ func CreateCard(c *gin.Context) {
 		return
 	}
 
-	var exists bool
-	err = db.DB.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1
-			FROM decks
-			WHERE id=$1 AND user_id=$2 AND is_deleted=false
-		)
-	`, deckID, userID).Scan(&exists)
+	ctx := c.Request.Context()
+	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	if !exists {
-		c.JSON(http.StatusForbidden, gin.H{"error": "invalid deck"})
+	defer tx.Rollback()
+	var lockedID uuid.UUID
+	err = tx.QueryRowContext(ctx, `SELECT id FROM decks WHERE id=$1 AND user_id=$2 AND is_deleted=false FOR UPDATE`, deckID, userID).Scan(&lockedID)
+	if err == sql.ErrNoRows {
+		c.JSON(403, gin.H{"error": "invalid deck"})
+		return
+	}
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	var cardCount int
-	err = db.DB.QueryRow(`
+	err = tx.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM cards
 		WHERE deck_id=$1 AND is_deleted=false
@@ -76,7 +78,7 @@ func CreateCard(c *gin.Context) {
 	}
 
 	id := uuid.New()
-	_, err = db.DB.Exec(`
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO cards (
 			id, deck_id, front, back, state,
 			interval, ease_factor, repetition_count,
@@ -90,5 +92,9 @@ func CreateCard(c *gin.Context) {
 		return
 	}
 
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, gin.H{"id": id.String()})
 }

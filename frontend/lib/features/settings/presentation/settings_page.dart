@@ -1,3 +1,6 @@
+import '../../../app/app_version.dart';
+import '../../onboarding/presentation/navigation_tour_launcher.dart';
+import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -24,22 +27,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await ref.read(authRepositoryProvider).logout();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_messageFromError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_messageFromError(e))));
       return;
     }
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Signed out successfully')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Signed out successfully')));
 
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.login,
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   void _goBack() {
@@ -60,6 +62,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
+          onReplayTour:
+              () => launchNavigationTour(
+                context,
+                ref.read(sessionStorageProvider),
+                replay: true,
+              ),
         );
     }
   }
@@ -69,11 +77,13 @@ class _MainSettings extends StatelessWidget {
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
+  final VoidCallback onReplayTour;
 
   const _MainSettings({
     required this.onAccountTap,
     required this.onSystemTap,
     required this.onLogout,
+    required this.onReplayTour,
   });
 
   @override
@@ -104,13 +114,64 @@ class _MainSettings extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.route_outlined),
+            title: const Text('Relearn app navigation'),
+            subtitle: const Text(
+              'Replay the nine-step guide with safe examples.',
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: onReplayTour,
+          ),
+          const SizedBox(height: 16),
+          _sectionCard(
+            isDark,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Privacy Policy'),
+                subtitle: const Text('Draft for attorney review'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap:
+                    () => Navigator.of(
+                      context,
+                    ).pushNamed(AppRoutes.privacyPolicy),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Terms of Service'),
+                subtitle: const Text('Draft for attorney review'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap:
+                    () => Navigator.of(
+                      context,
+                    ).pushNamed(AppRoutes.termsOfService),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.code_outlined),
+                title: const Text('Open-source licenses'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap:
+                    () => showLicensePage(
+                      context: context,
+                      applicationName: 'Flashstep Microlearner',
+                      applicationVersion: AppVersion.name,
+                      applicationLegalese:
+                          'Logo images and variants created by Roonil03. '
+                          'Licensed under Creative Commons Attribution-ShareAlike 4.0 International. '
+                          'Source: https://github.com/Roonil03/Flashstep-Microlearner/tree/v1.1.0/frontend/assets. '
+                          'License: https://creativecommons.org/licenses/by-sa/4.0/',
+                    ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           Column(
             children: [
-              Image.asset(
-                'assets/LogoWithText_WithoutBG.png',
-                height: 80,
-              ),
+              Image.asset('assets/LogoWithText_WithoutBG.png', height: 80),
               const SizedBox(height: 8),
               Text(
                 'Flashstep Microlearner',
@@ -120,7 +181,7 @@ class _MainSettings extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Version 1.0.0',
+                'Version ${AppVersion.name}',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -133,9 +194,8 @@ class _MainSettings extends StatelessWidget {
               icon: const Icon(Icons.logout),
               label: const Text('Sign Out'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: isDark
-                    ? Colors.red.shade400
-                    : Colors.red.shade700,
+                backgroundColor:
+                    isDark ? Colors.red.shade400 : Colors.red.shade700,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -217,7 +277,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               });
 
               try {
-                await ref.read(authRepositoryProvider).changePassword(
+                await ref
+                    .read(authRepositoryProvider)
+                    .changePassword(
                       oldPassword: oldPassword,
                       newPassword: newPassword,
                     );
@@ -266,13 +328,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'Current Password',
                           suffixIcon: IconButton(
-                            onPressed: isSubmitting
-                                ? null
-                                : () {
-                                    setStateDialog(() {
-                                      obscureOld = !obscureOld;
-                                    });
-                                  },
+                            onPressed:
+                                isSubmitting
+                                    ? null
+                                    : () {
+                                      setStateDialog(() {
+                                        obscureOld = !obscureOld;
+                                      });
+                                    },
                             icon: Icon(
                               obscureOld
                                   ? Icons.visibility_off
@@ -289,13 +352,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'New Password',
                           suffixIcon: IconButton(
-                            onPressed: isSubmitting
-                                ? null
-                                : () {
-                                    setStateDialog(() {
-                                      obscureNew = !obscureNew;
-                                    });
-                                  },
+                            onPressed:
+                                isSubmitting
+                                    ? null
+                                    : () {
+                                      setStateDialog(() {
+                                        obscureNew = !obscureNew;
+                                      });
+                                    },
                             icon: Icon(
                               obscureNew
                                   ? Icons.visibility_off
@@ -312,13 +376,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'Confirm New Password',
                           suffixIcon: IconButton(
-                            onPressed: isSubmitting
-                                ? null
-                                : () {
-                                    setStateDialog(() {
-                                      obscureConfirm = !obscureConfirm;
-                                    });
-                                  },
+                            onPressed:
+                                isSubmitting
+                                    ? null
+                                    : () {
+                                      setStateDialog(() {
+                                        obscureConfirm = !obscureConfirm;
+                                      });
+                                    },
                             icon: Icon(
                               obscureConfirm
                                   ? Icons.visibility_off
@@ -332,20 +397,22 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: isSubmitting
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(false),
+                    onPressed:
+                        isSubmitting
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(false),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
                     onPressed: isSubmitting ? null : submit,
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Update'),
+                    child:
+                        isSubmitting
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Update'),
                   ),
                 ],
               ),
@@ -394,9 +461,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               });
 
               try {
-                await ref.read(authRepositoryProvider).changeUsername(
-                      username: username,
-                    );
+                await ref
+                    .read(authRepositoryProvider)
+                    .changeUsername(username: username);
 
                 if (!dialogContext.mounted) return;
                 Navigator.of(dialogContext).pop(true);
@@ -447,20 +514,22 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: isSubmitting
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(false),
+                    onPressed:
+                        isSubmitting
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(false),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
                     onPressed: isSubmitting ? null : submit,
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Update'),
+                    child:
+                        isSubmitting
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Update'),
                   ),
                 ],
               ),
@@ -566,9 +635,10 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: isDeleting
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(false),
+                    onPressed:
+                        isDeleting
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(false),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
@@ -577,13 +647,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                       foregroundColor: Colors.white,
                     ),
                     onPressed: isDeleting ? null : submit,
-                    child: isDeleting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Delete'),
+                    child:
+                        isDeleting
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Delete'),
                   ),
                 ],
               ),
@@ -605,10 +676,9 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.login,
-        (route) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
   }
 
@@ -694,7 +764,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
 
   Future<void> _showDailyReviewLimitDialog() async {
     final currentLimit = await _storage.readDailyReviewLimit();
-    if (!mounted){
+    if (!mounted) {
       return;
     }
     int selectedLimit = currentLimit.clamp(1, 500);
@@ -720,8 +790,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     Text(
                       'Daily review limit',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -732,9 +802,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     Center(
                       child: Text(
                         '$selectedLimit cards per day',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -768,7 +837,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(false),
+                            onPressed:
+                                () => Navigator.of(sheetContext).pop(false),
                             child: const Text('Cancel'),
                           ),
                         ),
@@ -776,7 +846,9 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                         Expanded(
                           child: FilledButton(
                             onPressed: () async {
-                              await _storage.writeDailyReviewLimit(selectedLimit);
+                              await _storage.writeDailyReviewLimit(
+                                selectedLimit,
+                              );
                               if (!sheetContext.mounted) return;
                               Navigator.of(sheetContext).pop(true);
                             },
@@ -857,7 +929,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
         ),
         title: const Text('System Settings'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Align(
           alignment: Alignment.topLeft,
@@ -874,7 +946,9 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
               children: [
                 Text(
                   'App Theme',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 RadioListTile<ThemeMode>(
@@ -898,19 +972,17 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                 const Divider(height: 24),
                 Text(
                   'Review settings',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 FutureBuilder<int>(
                   future: _dailyLimitFuture,
                   builder: (context, snapshot) {
                     final value = snapshot.data ?? 25;
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.today_outlined),
-                      title: const Text('Daily review limit'),
-                      subtitle: Text('$value cards per day'),
-                      trailing: const Icon(Icons.swipe_vertical_outlined),
+                    return DailyReviewLimitTile(
+                      limit: value,
                       onTap: _showDailyReviewLimitDialog,
                     );
                   },

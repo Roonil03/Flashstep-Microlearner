@@ -1,3 +1,4 @@
+import '../features/onboarding/presentation/navigation_tour_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +12,7 @@ import '../features/splash/presentation/splash_screen.dart';
 import '../features/review/presentation/start_review_page.dart';
 import '../features/decks/presentation/browse_decks_page.dart';
 import '../features/analytics/presentation/analytics_page.dart';
+import '../features/legal/presentation/legal_document_page.dart';
 import '../features/decks/data/auto_sync_service.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
@@ -23,7 +25,7 @@ class App extends ConsumerWidget {
     final themeMode = ref.watch(appThemeModeProvider);
 
     ref.watch(autoSyncBootstrapProvider);
-    
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
@@ -37,6 +39,9 @@ class App extends ConsumerWidget {
         AppRoutes.home: (_) => const HomeDashboardPage(),
         AppRoutes.analytics: (_) => const AnalyticsPage(),
         AppRoutes.settings: (_) => const SettingsPage(),
+        AppRoutes.privacyPolicy: (_) => const LegalDocumentPage.privacy(),
+        AppRoutes.termsOfService: (_) => const LegalDocumentPage.terms(),
+        AppRoutes.navigationTour: (_) => const NavigationTourPage(),
         AppRoutes.browseDecks: (_) => const BrowseDecksPage(),
         AppRoutes.review: (_) => const StartReviewPage(),
         AppRoutes.createDeck: (_) => const CreateDeckPage(),
@@ -65,10 +70,7 @@ class _PlaceholderPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: Center(
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        child: Text(title, style: Theme.of(context).textTheme.headlineMedium),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
   }
 
   Future<void> _saveDeck() async {
+    if (_loading) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _loading = true);
@@ -48,10 +50,9 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
 
       unawaited(syncService.syncNow());
 
-      Navigator.of(context).pushReplacementNamed(
-        AppRoutes.deckDetail,
-        arguments: deckId,
-      );
+      Navigator.of(
+        context,
+      ).pushReplacementNamed(AppRoutes.deckDetail, arguments: deckId);
     } catch (e) {
       if (!mounted) return;
 
@@ -73,14 +74,12 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final fieldFill = isDark ? const Color(0xFF111827) : Colors.white;
     final borderColor = isDark ? Colors.white12 : const Color(0xFFE3E3E3);
-    final buttonColor = isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
+    final buttonColor =
+        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create deck'),
-      ),
+      appBar: AppBar(title: const Text('Create deck')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -90,7 +89,8 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                color:
+                    isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
                 border: Border.all(color: borderColor),
               ),
               child: Column(
@@ -110,17 +110,11 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                   const SizedBox(height: 20),
                   TextFormField(
                     controller: _titleController,
-                    decoration: InputDecoration(
-                      labelText: 'Deck title',
-                      filled: true,
-                      fillColor: fieldFill,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: borderColor),
-                      ),
+                    enabled: !_loading,
+                    textInputAction: TextInputAction.next,
+                    decoration: learningInputDecoration(
+                      'Deck title',
+                      helperText: 'Choose a recognizable name for your topic.',
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -135,26 +129,19 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _descriptionController,
+                    enabled: !_loading,
                     maxLines: 4,
-                    decoration: InputDecoration(
-                      labelText: 'Description',
-                      filled: true,
-                      fillColor: fieldFill,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: borderColor),
-                      ),
+                    decoration: learningInputDecoration(
+                      'Description (optional)',
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SwitchListTile(
+                  PublicVisibilityControl(
                     value: _isPublic,
-                    onChanged: _loading ? null : (value) => setState(() => _isPublic = value),
-                    title: const Text('Public deck'),
-                    contentPadding: EdgeInsets.zero,
+                    onChanged:
+                        _loading
+                            ? null
+                            : (value) => setState(() => _isPublic = value),
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -163,21 +150,23 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                       onPressed: _loading ? null : _saveDeck,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: buttonColor,
-                        foregroundColor: Colors.white,
+                        foregroundColor:
+                            isDark ? const Color(0xFF003153) : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Create deck'),
+                      child:
+                          _loading
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Text('Create deck'),
                     ),
                   ),
                 ],

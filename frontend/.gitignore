@@ -46,3 +46,10 @@ app.*.map.json
 **/api_client.dart
 /windows/
 /web/
+
+# Generated Kotlin incremental build cache
+/android/.kotlin/
+
+# Keep local test suites out of Git
+/test/
+/integration_test/

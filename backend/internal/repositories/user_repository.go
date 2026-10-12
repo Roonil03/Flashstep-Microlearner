@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/lib/pq"
+	"strings"
 
 	"backend/internal/models"
 )
 
 var ErrUserNotFound = errors.New("user not found")
+var ErrEmailAlreadyExists = errors.New("email already exists")
 
 type UserRepository struct {
 	DB *sql.DB
@@ -19,7 +22,24 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 }
 
 func (r *UserRepository) Create(ctx context.Context, u models.User) error {
-	_, err := r.DB.ExecContext(ctx, `
+	u.Email = strings.ToLower(strings.TrimSpace(u.Email))
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Serialize normalized-email registrations without changing the schema.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "registration-email:"+u.Email); err != nil {
+		return err
+	}
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE lower(btrim(email))=$1)`, u.Email).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrEmailAlreadyExists
+	}
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO users (
 			id, username, email, password_hash,
 			created_at, updated_at, version, is_deleted
@@ -28,15 +48,22 @@ func (r *UserRepository) Create(ctx context.Context, u models.User) error {
 		u.ID, u.Username, u.Email, u.PasswordHash,
 		u.CreatedAt, u.UpdatedAt, u.Version, u.IsDeleted,
 	)
-	return err
+	if err != nil {
+		var conflict *pq.Error
+		if errors.As(err, &conflict) && conflict.Code == "23505" && conflict.Constraint == "users_email_key" {
+			return ErrEmailAlreadyExists
+		}
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (models.User, error) {
 	row := r.DB.QueryRowContext(ctx, `
 		SELECT id, username, email, password_hash, created_at, updated_at, version, is_deleted
 		FROM users
-		WHERE email = $1 AND is_deleted = false
-	`, email)
+		WHERE lower(btrim(email)) = $1 AND is_deleted = false
+	`, strings.ToLower(strings.TrimSpace(email)))
 	var u models.User
 	err := row.Scan(
 		&u.ID,

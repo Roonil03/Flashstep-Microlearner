@@ -1,3 +1,4 @@
+import '../../onboarding/data/navigation_tour_storage.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -28,10 +29,7 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
-    final session = await api.login(
-      email: email,
-      password: password,
-    );
+    final session = await api.login(email: email, password: password);
 
     if (session.token.isEmpty) {
       throw StateError('Login succeeded but no token was returned.');
@@ -43,7 +41,8 @@ class AuthRepository {
 
     if (resolvedUserId.isEmpty) {
       final claims = _decodeJwtClaims(session.token);
-      resolvedUserId = _claimAsString(claims, 'user_id') ??
+      resolvedUserId =
+          _claimAsString(claims, 'user_id') ??
           _claimAsString(claims, 'sub') ??
           '';
     }
@@ -52,8 +51,9 @@ class AuthRepository {
         resolvedUsername.isEmpty ||
         resolvedEmail.isEmpty) {
       try {
-        final me =
-            await api.getMe(session.token).timeout(const Duration(seconds: 3));
+        final me = await api
+            .getMe(session.token)
+            .timeout(const Duration(seconds: 3));
         if (resolvedUserId.isEmpty && me.userId.isNotEmpty) {
           resolvedUserId = me.userId;
         }
@@ -68,8 +68,7 @@ class AuthRepository {
         if (e.statusCode == 401 || e.statusCode == 403) {
           rethrow;
         }
-      } catch (_) {
-      }
+      } catch (_) {}
     }
 
     if (resolvedUserId.isEmpty) {
@@ -98,11 +97,14 @@ class AuthRepository {
     required String username,
     required String password,
   }) async {
-    await api.register(
+    final session = await api.register(
       email: email,
       username: username,
       password: password,
     );
+    if (session != null && session.userId.isNotEmpty) {
+      await NavigationTourStorage(storage).markEligible(session.userId);
+    }
   }
 
   Future<bool> hasValidSession() async {
@@ -167,14 +169,9 @@ class AuthRepository {
     );
   }
 
-  Future<void> changeUsername({
-    required String username,
-  }) async {
+  Future<void> changeUsername({required String username}) async {
     final token = await _requireToken();
-    await api.changeUsername(
-      token: token,
-      username: username,
-    );
+    await api.changeUsername(token: token, username: username);
     await storage.writeUsername(username);
   }
 
@@ -184,6 +181,7 @@ class AuthRepository {
     await api.deleteAccount(token: token);
     await storage.clearAll();
     if (userId != null && userId.isNotEmpty) {
+      await NavigationTourStorage(storage).clear(userId);
       await storage.clearLastSyncAt(userId: userId);
       await databaseManager.deleteDatabaseForUser(userId);
     } else {

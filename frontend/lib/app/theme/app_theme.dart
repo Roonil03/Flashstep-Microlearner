@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/storage/theme_storage.dart';
 
-final themeStorageProvider =
-    Provider<ThemeStorage>((ref) => const ThemeStorage());
+final themeStorageProvider = Provider<ThemeStorage>(
+  (ref) => const ThemeStorage(),
+);
 
-final appThemeModeProvider =
-    StateNotifierProvider<ThemeNotifier, ThemeMode>((ref) {
+final appThemeModeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((
+  ref,
+) {
   final storage = ref.read(themeStorageProvider);
   return ThemeNotifier(storage);
 });
@@ -15,13 +17,17 @@ final appThemeModeProvider =
 class ThemeNotifier extends StateNotifier<ThemeMode> {
   final ThemeStorage _storage;
 
-  ThemeNotifier(this._storage) : super(ThemeMode.light) {
+  ThemeNotifier(this._storage) : super(ThemeMode.system) {
     _load();
   }
 
   Future<void> _load() async {
-    final mode = await _storage.readThemeMode();
-    state = mode;
+    try {
+      final mode = await _storage.readThemeMode();
+      if (mounted) state = mode;
+    } catch (_) {
+      // Keep the usable default when device preference storage is unavailable.
+    }
   }
 
   Future<void> setTheme(ThemeMode mode) async {
@@ -34,6 +40,12 @@ class AppTheme {
   static ThemeData light() {
     return ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
       brightness: Brightness.light,
       scaffoldBackgroundColor: Colors.white,
       colorScheme: ColorScheme.fromSeed(
@@ -46,6 +58,12 @@ class AppTheme {
   static ThemeData dark() {
     return ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
       brightness: Brightness.dark,
       scaffoldBackgroundColor: Colors.black,
       colorScheme: ColorScheme.fromSeed(

@@ -1,7 +1,7 @@
 name: frontend
 description: "The frontend of the entire project"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.7.0 <4.0.0"
@@ -28,6 +28,8 @@ dependencies:
   connectivity_plus: ^7.1.0
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
 
@@ -40,6 +42,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/legal/privacy_policy.md
+    - assets/legal/terms_of_service.md
     - assets/LogoWIthoutText_WithoutBG.png
     - assets/LogoWithoutText_WhiteBackground.png
     - assets/LogoWithText.png

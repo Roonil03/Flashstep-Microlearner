@@ -2,10 +2,7 @@ class DailyCountPoint {
   final DateTime date;
   final int count;
 
-  const DailyCountPoint({
-    required this.date,
-    required this.count,
-  });
+  const DailyCountPoint({required this.date, required this.count});
 
   factory DailyCountPoint.fromJson(Map<String, dynamic> json) {
     return DailyCountPoint(
@@ -112,6 +109,9 @@ class AnalyticsDashboardData {
   final int dueNow;
   final int dueNext24Hours;
   final int reviewsToday;
+  final int? cardsReviewedToday;
+  final int? cardsAvailableToday;
+  final bool dailyLimitApplied;
   final int reviewsInRange;
   final int activeDaysInRange;
   final double averageStudyLoad;
@@ -138,6 +138,9 @@ class AnalyticsDashboardData {
     required this.dueNow,
     required this.dueNext24Hours,
     required this.reviewsToday,
+    this.cardsReviewedToday,
+    this.cardsAvailableToday,
+    this.dailyLimitApplied = false,
     required this.reviewsInRange,
     required this.activeDaysInRange,
     required this.averageStudyLoad,
@@ -159,7 +162,9 @@ class AnalyticsDashboardData {
     return AnalyticsDashboardData(
       username: json['username']?.toString() ?? 'Learner',
       rangeDays: (json['range_days'] as num?)?.toInt() ?? 30,
-      generatedAt: DateTime.tryParse(json['generated_at']?.toString() ?? '')?.toUtc() ?? DateTime.now().toUtc(),
+      generatedAt:
+          DateTime.tryParse(json['generated_at']?.toString() ?? '')?.toUtc() ??
+          DateTime.now().toUtc(),
       totalDecks: (json['total_decks'] as num?)?.toInt() ?? 0,
       totalCards: (json['total_cards'] as num?)?.toInt() ?? 0,
       learnedCards: (json['learned_cards'] as num?)?.toInt() ?? 0,
@@ -170,27 +175,40 @@ class AnalyticsDashboardData {
       dueNow: (json['due_now'] as num?)?.toInt() ?? 0,
       dueNext24Hours: (json['due_next_24_hours'] as num?)?.toInt() ?? 0,
       reviewsToday: (json['reviews_today'] as num?)?.toInt() ?? 0,
+      cardsReviewedToday: (json['cards_reviewed_today'] as num?)?.toInt(),
+      cardsAvailableToday: (json['cards_available_today'] as num?)?.toInt(),
+      dailyLimitApplied: json['daily_limit_applied'] == true,
       reviewsInRange: (json['reviews_in_range'] as num?)?.toInt() ?? 0,
       activeDaysInRange: (json['active_days_in_range'] as num?)?.toInt() ?? 0,
       averageStudyLoad: (json['average_study_load'] as num?)?.toDouble() ?? 0,
       retentionRate: (json['retention_rate'] as num?)?.toDouble() ?? 0,
       currentStreak: (json['current_streak'] as num?)?.toInt() ?? 0,
       bestDayCount: (json['best_day_count'] as num?)?.toInt() ?? 0,
-      longestIntervalDays: (json['longest_interval_days'] as num?)?.toDouble() ?? 0,
+      longestIntervalDays:
+          (json['longest_interval_days'] as num?)?.toDouble() ?? 0,
       ratingBreakdown: RatingBreakdown.fromJson(
-        Map<String, dynamic>.from((json['rating_breakdown'] as Map?) ?? const {}),
+        Map<String, dynamic>.from(
+          (json['rating_breakdown'] as Map?) ?? const {},
+        ),
       ),
       reviewActivity: reviewActivityJson
           .whereType<Map>()
-          .map((item) => DailyCountPoint.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => DailyCountPoint.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(growable: false),
       accuracyTrend: accuracyTrendJson
           .whereType<Map>()
-          .map((item) => AccuracyPoint.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => AccuracyPoint.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(growable: false),
       deckInsights: deckInsightsJson
           .whereType<Map>()
-          .map((item) => DeckAnalyticsInsight.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                DeckAnalyticsInsight.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(growable: false),
     );
   }
