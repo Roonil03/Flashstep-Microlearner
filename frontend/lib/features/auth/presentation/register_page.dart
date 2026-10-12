@@ -187,6 +187,39 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                   : const Text("Register"),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            'By creating an account, you agree to the ',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(
+                                  context,
+                                ).pushNamed(AppRoutes.termsOfService),
+                            child: const Text('Terms of Service'),
+                          ),
+                          Text(
+                            ' and acknowledge the ',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(
+                                  context,
+                                ).pushNamed(AppRoutes.privacyPolicy),
+                            child: const Text('Privacy Policy'),
+                          ),
+                          Text(
+                            '. Both pages are drafts for attorney review.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 20),
                       TextButton(
                         onPressed: () {
