@@ -64,6 +64,16 @@ Response `201 Created`:
 }
 ```
 
+Registration email rules:
+
+- Email addresses are trimmed and compared case-insensitively, including legacy
+  mixed-case addresses already stored in the database.
+- An email remains reserved while its user row exists, including a soft-deleted
+  account. Concurrent requests for the same normalized email cannot create
+  multiple accounts.
+- `409 Conflict` with `{"error":"email already exists"}` indicates an email
+  already in use. Invalid input and other registration failures return `400`.
+
 ### Login
 `POST /auth/login`
 

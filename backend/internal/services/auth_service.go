@@ -16,7 +16,7 @@ import (
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrEmailAlreadyExists = repositories.ErrEmailAlreadyExists
 )
 
 type AuthService struct {
@@ -80,9 +80,6 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthRe
 		IsDeleted:    false,
 	}
 	if err := s.users.Create(ctx, user); err != nil {
-		if strings.Contains(err.Error(), "duplicate") {
-			return AuthResponse{}, ErrEmailAlreadyExists
-		}
 		return AuthResponse{}, err
 	}
 	token, err := utils.GenerateJWT(s.jwtSecret, user.ID, user.Email, s.jwtTTL)
