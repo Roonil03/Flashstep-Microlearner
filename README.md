@@ -36,7 +36,7 @@ Version 1.1.0 includes backend sync optimizations and additive manifest/fetch AP
 ## License
 
 - This project is licensed under the terms described in [MIT License](LICENSE).
-- The images for the logo are under the [CC SA 4.0](./frontend/assets/LICENSE).
+- Logo images and variants were created by Roonil03 and are licensed under [CC BY-SA 4.0](./frontend/assets/LICENSE). Their source is in [frontend/assets](./frontend/assets).
 
 ## Contributors:
 - Project Creator and maintainer: [Roonil03](https://github.com/Roonil03)
