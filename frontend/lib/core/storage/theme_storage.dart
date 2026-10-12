@@ -18,7 +18,7 @@ class ThemeStorage {
       case 'light':
         return ThemeMode.light;
       default:
-        return ThemeMode.light;
+        return ThemeMode.system;
     }
   }
 
@@ -26,7 +26,7 @@ class ThemeStorage {
     final value = switch (mode) {
       ThemeMode.dark => 'dark',
       ThemeMode.light => 'light',
-      ThemeMode.system => 'light',
+      ThemeMode.system => 'system',
     };
     await _storage.write(key: _key, value: value);
   }

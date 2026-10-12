@@ -17,7 +17,7 @@ final appThemeModeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((
 class ThemeNotifier extends StateNotifier<ThemeMode> {
   final ThemeStorage _storage;
 
-  ThemeNotifier(this._storage) : super(ThemeMode.light) {
+  ThemeNotifier(this._storage) : super(ThemeMode.system) {
     _load();
   }
 

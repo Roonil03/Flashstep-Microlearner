@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/network/providers.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -111,9 +112,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness != Brightness.dark;
     return Theme(
-      data: Theme.of(context),
+      data: isDark ? AppTheme.dark() : AppTheme.light(),
       child: Scaffold(
         backgroundColor: isDark ? Colors.black : Colors.white,
         body: SafeArea(
@@ -162,6 +163,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                 isDark
                                     ? Colors.lightBlue
                                     : const Color(0xFF003153),
+                            foregroundColor: isDark ? Colors.black : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           child:
