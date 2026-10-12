@@ -19,7 +19,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final confirmPasswordController = TextEditingController();
 
   final _formKey = GlobalKey<FormState>();
-  bool _obscure = true;
+  bool _obscurePassword = true;
+  bool _obscureConfirmation = true;
   bool isLoading = false;
 
   String? passwordErrorText;
@@ -144,6 +145,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         passwordController,
                         isDark,
                         obscure: true,
+                        hidden: _obscurePassword,
+                        onToggleVisibility:
+                            () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                         errorText: passwordErrorText,
                       ),
                       const SizedBox(height: 15),
@@ -152,6 +158,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         confirmPasswordController,
                         isDark,
                         obscure: true,
+                        hidden: _obscureConfirmation,
+                        onToggleVisibility:
+                            () => setState(
+                              () =>
+                                  _obscureConfirmation = !_obscureConfirmation,
+                            ),
                       ),
                       const SizedBox(height: 25),
                       SizedBox(
@@ -163,7 +175,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                 isDark
                                     ? Colors.lightBlue
                                     : const Color(0xFF003153),
-                            foregroundColor: isDark ? Colors.black : Colors.white,
+                            foregroundColor:
+                                isDark ? Colors.black : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           child:
@@ -206,12 +219,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     TextEditingController controller,
     bool isDark, {
     bool obscure = false,
+    bool hidden = true,
+    VoidCallback? onToggleVisibility,
     String? errorText,
   }) {
     return TextFormField(
       controller: controller,
       enabled: !isLoading,
-      obscureText: obscure && _obscure,
+      obscureText: obscure && hidden,
       keyboardType:
           label == 'Email' ? TextInputType.emailAddress : TextInputType.text,
       textInputAction:
@@ -239,10 +254,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         suffixIcon:
             obscure
                 ? IconButton(
-                  tooltip: _obscure ? 'Show passwords' : 'Hide passwords',
-                  onPressed: () => setState(() => _obscure = !_obscure),
+                  tooltip: '${hidden ? 'Show' : 'Hide'} ${label.toLowerCase()}',
+                  onPressed: isLoading ? null : onToggleVisibility,
                   icon: Icon(
-                    _obscure
+                    hidden
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined,
                   ),
