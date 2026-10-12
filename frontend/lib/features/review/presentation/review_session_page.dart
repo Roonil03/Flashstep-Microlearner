@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
+import '../../../app/router.dart';
+import 'start_review_page.dart';
 import '../data/review_repository.dart';
 
 class ReviewSessionPage extends ConsumerStatefulWidget {
@@ -34,7 +36,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   }
 
   Future<void> _bootstrap() async {
-    final cards = await ref.read(reviewRepositoryProvider).getDueCardsForDeck(widget.deckId);
+    final cards = await ref
+        .read(reviewRepositoryProvider)
+        .getDueCardsForDeck(widget.deckId);
     if (!mounted) return;
     setState(() {
       _cards = cards.toList();
@@ -96,19 +100,52 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         backgroundColor: bg,
         appBar: AppBar(title: Text(widget.deckTitle)),
         body: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.celebration_outlined, size: 60),
                 const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.icon(
+                      onPressed:
+                          () => Navigator.of(context).pushNamedAndRemoveUntil(
+                            AppRoutes.home,
+                            (_) => false,
+                          ),
+                      icon: const Icon(Icons.home_outlined),
+                      label: const Text('Back to Home'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        ref.invalidate(reviewDecksProvider);
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          AppRoutes.review,
+                          (route) => route.settings.name == AppRoutes.home,
+                        );
+                      },
+                      icon: const Icon(Icons.school_outlined),
+                      label: const Text('Choose another deck'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(
                   'Review complete',
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                const Text('All due cards in this deck were reviewed and stored locally.'),
+                const Text(
+                  'This session is complete. Reviews are saved on your device.',
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -127,7 +164,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
           IconButton(
             icon: const Icon(Icons.shuffle),
             tooltip: 'Shuffle remaining cards',
-            onPressed: (_cards.isEmpty || _index >= _cards.length - 1) ? null : _shuffleRemaining,
+            onPressed:
+                (_cards.isEmpty || _index >= _cards.length - 1)
+                    ? null
+                    : _shuffleRemaining,
           ),
         ],
       ),
@@ -156,12 +196,17 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: isDark
-                              ? const [Color(0xFF2F1B4E), Color(0xFF1C0F31)]
-                              : const [Colors.white, Color(0xFFF1E6FF)],
+                          colors:
+                              isDark
+                                  ? const [Color(0xFF2F1B4E), Color(0xFF1C0F31)]
+                                  : const [Colors.white, Color(0xFFF1E6FF)],
                         ),
                         boxShadow: const [
-                          BoxShadow(blurRadius: 22, offset: Offset(0, 10), color: Colors.black12),
+                          BoxShadow(
+                            blurRadius: 22,
+                            offset: Offset(0, 10),
+                            color: Colors.black12,
+                          ),
                         ],
                       ),
                       child: Column(
@@ -169,7 +214,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                         children: [
                           Text(
                             _revealed ? 'Answer' : 'Question',
-                            style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           const SizedBox(height: 18),
                           Expanded(
@@ -178,10 +225,11 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                                 child: Text(
                                   _revealed ? card.back : card.front,
                                   textAlign: TextAlign.center,
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.35,
-                                  ),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.35,
+                                      ),
                                 ),
                               ),
                             ),
