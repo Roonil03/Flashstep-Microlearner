@@ -358,6 +358,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       backgroundColor: backgroundColor,
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back to decks',
           onPressed: () => Navigator.of(context).pop(true),
           icon: const Icon(Icons.arrow_back),
         ),

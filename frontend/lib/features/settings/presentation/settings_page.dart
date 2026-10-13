@@ -293,6 +293,10 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'Current Password',
                           suffixIcon: IconButton(
+                            tooltip:
+                                obscureOld
+                                    ? 'Show current password'
+                                    : 'Hide current password',
                             onPressed:
                                 isSubmitting
                                     ? null
@@ -317,6 +321,10 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'New Password',
                           suffixIcon: IconButton(
+                            tooltip:
+                                obscureNew
+                                    ? 'Show new password'
+                                    : 'Hide new password',
                             onPressed:
                                 isSubmitting
                                     ? null
@@ -341,6 +349,10 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                         decoration: InputDecoration(
                           labelText: 'Confirm New Password',
                           suffixIcon: IconButton(
+                            tooltip:
+                                obscureConfirm
+                                    ? 'Show confirmation password'
+                                    : 'Hide confirmation password',
                             onPressed:
                                 isSubmitting
                                     ? null
@@ -655,6 +667,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back to Settings',
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),
@@ -890,6 +903,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back to Settings',
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),

@@ -166,6 +166,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 suffixIcon: IconButton(
+                  tooltip: 'Clear public deck search',
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     _searchController.clear();
