@@ -362,7 +362,11 @@ class _HeroChip extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 16), const SizedBox(width: 8), Text(label)],
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 8),
+          Flexible(child: Text(label)),
+        ],
       ),
     );
   }
