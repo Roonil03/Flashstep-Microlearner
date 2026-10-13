@@ -26,8 +26,8 @@ class AutoSyncService {
   AutoSyncService({
     required DeckSyncService syncService,
     Connectivity? connectivity,
-  })  : _syncService = syncService,
-        _connectivity = connectivity ?? Connectivity();
+  }) : _syncService = syncService,
+       _connectivity = connectivity ?? Connectivity();
 
   Future<void> start() async {
     if (_started) return;
@@ -46,10 +46,16 @@ class AutoSyncService {
   }
 
   Future<void> _handleConnectivity(List<ConnectivityResult> results) async {
-    final hasAnyNetwork =
-        results.any((result) => result != ConnectivityResult.none);
+    final hasAnyNetwork = results.any(
+      (result) => result != ConnectivityResult.none,
+    );
 
     if (!hasAnyNetwork) {
+      try {
+        await _syncService.reportNoNetwork();
+      } catch (_) {
+        // Connectivity feedback must not interrupt normal app use.
+      }
       return;
     }
 
@@ -68,6 +74,8 @@ class AutoSyncService {
 
     try {
       await _syncService.syncNow();
+    } catch (_) {
+      // A later network change or manual retry can start another attempt.
     } finally {
       _syncInFlight = false;
     }

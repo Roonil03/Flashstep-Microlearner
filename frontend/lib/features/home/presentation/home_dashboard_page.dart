@@ -10,6 +10,7 @@ import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
 import '../data/home_repository.dart';
 import '../../decks/data/data_sync_service.dart';
+import '../../decks/data/sync_status.dart';
 import '../domain/home_dashboard_models.dart';
 
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
@@ -59,14 +60,13 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   deckOfTheDay ??= decks.isNotEmpty ? decks.first : null;
 
   return HomeDashboardData(
+    userId: await sessionStorage.readUserId(),
     displayName: username,
     decksCount: decks.length,
     dueToday: dueToday,
     reviewedToday: dashboardStats.reviewedToday,
     streak: dashboardStats.streak,
     retentionRate: dashboardStats.retentionRate,
-    isOffline: false,
-    isSyncing: false,
     lastSyncedAt: lastSyncedAt,
     deckOfTheDay: deckOfTheDay,
     decks: decks,
@@ -92,6 +92,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
 
   Future<void> _refreshDashboard() async {
     await ref.read(deckSyncServiceProvider).syncNow();
+    if (!mounted) return;
     ref.invalidate(usernameProvider);
     ref.invalidate(userDecksProvider);
     ref.invalidate(homeDashboardProvider);
@@ -136,6 +137,13 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<SyncStatus>(syncStatusProvider, (previous, next) {
+      if (next.phase == SyncPhase.success &&
+          previous?.phase != SyncPhase.success) {
+        ref.invalidate(userDecksProvider);
+        ref.invalidate(homeDashboardProvider);
+      }
+    });
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -197,13 +205,19 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             ),
                           ),
                       data: (data) {
+                        final currentStatus = ref.watch(syncStatusProvider);
+                        final syncStatus =
+                            currentStatus.userId == data.userId
+                                ? currentStatus
+                                : const SyncStatus();
+                        final lastSuccessfulAt =
+                            syncStatus.lastSuccessfulAt ?? data.lastSyncedAt;
                         return SliverList(
                           delegate: SliverChildListDelegate([
                             _TopGreetingCard(
                               displayName: data.displayName,
-                              isOffline: data.isOffline,
-                              isSyncing: data.isSyncing,
-                              lastSyncedAt: data.lastSyncedAt,
+                              syncStatus: syncStatus,
+                              lastSyncedAt: lastSuccessfulAt,
                               dueToday: data.dueToday,
                               decksCount: data.decksCount,
                               reviewedToday: data.reviewedToday,
@@ -307,9 +321,8 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                   ),
                             const SizedBox(height: 24),
                             _SyncFooterCard(
-                              isOffline: data.isOffline,
-                              isSyncing: data.isSyncing,
-                              lastSyncedAt: data.lastSyncedAt,
+                              syncStatus: syncStatus,
+                              lastSyncedAt: lastSuccessfulAt,
                               onForceSync: _refreshDashboard,
                             ),
                             const SizedBox(height: 18),
@@ -330,8 +343,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
 
 class _TopGreetingCard extends StatelessWidget {
   final String displayName;
-  final bool isOffline;
-  final bool isSyncing;
+  final SyncStatus syncStatus;
   final DateTime? lastSyncedAt;
   final int dueToday;
   final int decksCount;
@@ -340,8 +352,7 @@ class _TopGreetingCard extends StatelessWidget {
 
   const _TopGreetingCard({
     required this.displayName,
-    required this.isOffline,
-    required this.isSyncing,
+    required this.syncStatus,
     required this.lastSyncedAt,
     required this.dueToday,
     required this.decksCount,
@@ -350,10 +361,12 @@ class _TopGreetingCard extends StatelessWidget {
   });
 
   String _syncText() {
-    if (isOffline) return 'Offline mode';
-    if (isSyncing) return 'Syncing now';
+    if (syncStatus.phase == SyncPhase.offline) return 'Offline';
+    if (syncStatus.phase == SyncPhase.syncing) return 'Syncing now';
+    if (syncStatus.phase == SyncPhase.failed) return 'Sync failed';
+    if (syncStatus.phase == SyncPhase.success) return 'All synced';
     if (lastSyncedAt == null) return 'Not synced yet';
-    return 'Synced recently';
+    return 'Last sync available';
   }
 
   String _lastSyncTime() {
@@ -440,12 +453,18 @@ class _TopGreetingCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isSyncing ? Icons.sync : Icons.check_circle,
+                        syncStatus.phase == SyncPhase.syncing
+                            ? Icons.sync
+                            : syncStatus.phase == SyncPhase.offline ||
+                                syncStatus.phase == SyncPhase.failed
+                            ? Icons.sync_problem_outlined
+                            : Icons.check_circle,
                         size: 14,
                         color:
-                            isOffline
+                            syncStatus.phase == SyncPhase.offline ||
+                                    syncStatus.phase == SyncPhase.failed
                                 ? Colors.orange
-                                : isSyncing
+                                : syncStatus.phase == SyncPhase.syncing
                                 ? Colors.blue
                                 : Colors.green,
                       ),
@@ -841,14 +860,12 @@ class _MiniStatsRow extends StatelessWidget {
 }
 
 class _SyncFooterCard extends StatelessWidget {
-  final bool isOffline;
-  final bool isSyncing;
+  final SyncStatus syncStatus;
   final DateTime? lastSyncedAt;
   final VoidCallback onForceSync;
 
   const _SyncFooterCard({
-    required this.isOffline,
-    required this.isSyncing,
+    required this.syncStatus,
     required this.lastSyncedAt,
     required this.onForceSync,
   });
@@ -877,36 +894,42 @@ class _SyncFooterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isOffline
-                    ? 'Offline mode'
-                    : isSyncing
-                    ? 'Syncing...'
-                    : 'All synced',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                lastSyncedAt == null
-                    ? 'Not synced yet'
-                    : isToday
-                    ? 'Last sync: $hour:$minute'
-                    : 'Last sync: $day/$month/$year $hour:$minute',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-                ),
-              ),
-            ],
+          Text(
+            switch (syncStatus.phase) {
+              SyncPhase.syncing => 'Syncing...',
+              SyncPhase.success => 'All synced',
+              SyncPhase.offline => 'Offline — changes saved on this device',
+              SyncPhase.failed => 'Sync failed — changes remain on this device',
+              SyncPhase.idle => 'Sync status unknown',
+            },
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          IconButton(icon: const Icon(Icons.sync), onPressed: onForceSync),
+          const SizedBox(height: 4),
+          Text(
+            lastSyncedAt == null
+                ? 'Never synced successfully'
+                : isToday
+                ? 'Last successful sync: $hour:$minute'
+                : 'Last successful sync: $day/$month/$year $hour:$minute',
+            style: theme.textTheme.bodySmall,
+          ),
+          if (syncStatus.message != null &&
+              syncStatus.phase != SyncPhase.success) ...[
+            const SizedBox(height: 4),
+            Text(syncStatus.message!, style: theme.textTheme.bodySmall),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed:
+                syncStatus.phase == SyncPhase.syncing ? null : onForceSync,
+            icon: const Icon(Icons.sync),
+            label: const Text('Retry sync'),
+          ),
         ],
       ),
     );

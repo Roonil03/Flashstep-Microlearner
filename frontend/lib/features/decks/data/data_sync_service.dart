@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,11 +11,13 @@ import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
 import 'sync_metadata_store.dart';
+import 'sync_status.dart';
 
 final deckSyncServiceProvider = Provider<DeckSyncService>((ref) {
   final service = DeckSyncService(
     database: ref.watch(appDatabaseProvider),
     storage: const SessionStorage(),
+    status: ref.read(syncStatusProvider.notifier),
   );
   ref.onDispose(service.dispose);
   return service;
@@ -25,13 +28,18 @@ class SyncResult {
   final bool warning;
   final int? statusCode;
   final String message;
+  final bool offline;
   const SyncResult.success(this.message)
     : success = true,
       warning = false,
+      offline = false,
       statusCode = 200;
-  const SyncResult.warning(this.message, {this.statusCode})
-    : success = false,
-      warning = true;
+  const SyncResult.warning(
+    this.message, {
+    this.statusCode,
+    this.offline = false,
+  }) : success = false,
+       warning = true;
 }
 
 class _SyncSession {
@@ -66,6 +74,7 @@ class DeckSyncService {
   final bool _ownsClient;
   final SyncMetadataStore _metadata;
   final String _baseUrl;
+  final SyncStatusNotifier? _status;
   final Map<String, Future<SyncResult>> _inFlight = {};
   bool _disposed = false;
   DeckSyncService({
@@ -74,11 +83,13 @@ class DeckSyncService {
     http.Client? client,
     SyncMetadataStore metadata = const SyncMetadataStore(),
     String? baseUrl,
+    SyncStatusNotifier? status,
   }) : _database = database,
        _storage = storage,
        _client = client ?? http.Client(),
        _ownsClient = client == null,
        _metadata = metadata,
+       _status = status,
        _baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
   void dispose() {
@@ -96,13 +107,26 @@ class DeckSyncService {
     }
     final existing = _inFlight[user];
     if (existing != null) return existing;
+    _status?.start(user);
     final work = _sync(_SyncSession(user, token));
     _inFlight[user] = work;
     try {
-      return await work;
+      final result = await work;
+      _status?.finish(
+        user,
+        success: result.success,
+        offline: result.offline,
+        message: result.message,
+      );
+      return result;
     } finally {
       if (identical(_inFlight[user], work)) _inFlight.remove(user);
     }
+  }
+
+  Future<void> reportNoNetwork() async {
+    final user = await _storage.readUserId();
+    if (user != null && user.isNotEmpty) _status?.offline(user);
   }
 
   Future<void> _assertActive(_SyncSession session) async {
@@ -154,9 +178,15 @@ class DeckSyncService {
         userId: session.userId,
       );
       return const SyncResult.success('Sync completed successfully.');
+    } on SocketException {
+      return const SyncResult.warning(
+        'Could not reach the server. Pending changes are retained.',
+        offline: true,
+      );
     } on http.ClientException {
       return const SyncResult.warning(
         'Could not reach the server. Pending changes are retained.',
+        offline: true,
       );
     } on TimeoutException {
       return const SyncResult.warning(
