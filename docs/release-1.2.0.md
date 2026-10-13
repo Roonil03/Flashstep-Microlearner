@@ -13,7 +13,7 @@ Flashstep Microlearner 1.2.0 makes it easier to see when your study data has syn
 - **Simpler System Settings**: Appearance and Review controls are grouped separately. Theme choices use clear buttons, and the existing daily-card-limit picker remains available.
 - **More Accessible Study Flows**: Deck actions and account controls have clearer screen-reader labels. Deck browsing, review controls, and analytics are easier to use with larger text.
 
-This release also includes bug fixes for deck-row accessibility and analytics text layout.
+This release also includes bug fixes for deck-row accessibility, analytics text layout, and Home review totals updating after a study session.
 
 ## Compatibility
 

@@ -121,6 +121,13 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
     await ref.read(homeDashboardProvider.future);
   }
 
+  Future<void> _openReview([String? deckId]) async {
+    await Navigator.of(context).pushNamed(AppRoutes.review, arguments: deckId);
+    if (!mounted) return;
+    ref.invalidate(userDecksProvider);
+    ref.invalidate(homeDashboardProvider);
+  }
+
   String _timeLabel(DateTime? time, {required int dueCards}) {
     if (time == null) {
       return dueCards > 0 ? 'Due now' : 'Not scheduled';
@@ -234,10 +241,8 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                       dueCards: data.deckOfTheDay!.dueCards,
                                     ),
                                     onStartReview:
-                                        () => Navigator.of(context).pushNamed(
-                                          AppRoutes.review,
-                                          arguments: data.deckOfTheDay!.id,
-                                        ),
+                                        () =>
+                                            _openReview(data.deckOfTheDay!.id),
                                     onOpenDeck:
                                         () => _openDeckDetail(
                                           data.deckOfTheDay!.id,
@@ -248,10 +253,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                               ),
                             _QuickActionsGrid(
                               onCreateDeck: _openCreateDeck,
-                              onStartReview:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.review),
+                              onStartReview: () => _openReview(),
                               onBrowseDecks:
                                   () => Navigator.of(
                                     context,
