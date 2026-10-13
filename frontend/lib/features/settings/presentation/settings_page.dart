@@ -53,13 +53,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget view;
     switch (_view) {
       case _SettingsView.account:
-        return _AccountSettings(onBack: _goBack);
+        view = _AccountSettings(onBack: _goBack);
+        break;
       case _SettingsView.system:
-        return _SystemSettings(onBack: _goBack);
+        view = _SystemSettings(onBack: _goBack);
+        break;
       case _SettingsView.main:
-        return _MainSettings(
+        view = _MainSettings(
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
@@ -70,7 +73,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 replay: true,
               ),
         );
+        break;
     }
+    return PopScope(
+      canPop: _view == _SettingsView.main,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _view != _SettingsView.main) _goBack();
+      },
+      child: view,
+    );
   }
 }
 
