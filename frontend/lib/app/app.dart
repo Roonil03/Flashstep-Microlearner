@@ -24,6 +24,7 @@ class App extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeModeProvider);
+    final fontSize = ref.watch(appFontSizeProvider);
 
     ref.watch(autoSyncBootstrapProvider);
 
@@ -32,6 +33,15 @@ class App extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: AppTextScaler(media.textScaler, fontSize.factor),
+          ),
+          child: child!,
+        );
+      },
       initialRoute: AppRoutes.splash,
       routes: {
         AppRoutes.splash: (_) => const SplashScreen(),

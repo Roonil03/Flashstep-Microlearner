@@ -9,6 +9,7 @@ import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/storage/session_storage.dart';
+import '../../../core/storage/theme_storage.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -884,6 +885,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final themeMode = ref.watch(appThemeModeProvider);
+    final fontSize = ref.watch(appFontSizeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -897,97 +899,147 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
         padding: const EdgeInsets.all(16),
         child: Align(
           alignment: Alignment.topLeft,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
-            ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'App Theme',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                RadioListTile<ThemeMode>(
-                  contentPadding: EdgeInsets.zero,
-                  value: ThemeMode.light,
-                  groupValue: themeMode,
-                  title: const Text('Light Mode'),
-                  onChanged: (value) {
-                    ref.read(appThemeModeProvider.notifier).setTheme(value!);
-                  },
-                ),
-                RadioListTile<ThemeMode>(
-                  contentPadding: EdgeInsets.zero,
-                  value: ThemeMode.dark,
-                  groupValue: themeMode,
-                  title: const Text('Dark Mode'),
-                  onChanged: (value) {
-                    ref.read(appThemeModeProvider.notifier).setTheme(value!);
-                  },
-                ),
-                const Divider(height: 24),
-                Text(
-                  'Review settings',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FutureBuilder<int>(
-                  future: _dailyLimitFuture,
-                  builder: (context, snapshot) {
-                    final value = snapshot.data ?? 25;
-                    return DailyReviewLimitTile(
-                      limit: value,
-                      onTap: _showDailyReviewLimitDialog,
-                    );
-                  },
-                ),
-                const Divider(height: 16),
-                FutureBuilder<bool>(
-                  future: _selectiveDecksOnlyFuture,
-                  builder: (context, snapshot) {
-                    final value = snapshot.data ?? true;
-                    return SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      secondary: const Icon(Icons.tune_outlined),
-                      title: const Text('Use selective review decks'),
-                      subtitle: Text(
-                        value
-                            ? 'Only show the decks chosen by the review algorithm'
-                            : 'Show all decks with due cards on Start Review',
+                _sectionCard(
+                  isDark,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              'Appearance',
+                              style: theme.textTheme.titleLarge,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text('App theme', style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              for (final (mode, label) in [
+                                (ThemeMode.system, 'System'),
+                                (ThemeMode.light, 'Light'),
+                                (ThemeMode.dark, 'Dark'),
+                              ])
+                                ChoiceChip(
+                                  label: Text(label),
+                                  selected: themeMode == mode,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.padded,
+                                  onSelected:
+                                      (_) => ref
+                                          .read(appThemeModeProvider.notifier)
+                                          .setTheme(mode),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Text('Font size', style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Adjusts text throughout the app relative to your device setting.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              for (final (size, label) in [
+                                (AppFontSize.small, 'Small'),
+                                (AppFontSize.device, 'Device default'),
+                                (AppFontSize.large, 'Large'),
+                                (AppFontSize.extraLarge, 'Extra large'),
+                              ])
+                                ChoiceChip(
+                                  label: Text(label),
+                                  selected: fontSize == size,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.padded,
+                                  onSelected:
+                                      (_) => ref
+                                          .read(appFontSizeProvider.notifier)
+                                          .setSize(size),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
-                      value: value,
-                      onChanged: _toggleSelectiveDecksOnly,
-                    );
-                  },
+                    ),
+                  ],
                 ),
-                const Divider(height: 16),
-                FutureBuilder<bool>(
-                  future: _bypassSrsFuture,
-                  builder: (context, snapshot) {
-                    final value = snapshot.data ?? false;
-                    return SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      secondary: const Icon(Icons.all_inclusive_outlined),
-                      title: const Text('Review all cards'),
-                      subtitle: Text(
-                        value
-                            ? 'Ignores daily limits and due dates. All cards are available.'
-                            : 'Respects daily limits and due dates.',
+                const SizedBox(height: 16),
+                _sectionCard(
+                  isDark,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            'Review',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                        ),
                       ),
-                      value: value,
-                      onChanged: _toggleBypassSrs,
-                    );
-                  },
+                    ),
+                    FutureBuilder<int>(
+                      future: _dailyLimitFuture,
+                      builder:
+                          (context, snapshot) => DailyReviewLimitTile(
+                            limit: snapshot.data ?? 25,
+                            onTap: _showDailyReviewLimitDialog,
+                          ),
+                    ),
+                    const Divider(height: 1),
+                    FutureBuilder<bool>(
+                      future: _selectiveDecksOnlyFuture,
+                      builder: (context, snapshot) {
+                        final value = snapshot.data ?? true;
+                        return SwitchListTile.adaptive(
+                          secondary: const Icon(Icons.tune_outlined),
+                          title: const Text('Use selective review decks'),
+                          subtitle: Text(
+                            value
+                                ? 'Only show decks chosen by the review algorithm'
+                                : 'Show all decks with due cards',
+                          ),
+                          value: value,
+                          onChanged: _toggleSelectiveDecksOnly,
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                    FutureBuilder<bool>(
+                      future: _bypassSrsFuture,
+                      builder: (context, snapshot) {
+                        final value = snapshot.data ?? false;
+                        return SwitchListTile.adaptive(
+                          secondary: const Icon(Icons.all_inclusive_outlined),
+                          title: const Text('Review all cards'),
+                          subtitle: Text(
+                            value
+                                ? 'Ignores daily limits and due dates.'
+                                : 'Respects daily limits and due dates.',
+                          ),
+                          value: value,
+                          onChanged: _toggleBypassSrs,
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

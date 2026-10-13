@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+enum AppFontSize { small, device, large, extraLarge }
+
 class ThemeStorage {
   static const _key = 'app_theme_mode';
+  static const _fontSizeKey = 'app_font_size';
 
   const ThemeStorage();
 
   FlutterSecureStorage get _storage => const FlutterSecureStorage(
-        aOptions: AndroidOptions(encryptedSharedPreferences: true),
-      );
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   Future<ThemeMode> readThemeMode() async {
     final value = await _storage.read(key: _key);
@@ -30,4 +33,15 @@ class ThemeStorage {
     };
     await _storage.write(key: _key, value: value);
   }
+
+  Future<AppFontSize> readFontSize() async {
+    final value = await _storage.read(key: _fontSizeKey);
+    return AppFontSize.values.firstWhere(
+      (size) => size.name == value,
+      orElse: () => AppFontSize.device,
+    );
+  }
+
+  Future<void> writeFontSize(AppFontSize size) =>
+      _storage.write(key: _fontSizeKey, value: size.name);
 }
