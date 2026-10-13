@@ -208,6 +208,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               suffixIcon: IconButton(
+                                tooltip: _obscure ? 'Show password' : 'Hide password',
                                 onPressed: () {
                                   setState(() {
                                     _obscure = !_obscure;
