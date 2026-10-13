@@ -129,8 +129,9 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   }
 
   String _timeLabel(DateTime? time, {required int dueCards}) {
+    if (dueCards > 0) return 'Due now';
     if (time == null) {
-      return dueCards > 0 ? 'Due now' : 'Not scheduled';
+      return 'Not scheduled';
     }
     final diff = time.difference(DateTime.now());
     if (diff.inMinutes <= 0) {
