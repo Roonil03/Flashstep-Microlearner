@@ -378,6 +378,7 @@ class DeckSyncService {
     Map<String, String> fingerprints,
   ) async {
     String? cursor;
+    String? reviewsFingerprint;
     final visited = <String>{};
     final seen = <String>{};
     do {
@@ -394,6 +395,9 @@ class DeckSyncService {
       }
       _requireSuccess(response, 'Reconciliation');
       final page = jsonDecode(response.body) as Map<String, dynamic>;
+      if (cursor == null) {
+        reviewsFingerprint = page['reviews_fingerprint'] as String?;
+      }
       final entries = (page['decks'] as List).cast<Map<String, dynamic>>();
       final ids = entries.map((e) => e['id'] as String).toList();
       final local =
@@ -454,9 +458,90 @@ class DeckSyncService {
         throw const FormatException('Repeated manifest cursor');
       }
     } while (cursor != null);
-    fingerprints.removeWhere((id, _) => !seen.contains(id));
+    if (reviewsFingerprint != null &&
+        fingerprints['__reviews'] != reviewsFingerprint) {
+      await _reconcileReviews(session);
+      final pendingReviews =
+          await (_database.select(_database.syncQueueItems)
+                ..where(
+                  (t) => t.entity.equals('review_log') & t.synced.equals(false),
+                )
+                ..limit(1))
+              .get();
+      if (pendingReviews.isEmpty) {
+        fingerprints['__reviews'] = reviewsFingerprint;
+      } else {
+        fingerprints.remove('__reviews');
+      }
+    }
+    fingerprints.removeWhere(
+      (id, _) => id != '__reviews' && !seen.contains(id),
+    );
     await _assertActive(session);
     await _metadata.write(session.userId, fingerprints);
+  }
+
+  Future<void> _reconcileReviews(_SyncSession session) async {
+    String? cursor;
+    final visited = <String>{};
+    do {
+      final suffix =
+          cursor == null ? '' : '&cursor=${Uri.encodeComponent(cursor)}';
+      final response = await _request(session, 'sync/reviews?limit=500$suffix');
+      _requireSuccess(response, 'Review history download');
+      final page = jsonDecode(response.body) as Map<String, dynamic>;
+      final records = page['review_logs'];
+      if (records is! List) {
+        throw const FormatException('Missing review history');
+      }
+      await _mergeDownloadedReviews(records, session);
+      cursor = page['next_cursor'] as String?;
+      if (cursor != null && !visited.add(cursor)) {
+        throw const FormatException('Repeated review cursor');
+      }
+    } while (cursor != null);
+  }
+
+  Future<void> _mergeDownloadedReviews(
+    List<dynamic> records,
+    _SyncSession session,
+  ) async {
+    final writes = <db.ReviewLogsCompanion>[];
+    for (final raw in records) {
+      if (raw is! Map<String, dynamic> ||
+          raw['user_id']?.toString() != session.userId) {
+        throw const FormatException('Invalid review owner');
+      }
+      final reviewedAt =
+          DateTime.tryParse(raw['reviewed_at']?.toString() ?? '')?.toUtc();
+      if (reviewedAt == null || raw['id'] == null || raw['card_id'] == null) {
+        throw const FormatException('Invalid review history record');
+      }
+      writes.add(
+        db.ReviewLogsCompanion.insert(
+          id: raw['id'].toString(),
+          userId: session.userId,
+          cardId: raw['card_id'].toString(),
+          rating: raw['rating']?.toString() ?? '',
+          previousInterval: (raw['previous_interval'] as num?)?.toDouble() ?? 0,
+          newInterval: (raw['new_interval'] as num?)?.toDouble() ?? 0,
+          reviewedAt: reviewedAt,
+          deviceId: raw['device_id']?.toString() ?? '',
+          syncStatus: 'synced',
+        ),
+      );
+    }
+    await _database.transaction(() async {
+      await _assertActive(session);
+      await _database.batch((batch) {
+        batch.insertAll(
+          _database.reviewLogs,
+          writes,
+          mode: InsertMode.insertOrIgnore,
+        );
+      });
+      await _assertActive(session);
+    });
   }
 
   Future<void> _legacyReconcile(_SyncSession session) async {
