@@ -941,11 +941,14 @@ class _SyncFooterCard extends StatelessWidget {
             Text(syncStatus.message!, style: theme.textTheme.bodySmall),
           ],
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed:
-                syncStatus.phase == SyncPhase.syncing ? null : onForceSync,
-            icon: const Icon(Icons.sync),
-            label: const Text('Retry sync'),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed:
+                  syncStatus.phase == SyncPhase.syncing ? null : onForceSync,
+              icon: const Icon(Icons.sync),
+              label: const Text('Retry sync'),
+            ),
           ),
         ],
       ),
