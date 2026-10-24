@@ -139,6 +139,11 @@ class AnalyticsRepository {
   final Map<String, Future<AnalyticsDashboardData>> _inFlightRefreshes = {};
 
   static const cacheMaxAge = Duration(minutes: 5);
+  // Keep persistent snapshots available for offline use, but retain at most
+  // one small snapshot in RAM. Large deck-insight responses are read from disk
+  // on demand and are released after the page is disposed.
+  static const _maxMemoryCacheEntries = 1;
+  static const _maxMemoryCacheBytes = 256 * 1024;
 
   AnalyticsRepository({
     required SessionStorage storage,
@@ -172,7 +177,7 @@ class AnalyticsRepository {
     var entry = _memoryCache[key];
     entry ??= await _cacheStore.read(userId: userId, rangeDays: rangeDays);
     if (entry == null) return null;
-    _memoryCache[key] = entry;
+    _rememberMemory(key, entry);
     return AnalyticsCacheSnapshot(
       data: _withDailyCounts(entry.data, dailyCounts),
       cachedAt: entry.cachedAt,
@@ -303,7 +308,7 @@ class AnalyticsRepository {
       cachedAt: DateTime.now().toUtc(),
       data: rawData,
     );
-    _memoryCache[_cacheKey(userId, rangeDays)] = entry;
+    _rememberMemory(_cacheKey(userId, rangeDays), entry);
     await _cacheStore.write(
       userId: userId,
       rangeDays: rangeDays,
@@ -324,5 +329,21 @@ class AnalyticsRepository {
         'daily_limit_applied': dailyCounts.limited,
       },
     });
+  }
+
+  void _rememberMemory(String key, AnalyticsCacheEntry entry) {
+    final encodedBytes = utf8.encode(jsonEncode(entry.data)).length;
+    if (encodedBytes > _maxMemoryCacheBytes) {
+      _memoryCache.remove(key);
+      return;
+    }
+    if (!_memoryCache.containsKey(key) &&
+        _memoryCache.length >= _maxMemoryCacheEntries) {
+      _memoryCache.remove(_memoryCache.keys.first);
+    }
+    // Removing and reinserting makes the single retained snapshot the most
+    // recently used entry if the limit is increased later.
+    _memoryCache.remove(key);
+    _memoryCache[key] = entry;
   }
 }
