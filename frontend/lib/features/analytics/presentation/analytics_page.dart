@@ -29,6 +29,9 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
   }
 
   Future<void> _refresh() async {
+    await ref
+        .read(analyticsRepositoryProvider)
+        .clearCachedDashboard(rangeDays: _rangeDays);
     ref.invalidate(analyticsDashboardProvider(_rangeDays));
     try {
       await ref.read(analyticsDashboardProvider(_rangeDays).future);
