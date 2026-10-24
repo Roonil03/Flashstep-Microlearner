@@ -193,7 +193,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            'By creating an account, you agree to the ',
+                            'Read the current ',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           TextButton(
@@ -204,7 +204,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             child: const Text('Terms of Service'),
                           ),
                           Text(
-                            ' and acknowledge the ',
+                            ' and ',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           TextButton(
@@ -215,7 +215,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                             child: const Text('Privacy Policy'),
                           ),
                           Text(
-                            '. Both pages are drafts for attorney review.',
+                            '. These pages are information placeholders. Account creation does not accept future terms or data practices.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
