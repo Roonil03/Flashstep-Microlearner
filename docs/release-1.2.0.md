@@ -18,6 +18,7 @@ Flashstep Microlearner 1.2.0 makes it easier to see when your study data has syn
 - **Clearer Action Placement**: Public-deck downloads and sync retries are aligned to the lower-right of their cards for easier scanning and reachability.
 - **Smoother Large Libraries**: Home calculates deck and due-card summaries more efficiently, keeping large collections easier to browse.
 - **Faster Home Loading**: Home reuses recent account-specific summaries and refreshes them when local study data changes. Home and Analytics show gently animated loading placeholders while their content is prepared; reduced-motion settings are respected.
+- **Cached Analytics**: Analytics keeps the last successful account-specific snapshot on the device, shows it immediately on the next visit, and replaces it after a newer response is fetched. Cached data remains available while offline, and Refresh requests a new snapshot explicitly.
 
 This release also includes bug fixes for deck-row accessibility, analytics text layout, Home review totals after returning from a deck review, registration password feedback, due-now labels, and Back navigation within Settings.
 
