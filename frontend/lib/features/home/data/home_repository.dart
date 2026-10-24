@@ -26,6 +26,7 @@ class _DeckCardStats {
 class HomeRepository {
   final AppDatabase _database;
   final SessionStorage _sessionStorage;
+  final void Function()? _onDataChanged;
   late final StreamSubscription<dynamic> _deckChanges;
   late final StreamSubscription<dynamic> _reviewChanges;
   Future<List<DeckSummary>>? _cachedDecks;
@@ -36,29 +37,39 @@ class HomeRepository {
   DateTime? _statsCachedAt;
   int _deckRevision = 0;
   int _reviewRevision = 0;
+  bool _disposed = false;
 
-  HomeRepository(this._database, this._sessionStorage) {
+  HomeRepository(
+    this._database,
+    this._sessionStorage, {
+    void Function()? onDataChanged,
+  }) : _onDataChanged = onDataChanged {
     // A cheap watched query invalidates the summaries for local edits and
     // downloaded sync changes without loading all cards into memory.
     _deckChanges = _database
         .customSelect('SELECT 1', readsFrom: {_database.decks, _database.cards})
         .watch()
         .listen((_) {
+          if (_disposed) return;
           _deckRevision++;
           _reviewRevision++;
           _cachedDecks = null;
           _cachedStats = null;
+          _onDataChanged?.call();
         });
     _reviewChanges = _database
         .customSelect('SELECT 1', readsFrom: {_database.reviewLogs})
         .watch()
         .listen((_) {
+          if (_disposed) return;
           _reviewRevision++;
           _cachedStats = null;
+          _onDataChanged?.call();
         });
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     await _deckChanges.cancel();
     await _reviewChanges.cancel();
   }
@@ -281,5 +292,6 @@ class HomeRepository {
         );
     _deckRevision++;
     _cachedDecks = null;
+    _onDataChanged?.call();
   }
 }

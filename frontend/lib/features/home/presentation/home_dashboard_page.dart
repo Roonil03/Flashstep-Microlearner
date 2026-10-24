@@ -13,10 +13,17 @@ import '../../decks/data/data_sync_service.dart';
 import '../../decks/data/sync_status.dart';
 import '../domain/home_dashboard_models.dart';
 
+// Local table changes also invalidate the rendered dashboard, including when
+// another route saved a review while Home remained mounted in the navigator.
+final homeDataRevisionProvider = StateProvider<int>((ref) => 0);
+
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
   final repository = HomeRepository(
     ref.watch(appDatabaseProvider),
     const SessionStorage(),
+    onDataChanged: () {
+      ref.read(homeDataRevisionProvider.notifier).state++;
+    },
   );
   ref.onDispose(repository.dispose);
   return repository;
@@ -29,11 +36,13 @@ final usernameProvider = FutureProvider<String>((ref) async {
 });
 
 final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
+  ref.watch(homeDataRevisionProvider);
   final repository = ref.watch(homeRepositoryProvider);
   return repository.getDecks();
 });
 
 final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
+  ref.watch(homeDataRevisionProvider);
   final repository = ref.watch(homeRepositoryProvider);
   final username = await ref.watch(usernameProvider.future);
   final decks = await ref.watch(userDecksProvider.future);
@@ -116,6 +125,13 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
     ).pushNamed(AppRoutes.deckDetail, arguments: deckId);
     if (!mounted) return;
     await _refreshDashboard();
+  }
+
+  Future<void> _openBrowseDecks() async {
+    await Navigator.of(context).pushNamed(AppRoutes.browseDecks);
+    if (!mounted) return;
+    ref.invalidate(userDecksProvider);
+    ref.invalidate(homeDashboardProvider);
   }
 
   Future<void> _openSettings() async {
@@ -260,10 +276,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             _QuickActionsGrid(
                               onCreateDeck: _openCreateDeck,
                               onStartReview: () => _openReview(),
-                              onBrowseDecks:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.browseDecks),
+                              onBrowseDecks: _openBrowseDecks,
                               onAnalytics:
                                   () => Navigator.of(
                                     context,
@@ -287,11 +300,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 ),
                                 if (data.decks.length > 5)
                                   TextButton(
-                                    onPressed: () {
-                                      Navigator.of(
-                                        context,
-                                      ).pushNamed(AppRoutes.browseDecks);
-                                    },
+                                    onPressed: _openBrowseDecks,
                                     child: const Text('Explore all'),
                                   ),
                               ],
