@@ -14,7 +14,12 @@ import '../../decks/data/sync_status.dart';
 import '../domain/home_dashboard_models.dart';
 
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
-  return HomeRepository(ref.watch(appDatabaseProvider), const SessionStorage());
+  final repository = HomeRepository(
+    ref.watch(appDatabaseProvider),
+    const SessionStorage(),
+  );
+  ref.onDispose(repository.dispose);
+  return repository;
 });
 
 final usernameProvider = FutureProvider<String>((ref) async {
@@ -939,20 +944,60 @@ class _SyncFooterCard extends StatelessWidget {
   }
 }
 
-class _LoadingCard extends StatelessWidget {
+class _LoadingCard extends StatefulWidget {
   final bool isDark;
   final bool short;
 
   const _LoadingCard({required this.isDark, this.short = false});
 
   @override
+  State<_LoadingCard> createState() => _LoadingCardState();
+}
+
+class _LoadingCardState extends State<_LoadingCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      height: short ? 60 : 120,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
-      ),
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder:
+          (context, _) => Container(
+            height: widget.short ? 60 : 120,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Color.lerp(
+                widget.isDark
+                    ? const Color(0xFF1A2D3D)
+                    : const Color(0xFFE7ECF1),
+                widget.isDark
+                    ? const Color(0xFF30485B)
+                    : const Color(0xFFF7FAFC),
+                reduceMotion ? 0 : _pulse.value,
+              ),
+            ),
+          ),
     );
   }
 }

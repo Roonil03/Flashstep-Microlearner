@@ -37,9 +37,10 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final analyticsAsync = _ready
-        ? ref.watch(analyticsDashboardProvider(_rangeDays))
-        : const AsyncValue<AnalyticsDashboardData>.loading();
+    final analyticsAsync =
+        _ready
+            ? ref.watch(analyticsDashboardProvider(_rangeDays))
+            : const AsyncValue<AnalyticsDashboardData>.loading();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -1205,20 +1206,56 @@ class _ChartEmptyState extends StatelessWidget {
   }
 }
 
-class _SkeletonCard extends StatelessWidget {
+class _SkeletonCard extends StatefulWidget {
   final double height;
 
   const _SkeletonCard({required this.height});
 
   @override
+  State<_SkeletonCard> createState() => _SkeletonCardState();
+}
+
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: isDark ? const Color(0xFF171B2E) : const Color(0xFFF5F7FC),
-      ),
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder:
+          (context, _) => Container(
+            height: widget.height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: Color.lerp(
+                isDark ? const Color(0xFF171B2E) : const Color(0xFFE7ECF1),
+                isDark ? const Color(0xFF303751) : const Color(0xFFF7FAFC),
+                reduceMotion ? 0 : _pulse.value,
+              ),
+            ),
+          ),
     );
   }
 }
