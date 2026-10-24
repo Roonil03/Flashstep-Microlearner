@@ -317,43 +317,49 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
               itemBuilder: (context, index) {
                 final deck = decks[index];
                 return Card(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    onTap: () => _openDeck(deck.id),
-                    title: Text(
-                      deck.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(_subtitle(deck)),
-                    ),
-                    trailing: PopupMenuButton<_DeckMenuAction>(
-                      tooltip: 'Deck actions',
-                      onSelected: (action) => _handleDeckAction(action, deck),
-                      itemBuilder:
-                          (context) => const [
-                            PopupMenuItem(
-                              value: _DeckMenuAction.rename,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.edit_outlined),
-                                title: Text('Edit'),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: _DeckMenuAction.delete,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.delete_outline),
-                                title: Text('Delete'),
-                              ),
-                            ),
-                          ],
-                      child: Icon(
-                        deck.isPublic ? Icons.public : Icons.lock_outline,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          onTap: () => _openDeck(deck.id),
+                          title: Text(
+                            deck.title,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(_subtitle(deck)),
+                          ),
+                        ),
                       ),
-                    ),
+                      PopupMenuButton<_DeckMenuAction>(
+                        tooltip: 'Deck actions for ${deck.title}',
+                        onSelected: (action) => _handleDeckAction(action, deck),
+                        itemBuilder:
+                            (context) => const [
+                              PopupMenuItem(
+                                value: _DeckMenuAction.rename,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.edit_outlined),
+                                  title: Text('Edit'),
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: _DeckMenuAction.delete,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.delete_outline),
+                                  title: Text('Delete'),
+                                ),
+                              ),
+                            ],
+                        icon: Icon(
+                          deck.isPublic ? Icons.public : Icons.lock_outline,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

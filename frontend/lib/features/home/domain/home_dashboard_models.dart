@@ -23,27 +23,25 @@ class DeckSummary {
 }
 
 class HomeDashboardData {
+  final String? userId;
   final String displayName;
   final int decksCount;
   final int dueToday;
   final int reviewedToday;
   final int streak;
   final double retentionRate;
-  final bool isOffline;
-  final bool isSyncing;
   final DateTime? lastSyncedAt;
   final DeckSummary? deckOfTheDay;
   final List<DeckSummary> decks;
 
   const HomeDashboardData({
+    required this.userId,
     required this.displayName,
     required this.decksCount,
     required this.dueToday,
     required this.reviewedToday,
     required this.streak,
     required this.retentionRate,
-    required this.isOffline,
-    required this.isSyncing,
     required this.lastSyncedAt,
     required this.deckOfTheDay,
     required this.decks,

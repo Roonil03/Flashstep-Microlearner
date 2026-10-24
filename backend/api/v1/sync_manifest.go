@@ -87,7 +87,17 @@ func SyncManifest(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"decks": out, "next_cursor": next})
+	response := gin.H{"decks": out, "next_cursor": next}
+	if cursor == uuid.Nil {
+		var reviewsFingerprint string
+		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT md5(count(*)::text || ':' || COALESCE(max(created_at)::text, '')) FROM review_logs WHERE user_id=$1`, user).Scan(&reviewsFingerprint)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		response["reviews_fingerprint"] = reviewsFingerprint
+	}
+	c.JSON(200, response)
 }
 
 type syncFetchRequest struct {

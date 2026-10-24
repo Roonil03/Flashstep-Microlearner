@@ -14,6 +14,68 @@ final appThemeModeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((
   return ThemeNotifier(storage);
 });
 
+final appFontSizeProvider =
+    StateNotifierProvider<FontSizeNotifier, AppFontSize>(
+      (ref) => FontSizeNotifier(ref.read(themeStorageProvider)),
+    );
+
+class FontSizeNotifier extends StateNotifier<AppFontSize> {
+  final ThemeStorage _storage;
+
+  FontSizeNotifier(this._storage) : super(AppFontSize.device) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final size = await _storage.readFontSize();
+      if (mounted) state = size;
+    } catch (_) {
+      // Keep device sizing when preferences cannot be read.
+    }
+  }
+
+  Future<void> setSize(AppFontSize size) async {
+    state = size;
+    try {
+      await _storage.writeFontSize(size);
+    } catch (_) {
+      // The chosen size remains usable for this app session.
+    }
+  }
+}
+
+extension AppFontSizeFactor on AppFontSize {
+  double get factor => switch (this) {
+    AppFontSize.small => 0.9,
+    AppFontSize.device => 1.0,
+    AppFontSize.large => 1.15,
+    AppFontSize.extraLarge => 1.3,
+  };
+}
+
+class AppTextScaler extends TextScaler {
+  final TextScaler deviceScaler;
+  final double factor;
+
+  const AppTextScaler(this.deviceScaler, this.factor);
+
+  @override
+  double scale(double fontSize) => deviceScaler.scale(fontSize) * factor;
+
+  @override
+  double get textScaleFactor => scale(14) / 14;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AppTextScaler &&
+      other.deviceScaler == deviceScaler &&
+      other.factor == factor;
+
+  @override
+  int get hashCode => Object.hash(deviceScaler, factor);
+}
+
 class ThemeNotifier extends StateNotifier<ThemeMode> {
   final ThemeStorage _storage;
 

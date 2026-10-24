@@ -5,6 +5,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String analytics = '/analytics';
   static const String settings = '/settings';
+  static const String legal = '/legal';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
   static const String navigationTour = '/navigation-tour';

@@ -301,9 +301,12 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   }
 
   Widget _ratingButton(BuildContext context, String value, String label) {
-    return ElevatedButton(
-      onPressed: _saving ? null : () => _rateCard(value),
-      child: Text(label),
+    return Semantics(
+      hint: 'Rate how well you recalled this card',
+      child: ElevatedButton(
+        onPressed: _saving ? null : () => _rateCard(value),
+        child: Text(label),
+      ),
     );
   }
 }

@@ -12,6 +12,11 @@ this backend before distributing the updated frontend. A frontend build can
 override its base URL using `--dart-define=API_BASE_URL=<base URL>` for isolated
 testing; this does not change the server's route prefix.
 
+The v1.2.0 backend also adds paged `/sync/reviews` and a review-history
+fingerprint to the first manifest page. Deploy it before distributing the
+v1.2.0 frontend so review history and daily limits reconcile across devices.
+Earlier clients continue using their existing sync routes; no migration is needed.
+
 ### Health Check
 
 `GET /health` is outside `/api/v1` and does not require authentication.
@@ -489,7 +494,8 @@ Response `200 OK`:
       "fingerprint": "opaque revision digest"
     }
   ],
-  "next_cursor": null
+  "next_cursor": null,
+  "reviews_fingerprint": "opaque review-history digest"
 }
 ```
 
@@ -498,6 +504,10 @@ Fingerprints include the deck revision/timestamp/deletion flag and ordered
 child-card IDs, parent IDs, revisions, timestamps, and deletion flags. Treat the
 fingerprint as an opaque equality token, not a timestamp or authentication value.
 No card bodies or review logs are returned. Empty results use `decks: []`.
+The first page (without `cursor`) also includes `reviews_fingerprint`, an
+opaque token that changes when immutable review history is appended. Later
+manifest pages omit it. Earlier backend versions omit it on every page; clients
+should continue deck reconciliation without review-history download in that case.
 
 If more records exist, `next_cursor` is the last returned deck UUID. Pass it as
 `cursor` in the next request; `null` means the manifest is complete.
@@ -545,6 +555,44 @@ Errors:
 - `401 Unauthorized`: missing or invalid JWT
 - `500 Internal Server Error`: database/read/transaction failure
 
+### Fetch Review History (v1.2.0)
+
+`GET /sync/reviews?cursor=<review UUID>&limit=500`
+
+- `cursor`: optional review-log UUID. Omit it for the first page; later pages
+  return owned review logs with IDs strictly greater than the cursor.
+- `limit`: integer from 1 through 500; omission or explicit `0` uses 500.
+
+Response `200 OK`:
+```json
+{
+  "review_logs": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "user_id": "22222222-2222-4222-8222-222222222222",
+      "card_id": "33333333-3333-4333-8333-333333333333",
+      "rating": "good",
+      "previous_interval": 0,
+      "new_interval": 1,
+      "reviewed_at": "2026-03-24T10:00:00Z",
+      "device_id": null,
+      "created_at": "2026-03-24T10:00:00Z"
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+Only the authenticated account's review logs are returned, ordered by UUID.
+Empty results use `review_logs: []`. If more exist, `next_cursor` is the last
+returned review UUID. Repeated reads are safe because review-log IDs are stable
+and retries of the same log do not create duplicates. The endpoint is read-only
+and adds no table or column. New reviews arriving during pagination are detected
+by a changed manifest fingerprint on the next sync.
+
+Errors: `400` for an invalid cursor or limit, `401` for missing or invalid
+authentication, and `500` for a database/read failure.
+
 ### Reconciliation Sequence and Compatibility
 
 1. Upload queued mutations in deck → card → review-log order. The updated
@@ -558,7 +606,10 @@ Errors:
    local edits. Save the manifest's original fingerprint only after all pages
    for that group merge successfully. Invalidate fingerprints for decks with
    remaining pending edits; missing/corrupt metadata starts fresh reconciliation.
-4. Continue until both card and manifest cursors are `null`. The endpoints do
+4. When the first manifest page's review fingerprint changes, fetch review logs
+   through `/sync/reviews` and merge them by immutable ID. Save the fingerprint
+   only after all pages merge and no local review upload remains pending.
+5. Continue until card, review, and manifest cursors are `null`. The endpoints do
    not hold a snapshot across HTTP requests; each fetch request has its own
    consistent read transaction. Changes arriving during paging are detected on
    the following sync. Interrupted downloads can safely restart.

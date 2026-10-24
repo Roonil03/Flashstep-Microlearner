@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,11 +11,13 @@ import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
 import 'sync_metadata_store.dart';
+import 'sync_status.dart';
 
 final deckSyncServiceProvider = Provider<DeckSyncService>((ref) {
   final service = DeckSyncService(
     database: ref.watch(appDatabaseProvider),
     storage: const SessionStorage(),
+    status: ref.read(syncStatusProvider.notifier),
   );
   ref.onDispose(service.dispose);
   return service;
@@ -25,13 +28,18 @@ class SyncResult {
   final bool warning;
   final int? statusCode;
   final String message;
+  final bool offline;
   const SyncResult.success(this.message)
     : success = true,
       warning = false,
+      offline = false,
       statusCode = 200;
-  const SyncResult.warning(this.message, {this.statusCode})
-    : success = false,
-      warning = true;
+  const SyncResult.warning(
+    this.message, {
+    this.statusCode,
+    this.offline = false,
+  }) : success = false,
+       warning = true;
 }
 
 class _SyncSession {
@@ -66,6 +74,7 @@ class DeckSyncService {
   final bool _ownsClient;
   final SyncMetadataStore _metadata;
   final String _baseUrl;
+  final SyncStatusNotifier? _status;
   final Map<String, Future<SyncResult>> _inFlight = {};
   bool _disposed = false;
   DeckSyncService({
@@ -74,11 +83,13 @@ class DeckSyncService {
     http.Client? client,
     SyncMetadataStore metadata = const SyncMetadataStore(),
     String? baseUrl,
+    SyncStatusNotifier? status,
   }) : _database = database,
        _storage = storage,
        _client = client ?? http.Client(),
        _ownsClient = client == null,
        _metadata = metadata,
+       _status = status,
        _baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
   void dispose() {
@@ -96,13 +107,26 @@ class DeckSyncService {
     }
     final existing = _inFlight[user];
     if (existing != null) return existing;
+    _status?.start(user);
     final work = _sync(_SyncSession(user, token));
     _inFlight[user] = work;
     try {
-      return await work;
+      final result = await work;
+      _status?.finish(
+        user,
+        success: result.success,
+        offline: result.offline,
+        message: result.message,
+      );
+      return result;
     } finally {
       if (identical(_inFlight[user], work)) _inFlight.remove(user);
     }
+  }
+
+  Future<void> reportNoNetwork() async {
+    final user = await _storage.readUserId();
+    if (user != null && user.isNotEmpty) _status?.offline(user);
   }
 
   Future<void> _assertActive(_SyncSession session) async {
@@ -154,9 +178,15 @@ class DeckSyncService {
         userId: session.userId,
       );
       return const SyncResult.success('Sync completed successfully.');
+    } on SocketException {
+      return const SyncResult.warning(
+        'Could not reach the server. Pending changes are retained.',
+        offline: true,
+      );
     } on http.ClientException {
       return const SyncResult.warning(
         'Could not reach the server. Pending changes are retained.',
+        offline: true,
       );
     } on TimeoutException {
       return const SyncResult.warning(
@@ -348,6 +378,7 @@ class DeckSyncService {
     Map<String, String> fingerprints,
   ) async {
     String? cursor;
+    String? reviewsFingerprint;
     final visited = <String>{};
     final seen = <String>{};
     do {
@@ -364,6 +395,9 @@ class DeckSyncService {
       }
       _requireSuccess(response, 'Reconciliation');
       final page = jsonDecode(response.body) as Map<String, dynamic>;
+      if (cursor == null) {
+        reviewsFingerprint = page['reviews_fingerprint'] as String?;
+      }
       final entries = (page['decks'] as List).cast<Map<String, dynamic>>();
       final ids = entries.map((e) => e['id'] as String).toList();
       final local =
@@ -424,9 +458,90 @@ class DeckSyncService {
         throw const FormatException('Repeated manifest cursor');
       }
     } while (cursor != null);
-    fingerprints.removeWhere((id, _) => !seen.contains(id));
+    if (reviewsFingerprint != null &&
+        fingerprints['__reviews'] != reviewsFingerprint) {
+      await _reconcileReviews(session);
+      final pendingReviews =
+          await (_database.select(_database.syncQueueItems)
+                ..where(
+                  (t) => t.entity.equals('review_log') & t.synced.equals(false),
+                )
+                ..limit(1))
+              .get();
+      if (pendingReviews.isEmpty) {
+        fingerprints['__reviews'] = reviewsFingerprint;
+      } else {
+        fingerprints.remove('__reviews');
+      }
+    }
+    fingerprints.removeWhere(
+      (id, _) => id != '__reviews' && !seen.contains(id),
+    );
     await _assertActive(session);
     await _metadata.write(session.userId, fingerprints);
+  }
+
+  Future<void> _reconcileReviews(_SyncSession session) async {
+    String? cursor;
+    final visited = <String>{};
+    do {
+      final suffix =
+          cursor == null ? '' : '&cursor=${Uri.encodeComponent(cursor)}';
+      final response = await _request(session, 'sync/reviews?limit=500$suffix');
+      _requireSuccess(response, 'Review history download');
+      final page = jsonDecode(response.body) as Map<String, dynamic>;
+      final records = page['review_logs'];
+      if (records is! List) {
+        throw const FormatException('Missing review history');
+      }
+      await _mergeDownloadedReviews(records, session);
+      cursor = page['next_cursor'] as String?;
+      if (cursor != null && !visited.add(cursor)) {
+        throw const FormatException('Repeated review cursor');
+      }
+    } while (cursor != null);
+  }
+
+  Future<void> _mergeDownloadedReviews(
+    List<dynamic> records,
+    _SyncSession session,
+  ) async {
+    final writes = <db.ReviewLogsCompanion>[];
+    for (final raw in records) {
+      if (raw is! Map<String, dynamic> ||
+          raw['user_id']?.toString() != session.userId) {
+        throw const FormatException('Invalid review owner');
+      }
+      final reviewedAt =
+          DateTime.tryParse(raw['reviewed_at']?.toString() ?? '')?.toUtc();
+      if (reviewedAt == null || raw['id'] == null || raw['card_id'] == null) {
+        throw const FormatException('Invalid review history record');
+      }
+      writes.add(
+        db.ReviewLogsCompanion.insert(
+          id: raw['id'].toString(),
+          userId: session.userId,
+          cardId: raw['card_id'].toString(),
+          rating: raw['rating']?.toString() ?? '',
+          previousInterval: (raw['previous_interval'] as num?)?.toDouble() ?? 0,
+          newInterval: (raw['new_interval'] as num?)?.toDouble() ?? 0,
+          reviewedAt: reviewedAt,
+          deviceId: raw['device_id']?.toString() ?? '',
+          syncStatus: 'synced',
+        ),
+      );
+    }
+    await _database.transaction(() async {
+      await _assertActive(session);
+      await _database.batch((batch) {
+        batch.insertAll(
+          _database.reviewLogs,
+          writes,
+          mode: InsertMode.insertOrIgnore,
+        );
+      });
+      await _assertActive(session);
+    });
   }
 
   Future<void> _legacyReconcile(_SyncSession session) async {

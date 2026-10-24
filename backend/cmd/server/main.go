@@ -66,6 +66,7 @@ func main() {
 			protected.POST("/sync/upload", v1.SyncUpload)
 			protected.GET("/sync/download", v1.SyncDownload)
 			protected.GET("/sync/manifest", v1.SyncManifest)
+			protected.GET("/sync/reviews", v1.SyncReviews)
 			protected.POST("/sync/fetch", v1.SyncFetch)
 		}
 		{
