@@ -29,6 +29,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   void initState() {
     super.initState();
     passwordController.addListener(_validatePassword);
+    passwordController.addListener(_clearValidationSnack);
+    confirmPasswordController.addListener(_clearValidationSnack);
+  }
+
+  void _clearValidationSnack() {
+    if (mounted) ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
   }
 
   void _validatePassword() {
@@ -98,6 +104,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   void dispose() {
     passwordController.removeListener(_validatePassword);
+    passwordController.removeListener(_clearValidationSnack);
+    confirmPasswordController.removeListener(_clearValidationSnack);
     emailController.dispose();
     usernameController.dispose();
     passwordController.dispose();
@@ -106,7 +114,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   void showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
@@ -125,6 +135,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               child: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     children: [
                       Text(
