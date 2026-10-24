@@ -296,19 +296,25 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 const SizedBox(height: 12),
-                                downloading
-                                    ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                    : LearningAction(
-                                      onPressed: () => _downloadDeck(deck),
-                                      icon: Icons.download_rounded,
-                                      label: 'Add to my decks',
-                                    ),
+                                Align(
+                                  alignment: Alignment.bottomRight,
+                                  child:
+                                      downloading
+                                          ? const SizedBox(
+                                            width: 48,
+                                            height: 48,
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          )
+                                          : LearningAction(
+                                            onPressed: () => _downloadDeck(deck),
+                                            icon: Icons.download_rounded,
+                                            label: 'Add to my decks',
+                                          ),
+                                ),
                               ],
                             ),
                           ),
