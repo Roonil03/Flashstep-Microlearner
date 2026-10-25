@@ -53,14 +53,25 @@ class PublicVisibilityControl extends StatelessWidget {
 class DailyReviewLimitTile extends StatelessWidget {
   final int limit;
   final VoidCallback? onTap;
-  const DailyReviewLimitTile({super.key, required this.limit, this.onTap});
+  final EdgeInsetsGeometry contentPadding;
+  const DailyReviewLimitTile({
+    super.key,
+    required this.limit,
+    this.onTap,
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 8,
+    ),
+  });
   @override
   Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
+    contentPadding: contentPadding,
     leading: const Icon(Icons.today_outlined),
     title: const Text('Daily review limit'),
     subtitle: Text(
       '$limit cards per day. Review all cards overrides this limit.',
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
     ),
     trailing: const Icon(Icons.edit_outlined),
     onTap: onTap,

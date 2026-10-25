@@ -684,45 +684,82 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
         ),
         title: const Text('Account Settings'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: _sectionCard(
-            isDark,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                child: Text(
-                  'Account',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 28),
+                  child: Opacity(
+                    opacity: 0.35,
+                    child: Image.asset(
+                      'assets/LogoWithText_WithoutBG.png',
+                      width: 320,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Change Username'),
-                onTap: _showChangeUsernameDialog,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.lock_outline),
-                title: const Text('Change Password'),
-                onTap: _showChangePasswordDialog,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete Account'),
-                onTap: _showDeleteAccountDialog,
-              ),
-            ],
+            ),
           ),
-        ),
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: _sectionCard(
+                  isDark,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Text(
+                        'Account',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: Text(
+                        'Change Username',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: _showChangeUsernameDialog,
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.lock_outline),
+                      title: Text(
+                        'Change Password',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: _showChangePasswordDialog,
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.delete_outline),
+                      title: Text(
+                        'Delete Account',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: _showDeleteAccountDialog,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -976,25 +1013,46 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                             style: theme.textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
+                          Semantics(
+                            label: 'Font size: ${_fontSizeLabel(fontSize)}',
+                            value: _fontSizeLabel(fontSize),
+                            child: Slider(
+                              min: 0,
+                              max: (AppFontSize.values.length - 1).toDouble(),
+                              divisions: AppFontSize.values.length - 1,
+                              value: fontSize.index.toDouble(),
+                              label: _fontSizeLabel(fontSize),
+                              semanticFormatterCallback:
+                                  (value) => _fontSizeLabel(
+                                    AppFontSize.values[value.round()],
+                                  ),
+                              onChanged: (value) {
+                                final next =
+                                    AppFontSize.values[value.round().clamp(
+                                      0,
+                                      AppFontSize.values.length - 1,
+                                    )];
+                                ref
+                                    .read(appFontSizeProvider.notifier)
+                                    .setSize(next);
+                              },
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              for (final (size, label) in [
-                                (AppFontSize.small, 'Small'),
-                                (AppFontSize.device, 'Device default'),
-                                (AppFontSize.large, 'Large'),
-                                (AppFontSize.extraLarge, 'Extra large'),
-                              ])
-                                ChoiceChip(
-                                  label: Text(label),
-                                  selected: fontSize == size,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.padded,
-                                  onSelected:
-                                      (_) => ref
-                                          .read(appFontSizeProvider.notifier)
-                                          .setSize(size),
+                              for (final size in AppFontSize.values)
+                                Expanded(
+                                  child: Text(
+                                    _fontSizeLabel(size),
+                                    textAlign:
+                                        size == AppFontSize.small
+                                            ? TextAlign.left
+                                            : size == AppFontSize.extraLarge
+                                            ? TextAlign.right
+                                            : TextAlign.center,
+                                    style: theme.textTheme.labelSmall,
+                                  ),
                                 ),
                             ],
                           ),
@@ -1028,12 +1086,16 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                             onTap: _showDailyReviewLimitDialog,
                           ),
                     ),
-                    const Divider(height: 1),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
                       future: _selectiveDecksOnlyFuture,
                       builder: (context, snapshot) {
                         final value = snapshot.data ?? true;
                         return SwitchListTile.adaptive(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           secondary: const Icon(Icons.tune_outlined),
                           title: const Text('Use selective review decks'),
                           subtitle: Text(
@@ -1046,12 +1108,16 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                         );
                       },
                     ),
-                    const Divider(height: 1),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
                       future: _bypassSrsFuture,
                       builder: (context, snapshot) {
                         final value = snapshot.data ?? false;
                         return SwitchListTile.adaptive(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           secondary: const Icon(Icons.all_inclusive_outlined),
                           title: const Text('Review all cards'),
                           subtitle: Text(
@@ -1092,3 +1158,10 @@ String _messageFromError(Object error) {
       .replaceFirst('StateError: ', '')
       .trim();
 }
+
+String _fontSizeLabel(AppFontSize size) => switch (size) {
+  AppFontSize.small => 'Small',
+  AppFontSize.device => 'Device default',
+  AppFontSize.large => 'Large',
+  AppFontSize.extraLarge => 'Extra large',
+};
