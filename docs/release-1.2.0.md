@@ -14,6 +14,7 @@ Flashstep Microlearner 1.2.0 makes it easier to see when your study data has syn
 
 - **Honest Offline Feedback**: If the device cannot reach the server, Home explains that changes remain on the device. A failed attempt does not appear as a completed sync.
 - **Simpler System Settings**: Appearance and Review controls are grouped separately. Theme choices use clear buttons, and the existing daily-card-limit picker remains available.
+- **Refined Settings Navigation**: Font size now uses a four-position slider, review controls keep consistent padded boundaries, and Account Settings uses larger options within a compact card with a subtle logo watermark. The navigation guide reflects these placements.
 - **More Accessible Study Flows**: Deck actions and account controls have clearer screen-reader labels. Deck browsing, review controls, and analytics are easier to use with larger text.
 - **Clearer Action Placement**: Public-deck downloads and sync retries are aligned to the lower-right of their cards for easier scanning and reachability.
 - **Smoother Large Libraries**: Home calculates deck and due-card summaries more efficiently, keeping large collections easier to browse.
