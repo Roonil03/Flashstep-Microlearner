@@ -64,13 +64,13 @@ const navigationTourScenes = <TourScene>[
     8,
     'View learning analytics',
     'Home → Analytics',
-    'Open Analytics to see learning progress, reviews, retention, and due cards. Choose 7, 30, or 90 days to change the reporting range. Analytics reflects synced learning data.',
+    'Open Analytics to see learning progress, reviews, retention, and due cards. Choose 7, 30, or 90 days to change the reporting range. The last successful snapshot appears while a newer result is fetched, including during a short offline period.',
   ),
   TourScene(
     9,
     'Adjust daily limits',
     'Home → Settings → System Settings',
-    'Open Settings, then System Settings. Daily review limit controls cards per day (1–500). Selective review chooses recommended decks. Review all cards overrides daily limits and due dates. Replay this guide from Settings → Relearn app navigation.',
+    'Open Settings, then System Settings. Use the Font size slider to choose Small, Device default, Large, or Extra large text. Daily review limit controls cards per day (1–500). Selective review chooses recommended decks. Review all cards overrides daily limits and due dates. Replay this guide from Settings → Relearn app navigation.',
   ),
 ];
 
@@ -265,14 +265,36 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
       ],
       _ => <Widget>[
         _action(Icons.settings_outlined, 'Settings → System Settings'),
+        const Align(alignment: Alignment.centerLeft, child: Text('Font size')),
+        Slider(
+          value: 1,
+          min: 0,
+          max: 3,
+          divisions: 3,
+          label: 'Device default',
+          onChanged: (_) {},
+        ),
+        const Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          alignment: WrapAlignment.spaceBetween,
+          children: [
+            Text('Small'),
+            Text('Device default'),
+            Text('Large'),
+            Text('Extra large'),
+          ],
+        ),
         DailyReviewLimitTile(limit: 25, onTap: _noop),
         SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
           value: true,
           onChanged: (_) {},
           title: const Text('Use selective review decks'),
           subtitle: const Text('Show recommended decks'),
         ),
         SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
           value: false,
           onChanged: (_) {},
           title: const Text('Review all cards'),
