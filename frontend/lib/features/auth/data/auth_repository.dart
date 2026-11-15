@@ -117,9 +117,9 @@ class AuthRepository {
       return false;
     }
 
-    String? resolvedUserId = await storage.readUserId();
-    resolvedUserId ??= _claimAsString(claims, 'user_id');
-    resolvedUserId ??= _claimAsString(claims, 'sub');
+    String? resolvedUserId = _claimAsString(claims, 'user_id') ??
+        _claimAsString(claims, 'sub') ??
+        await storage.readUserId();
 
     if (resolvedUserId == null || resolvedUserId.trim().isEmpty) {
       try {
@@ -149,7 +149,7 @@ class AuthRepository {
     await storage.writeUserId(resolvedUserId.trim());
     await databaseManager.switchToUser(resolvedUserId.trim());
 
-    unawaited(_refreshSessionProfile(token));
+    unawaited(_refreshSessionProfile(token, resolvedUserId.trim()));
     return true;
   }
 
@@ -189,20 +189,17 @@ class AuthRepository {
     }
   }
 
-  Future<void> _refreshSessionProfile(String token) async {
+  Future<void> _refreshSessionProfile(String token, String userId) async {
     try {
       final me = await api.getMe(token).timeout(const Duration(seconds: 3));
-      if (me.userId.isEmpty) {
-        return;
-      }
-
-      await storage.writeUserId(me.userId);
-      if (me.username.isNotEmpty) {
+      if (me.userId == userId &&
+          me.username.isNotEmpty &&
+          await storage.readToken() == token) {
         await storage.writeUsername(me.username);
       }
-      await databaseManager.switchToUser(me.userId);
     } on AuthApiException catch (e) {
-      if (e.statusCode == 401 || e.statusCode == 403) {
+      if ((e.statusCode == 401 || e.statusCode == 403) &&
+          await storage.readToken() == token) {
         await _resetSessionOnly();
       }
     } on TimeoutException {
