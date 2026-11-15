@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import '../../../core/network/api_errors.dart';
 import '../data/deck_repository.dart';
 
 class BrowsePublicDecksPage extends ConsumerStatefulWidget {
@@ -52,7 +53,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = networkErrorMessage(e);
         _loading = false;
       });
     }
@@ -113,7 +114,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to download deck: $e'),
+          content: Text(networkErrorMessage(e)),
           behavior: SnackBarBehavior.floating,
         ),
       );

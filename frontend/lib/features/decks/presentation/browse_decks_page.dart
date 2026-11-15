@@ -1,3 +1,4 @@
+import '../../../core/network/api_errors.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -131,7 +132,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update deck: $e'),
+          content: Text('Failed to update deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -198,7 +199,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete deck: $e'),
+          content: Text('Failed to delete deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );

@@ -1,3 +1,4 @@
+import '../../../core/network/api_errors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
 
@@ -58,7 +59,7 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to create deck: $e'),
+          content: Text('Failed to create deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -120,7 +121,7 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Enter a deck title';
                       }
-                      if (value.trim().length > 255) {
+                      if (value.trim().runes.length > 255) {
                         return 'Title must be 255 characters or less';
                       }
                       return null;

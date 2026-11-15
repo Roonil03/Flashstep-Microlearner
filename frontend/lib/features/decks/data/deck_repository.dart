@@ -1,3 +1,4 @@
+import '../../../core/network/api_errors.dart';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -51,7 +52,7 @@ class PublicDeckSummary {
       cardCount: (json['card_count'] as num?)?.toInt() ?? 0,
       updatedAt:
           DateTime.tryParse(json['updated_at']?.toString() ?? '')?.toUtc() ??
-              DateTime.now().toUtc(),
+          DateTime.now().toUtc(),
       version: (json['version'] as num?)?.toInt() ?? 1,
     );
   }
@@ -90,8 +91,8 @@ class DeckRepository {
   DeckRepository({
     required db.AppDatabase database,
     required SessionStorage storage,
-  })  : _database = database,
-        _storage = storage;
+  }) : _database = database,
+       _storage = storage;
 
   String _generateId() => _uuid.v4();
 
@@ -178,7 +179,18 @@ class DeckRepository {
     required Map<String, dynamic> payload,
     required DateTime createdAt,
   }) async {
-    await _database.into(_database.syncQueueItems).insert(
+    if (payload['title'] is String &&
+        (payload['title'] as String).runes.length > 255) {
+      throw StateError('Deck title must be 255 characters or less.');
+    }
+    if (utf8.encode(jsonEncode(payload)).length > (4 << 20) - 128) {
+      throw StateError(
+        'This change is too large to sync. Shorten its content and try again.',
+      );
+    }
+    await _database
+        .into(_database.syncQueueItems)
+        .insert(
           db.SyncQueueItemsCompanion.insert(
             operationId: operationId,
             type: type,
@@ -193,8 +205,7 @@ class DeckRepository {
   Future<void> _deleteSyncOperations(List<String> operationIds) async {
     if (operationIds.isEmpty) return;
     await (_database.delete(_database.syncQueueItems)
-          ..where((tbl) => tbl.operationId.isIn(operationIds)))
-        .go();
+      ..where((tbl) => tbl.operationId.isIn(operationIds))).go();
   }
 
   Future<String> createDeckOffline({
@@ -213,7 +224,9 @@ class DeckRepository {
     final normalizedDescription = _normalizeDescription(description);
 
     await _database.transaction(() async {
-      await _database.into(_database.decks).insert(
+      await _database
+          .into(_database.decks)
+          .insert(
             db.DecksCompanion.insert(
               id: deckId,
               userId: userId,
@@ -250,12 +263,10 @@ class DeckRepository {
   }
 
   Future<int> getCardCountForDeck(String deckId) async {
-    final cards = await (_database.select(_database.cards)
-          ..where(
-            (tbl) =>
-                tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
-          ))
-        .get();
+    final cards =
+        await (_database.select(_database.cards)..where(
+          (tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
+        )).get();
     return cards.length;
   }
 
@@ -273,14 +284,13 @@ class DeckRepository {
 
     final currentUserId = await _requireUserId();
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
 
     if (deck == null) {
       throw StateError('Deck not found.');
@@ -295,7 +305,9 @@ class DeckRepository {
     final cardId = _generateId();
 
     await _database.transaction(() async {
-      await _database.into(_database.cards).insert(
+      await _database
+          .into(_database.cards)
+          .insert(
             db.CardsCompanion.insert(
               id: cardId,
               deckId: deckId,
@@ -315,8 +327,7 @@ class DeckRepository {
           );
 
       await (_database.update(_database.decks)
-            ..where((tbl) => tbl.id.equals(deckId)))
-          .write(
+        ..where((tbl) => tbl.id.equals(deckId))).write(
         db.DecksCompanion(
           updatedAt: Value(now),
           version: Value(deck.version + 1),
@@ -350,7 +361,7 @@ class DeckRepository {
     return cardId;
   }
 
-    Future<int> importCardsOffline({
+  Future<int> importCardsOffline({
     required String deckId,
     required List<CsvCardDraft> cards,
   }) async {
@@ -366,35 +377,36 @@ class DeckRepository {
 
     final currentUserId = await _requireUserId();
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
 
     if (deck == null) {
       throw StateError('Deck not found.');
     }
 
-    final normalizedCards = cards.map((card) {
-      final front = card.front.trim();
-      final back = card.back.trim();
+    final normalizedCards = cards
+        .map((card) {
+          final front = card.front.trim();
+          final back = card.back.trim();
 
-      if (front.isEmpty || back.isEmpty) {
-        throw StateError(
-          'CSV row ${card.sourceRow} has an empty Front or Back value.',
-        );
-      }
+          if (front.isEmpty || back.isEmpty) {
+            throw StateError(
+              'CSV row ${card.sourceRow} has an empty Front or Back value.',
+            );
+          }
 
-      return CsvCardDraft(
-        front: front,
-        back: back,
-        sourceRow: card.sourceRow,
-      );
-    }).toList(growable: false);
+          return CsvCardDraft(
+            front: front,
+            back: back,
+            sourceRow: card.sourceRow,
+          );
+        })
+        .toList(growable: false);
 
     final existingCount = await getCardCountForDeck(deckId);
     final remainingSlots = maxCardsPerDeck - existingCount;
@@ -417,7 +429,9 @@ class DeckRepository {
       for (final draft in normalizedCards) {
         final cardId = _generateId();
 
-        await _database.into(_database.cards).insert(
+        await _database
+            .into(_database.cards)
+            .insert(
               db.CardsCompanion.insert(
                 id: cardId,
                 deckId: deckId,
@@ -461,8 +475,7 @@ class DeckRepository {
       }
 
       await (_database.update(_database.decks)
-            ..where((tbl) => tbl.id.equals(deckId)))
-          .write(
+        ..where((tbl) => tbl.id.equals(deckId))).write(
         db.DecksCompanion(
           updatedAt: Value(now),
           version: Value(nextDeckVersion),
@@ -485,14 +498,13 @@ class DeckRepository {
       throw StateError('Deck title cannot be empty.');
     }
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (deck == null) {
       throw StateError('Deck not found.');
     }
@@ -503,8 +515,7 @@ class DeckRepository {
 
     await _database.transaction(() async {
       await (_database.update(_database.decks)
-            ..where((tbl) => tbl.id.equals(deckId)))
-          .write(
+        ..where((tbl) => tbl.id.equals(deckId))).write(
         db.DecksCompanion(
           title: Value(trimmedTitle),
           description: Value(normalizedDescription),
@@ -546,23 +557,21 @@ class DeckRepository {
       throw StateError('Card front and back are required.');
     }
 
-    final card = await (_database.select(_database.cards)
-          ..where(
-            (tbl) => tbl.id.equals(cardId) & tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final card =
+        await (_database.select(_database.cards)..where(
+          (tbl) => tbl.id.equals(cardId) & tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (card == null) {
       throw StateError('Card not found.');
     }
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(card.deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(card.deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (deck == null) {
       throw StateError('Deck not found.');
     }
@@ -572,8 +581,7 @@ class DeckRepository {
 
     await _database.transaction(() async {
       await (_database.update(_database.cards)
-            ..where((tbl) => tbl.id.equals(cardId)))
-          .write(
+        ..where((tbl) => tbl.id.equals(cardId))).write(
         db.CardsCompanion(
           front: Value(trimmedFront),
           back: Value(trimmedBack),
@@ -609,23 +617,21 @@ class DeckRepository {
 
   Future<PendingCardDeletion> markCardDeletedOffline(String cardId) async {
     final currentUserId = await _requireUserId();
-    final card = await (_database.select(_database.cards)
-          ..where(
-            (tbl) => tbl.id.equals(cardId) & tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final card =
+        await (_database.select(_database.cards)..where(
+          (tbl) => tbl.id.equals(cardId) & tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (card == null) {
       throw StateError('Card not found.');
     }
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(card.deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(card.deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (deck == null) {
       throw StateError('Deck not found.');
     }
@@ -636,8 +642,7 @@ class DeckRepository {
 
     await _database.transaction(() async {
       await (_database.update(_database.cards)
-            ..where((tbl) => tbl.id.equals(card.id)))
-          .write(
+        ..where((tbl) => tbl.id.equals(card.id))).write(
         db.CardsCompanion(
           isDeleted: const Value(true),
           updatedAt: Value(now),
@@ -669,36 +674,59 @@ class DeckRepository {
       );
     });
 
-    return PendingCardDeletion(
-      operationId: operationId,
-      snapshot: card,
-    );
+    return PendingCardDeletion(operationId: operationId, snapshot: card);
   }
 
   Future<void> undoCardDeletion(PendingCardDeletion deletion) async {
     final currentUserId = await _requireUserId();
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deletion.snapshot.deckId) &
-                tbl.userId.equals(currentUserId),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deletion.snapshot.deckId) &
+              tbl.userId.equals(currentUserId),
+        )).getSingleOrNull();
     if (deck == null) {
       throw StateError('Deck not found.');
     }
 
-    final current = await (_database.select(_database.cards)
-          ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-        .getSingleOrNull();
+    final current =
+        await (_database.select(_database.cards)..where(
+          (tbl) => tbl.id.equals(deletion.snapshot.id),
+        )).getSingleOrNull();
 
     final now = DateTime.now().toUtc();
     final nextVersion = (current?.version ?? deletion.snapshot.version) + 1;
 
     await _database.transaction(() async {
+      final stillPresent =
+          await (_database.select(
+            _database.cards,
+          )..where((t) => t.id.equals(deletion.snapshot.id))).getSingleOrNull();
+      final parent =
+          await (_database.select(_database.decks)..where(
+            (t) =>
+                t.id.equals(deletion.snapshot.deckId) &
+                t.userId.equals(currentUserId),
+          )).getSingleOrNull();
+      if (stillPresent == null ||
+          parent == null ||
+          parent.isDeleted ||
+          (await _database.purgedIds(currentUserId, 'card', [
+            deletion.snapshot.id,
+          ])).isNotEmpty ||
+          (await _database.purgedIds(currentUserId, 'deck', [
+            deletion.snapshot.deckId,
+          ])).isNotEmpty ||
+          await _requireUserId() != currentUserId) {
+        throw StateError(
+          'This card has been permanently deleted and cannot be restored.',
+        );
+      }
       await _deleteSyncOperations([deletion.operationId]);
 
-      await _database.into(_database.cards).insertOnConflictUpdate(
+      await _database
+          .into(_database.cards)
+          .insertOnConflictUpdate(
             db.CardsCompanion.insert(
               id: deletion.snapshot.id,
               deckId: deletion.snapshot.deckId,
@@ -743,39 +771,39 @@ class DeckRepository {
   }
 
   Future<void> finalizeCardDeletion(PendingCardDeletion deletion) async {
-    final existing = await (_database.select(_database.cards)
-          ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-        .getSingleOrNull();
+    final existing =
+        await (_database.select(_database.cards)..where(
+          (tbl) => tbl.id.equals(deletion.snapshot.id),
+        )).getSingleOrNull();
     if (existing == null || !existing.isDeleted) {
       return;
     }
 
     await (_database.delete(_database.cards)
-          ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-        .go();
+      ..where((tbl) => tbl.id.equals(deletion.snapshot.id))).go();
   }
 
   Future<PendingDeckDeletion> markDeckDeletedOffline(String deckId) async {
     final currentUserId = await _requireUserId();
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
     if (deck == null) {
       throw StateError('Deck not found.');
     }
 
-    final activeCards = await (_database.select(_database.cards)
-          ..where(
-            (tbl) =>
-                tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
-          )
-          ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]))
-        .get();
+    final activeCards =
+        await (_database.select(_database.cards)
+              ..where(
+                (tbl) =>
+                    tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
+              )
+              ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]))
+            .get();
 
     final now = DateTime.now().toUtc();
     final deckNextVersion = deck.version + 1;
@@ -784,8 +812,7 @@ class DeckRepository {
 
     await _database.transaction(() async {
       await (_database.update(_database.decks)
-            ..where((tbl) => tbl.id.equals(deck.id)))
-          .write(
+        ..where((tbl) => tbl.id.equals(deck.id))).write(
         db.DecksCompanion(
           isDeleted: const Value(true),
           updatedAt: Value(now),
@@ -817,8 +844,7 @@ class DeckRepository {
         cardDeleteOperationIds.add(operationId);
 
         await (_database.update(_database.cards)
-              ..where((tbl) => tbl.id.equals(card.id)))
-            .write(
+          ..where((tbl) => tbl.id.equals(card.id))).write(
           db.CardsCompanion(
             isDeleted: const Value(true),
             updatedAt: Value(now),
@@ -861,22 +887,41 @@ class DeckRepository {
   }
 
   Future<void> undoDeckDeletion(PendingDeckDeletion deletion) async {
-    await _requireUserId();
-    final currentDeck = await (_database.select(_database.decks)
-          ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-        .getSingleOrNull();
+    final currentUserId = await _requireUserId();
+    final currentDeck =
+        await (_database.select(_database.decks)..where(
+          (tbl) => tbl.id.equals(deletion.snapshot.id),
+        )).getSingleOrNull();
 
     final now = DateTime.now().toUtc();
     final deckNextVersion =
         (currentDeck?.version ?? deletion.snapshot.version) + 1;
 
     await _database.transaction(() async {
+      final stillPresent =
+          await (_database.select(_database.decks)..where(
+            (t) =>
+                t.id.equals(deletion.snapshot.id) &
+                t.userId.equals(currentUserId),
+          )).getSingleOrNull();
+      if (stillPresent == null ||
+          deletion.snapshot.userId != currentUserId ||
+          (await _database.purgedIds(currentUserId, 'deck', [
+            deletion.snapshot.id,
+          ])).isNotEmpty ||
+          await _requireUserId() != currentUserId) {
+        throw StateError(
+          'This deck has been permanently deleted and cannot be restored.',
+        );
+      }
       await _deleteSyncOperations([
         deletion.operationId,
         ...deletion.cardDeleteOperationIds,
       ]);
 
-      await _database.into(_database.decks).insertOnConflictUpdate(
+      await _database
+          .into(_database.decks)
+          .insertOnConflictUpdate(
             db.DecksCompanion.insert(
               id: deletion.snapshot.id,
               userId: deletion.snapshot.userId,
@@ -909,12 +954,19 @@ class DeckRepository {
       );
 
       for (final card in deletion.cardSnapshots) {
-        final currentCard = await (_database.select(_database.cards)
-              ..where((tbl) => tbl.id.equals(card.id)))
-            .getSingleOrNull();
-        final nextVersion = (currentCard?.version ?? card.version) + 1;
+        final currentCard =
+            await (_database.select(_database.cards)
+              ..where((tbl) => tbl.id.equals(card.id))).getSingleOrNull();
+        if (currentCard == null ||
+            (await _database.purgedIds(currentUserId, 'card', [
+              card.id,
+            ])).isNotEmpty)
+          continue;
+        final nextVersion = currentCard.version + 1;
 
-        await _database.into(_database.cards).insertOnConflictUpdate(
+        await _database
+            .into(_database.cards)
+            .insertOnConflictUpdate(
               db.CardsCompanion.insert(
                 id: card.id,
                 deckId: card.deckId,
@@ -960,20 +1012,19 @@ class DeckRepository {
   }
 
   Future<void> finalizeDeckDeletion(PendingDeckDeletion deletion) async {
-    final existing = await (_database.select(_database.decks)
-          ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-        .getSingleOrNull();
+    final existing =
+        await (_database.select(_database.decks)..where(
+          (tbl) => tbl.id.equals(deletion.snapshot.id),
+        )).getSingleOrNull();
     if (existing == null || !existing.isDeleted) {
       return;
     }
 
     await _database.transaction(() async {
       await (_database.delete(_database.cards)
-            ..where((tbl) => tbl.deckId.equals(deletion.snapshot.id)))
-          .go();
+        ..where((tbl) => tbl.deckId.equals(deletion.snapshot.id))).go();
       await (_database.delete(_database.decks)
-            ..where((tbl) => tbl.id.equals(deletion.snapshot.id)))
-          .go();
+        ..where((tbl) => tbl.id.equals(deletion.snapshot.id))).go();
     });
   }
 
@@ -989,15 +1040,12 @@ class DeckRepository {
       url += '?search=$encodedQuery';
     }
 
-    final response = await http.get(
-      Uri.parse(url),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final response = await http
+        .get(Uri.parse(url), headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Failed to load public decks (${response.statusCode}): ${response.body}',
-      );
+      throw ApiRequestException(apiErrorMessage(response));
     }
 
     final decoded = jsonDecode(response.body);
@@ -1019,18 +1067,18 @@ class DeckRepository {
 
     final localUserId = await _requireUserId();
 
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/decks/$sourceDeckId/download'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await http
+        .post(
+          Uri.parse('${ApiConfig.baseUrl}/decks/$sourceDeckId/download'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Failed to download deck (${response.statusCode}): ${response.body}',
-      );
+      throw ApiRequestException(apiErrorMessage(response));
     }
 
     final decoded = jsonDecode(response.body);
@@ -1055,13 +1103,15 @@ class DeckRepository {
 
     final deckCreatedAt =
         DateTime.tryParse(rawDeck['created_at']?.toString() ?? '')?.toUtc() ??
-            DateTime.now().toUtc();
+        DateTime.now().toUtc();
     final deckUpdatedAt =
         DateTime.tryParse(rawDeck['updated_at']?.toString() ?? '')?.toUtc() ??
-            deckCreatedAt;
+        deckCreatedAt;
 
     await _database.transaction(() async {
-      await _database.into(_database.decks).insertOnConflictUpdate(
+      await _database
+          .into(_database.decks)
+          .insertOnConflictUpdate(
             db.DecksCompanion.insert(
               id: deckId,
               userId: rawDeck['user_id']?.toString() ?? localUserId,
@@ -1082,22 +1132,31 @@ class DeckRepository {
         }
 
         final cardCreatedAt =
-            DateTime.tryParse(rawCard['created_at']?.toString() ?? '')
-                    ?.toUtc() ??
-                deckCreatedAt;
+            DateTime.tryParse(
+              rawCard['created_at']?.toString() ?? '',
+            )?.toUtc() ??
+            deckCreatedAt;
         final cardUpdatedAt =
-            DateTime.tryParse(rawCard['updated_at']?.toString() ?? '')
-                    ?.toUtc() ??
-                cardCreatedAt;
-        final dueTimestamp = rawCard['due_timestamp'] != null
-            ? DateTime.tryParse(rawCard['due_timestamp'].toString())?.toUtc()
-            : null;
-        final lastReviewedAt = rawCard['last_reviewed_at'] != null
-            ? DateTime.tryParse(rawCard['last_reviewed_at'].toString())
-                ?.toUtc()
-            : null;
+            DateTime.tryParse(
+              rawCard['updated_at']?.toString() ?? '',
+            )?.toUtc() ??
+            cardCreatedAt;
+        final dueTimestamp =
+            rawCard['due_timestamp'] != null
+                ? DateTime.tryParse(
+                  rawCard['due_timestamp'].toString(),
+                )?.toUtc()
+                : null;
+        final lastReviewedAt =
+            rawCard['last_reviewed_at'] != null
+                ? DateTime.tryParse(
+                  rawCard['last_reviewed_at'].toString(),
+                )?.toUtc()
+                : null;
 
-        await _database.into(_database.cards).insertOnConflictUpdate(
+        await _database
+            .into(_database.cards)
+            .insertOnConflictUpdate(
               db.CardsCompanion.insert(
                 id: cardId,
                 deckId: rawCard['deck_id']?.toString() ?? deckId,
@@ -1105,10 +1164,12 @@ class DeckRepository {
                 back: rawCard['back']?.toString() ?? '',
                 state: Value(rawCard['state']?.toString() ?? 'new'),
                 interval: Value((rawCard['interval'] as num?)?.toDouble() ?? 0),
-                easeFactor:
-                    Value((rawCard['ease_factor'] as num?)?.toDouble() ?? 2.5),
-                repetitionCount:
-                    Value((rawCard['repetition_count'] as num?)?.toInt() ?? 0),
+                easeFactor: Value(
+                  (rawCard['ease_factor'] as num?)?.toDouble() ?? 2.5,
+                ),
+                repetitionCount: Value(
+                  (rawCard['repetition_count'] as num?)?.toInt() ?? 0,
+                ),
                 dueTimestamp: Value(dueTimestamp),
                 lastReviewedAt: Value(lastReviewedAt),
                 createdAt: cardCreatedAt,
@@ -1133,8 +1194,7 @@ class DeckRepository {
     yield* (_database.select(_database.decks)
           ..where(
             (tbl) =>
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
+                tbl.userId.equals(currentUserId) & tbl.isDeleted.equals(false),
           )
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)]))
         .watch();
@@ -1147,14 +1207,12 @@ class DeckRepository {
       return;
     }
 
-    yield* (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .watchSingleOrNull();
+    yield* (_database.select(_database.decks)..where(
+      (tbl) =>
+          tbl.id.equals(deckId) &
+          tbl.userId.equals(currentUserId) &
+          tbl.isDeleted.equals(false),
+    )).watchSingleOrNull();
   }
 
   Stream<List<db.Card>> watchCardsByDeck(String deckId) async* {
@@ -1164,14 +1222,13 @@ class DeckRepository {
       return;
     }
 
-    final deck = await (_database.select(_database.decks)
-          ..where(
-            (tbl) =>
-                tbl.id.equals(deckId) &
-                tbl.userId.equals(currentUserId) &
-                tbl.isDeleted.equals(false),
-          ))
-        .getSingleOrNull();
+    final deck =
+        await (_database.select(_database.decks)..where(
+          (tbl) =>
+              tbl.id.equals(deckId) &
+              tbl.userId.equals(currentUserId) &
+              tbl.isDeleted.equals(false),
+        )).getSingleOrNull();
 
     if (deck == null) {
       yield const <db.Card>[];
@@ -1180,8 +1237,7 @@ class DeckRepository {
 
     yield* (_database.select(_database.cards)
           ..where(
-            (tbl) =>
-                tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
+            (tbl) => tbl.deckId.equals(deckId) & tbl.isDeleted.equals(false),
           )
           ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAt)]))
         .watch();

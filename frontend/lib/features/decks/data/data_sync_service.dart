@@ -44,7 +44,8 @@ class SyncResult {
 
 class _SyncSession {
   final String userId, token;
-  const _SyncSession(this.userId, this.token);
+  final int metadataRevision;
+  const _SyncSession(this.userId, this.token, this.metadataRevision);
 }
 
 class _PendingGroup {
@@ -75,7 +76,9 @@ class DeckSyncService {
   final SyncMetadataStore _metadata;
   final String _baseUrl;
   final SyncStatusNotifier? _status;
-  final Map<String, Future<SyncResult>> _inFlight = {};
+  static final _databaseSyncs = Expando<Map<String, Future<SyncResult>>>();
+  Map<String, Future<SyncResult>> get _inFlight =>
+      _databaseSyncs[_database] ??= {};
   bool _disposed = false;
   DeckSyncService({
     required db.AppDatabase database,
@@ -108,7 +111,7 @@ class DeckSyncService {
     final existing = _inFlight[user];
     if (existing != null) return existing;
     _status?.start(user);
-    final work = _sync(_SyncSession(user, token));
+    final work = _sync(_SyncSession(user, token, _metadata.revision(user)));
     _inFlight[user] = work;
     try {
       final result = await work;
@@ -131,6 +134,10 @@ class DeckSyncService {
 
   Future<void> _assertActive(_SyncSession session) async {
     if (_disposed ||
+        (_database.databaseFileName != ':memory:' &&
+            _database.databaseFileName !=
+                db.AppDatabase.fileNameForUser(session.userId)) ||
+        _metadata.revision(session.userId) != session.metadataRevision ||
         await _storage.readUserId() != session.userId ||
         await _storage.readToken() != session.token) {
       throw StateError('The active account changed; sync was stopped.');
@@ -170,9 +177,19 @@ class DeckSyncService {
     try {
       await _assertActive(session);
       final fingerprints = await _metadata.read(session.userId);
-      await _uploadPendingChanges(session, fingerprints);
+      final rejected = await _uploadPendingChanges(session, fingerprints);
+      // Upload first so the server can retain an offline review's card ID even
+      // when its never-uploaded parent/child content has already been purged.
+      await _reconcilePurged(session);
       await _reconcile(session, fingerprints);
+      // A different device may have logged in and purged during this sync.
+      await _reconcilePurged(session);
       await _assertActive(session);
+      if (rejected > 0) {
+        return SyncResult.warning(
+          '$rejected pending change(s) need attention and remain on this device. Other changes were synced. Edit the affected content and retry sync.',
+        );
+      }
       await _storage.writeLastSyncAt(
         DateTime.now().toUtc(),
         userId: session.userId,
@@ -194,14 +211,105 @@ class DeckSyncService {
       );
     } on _SyncHttpException catch (e) {
       return SyncResult.warning(e.message, statusCode: e.statusCode);
-    } catch (e) {
-      return SyncResult.warning('Sync failed: $e');
+    } catch (_) {
+      return const SyncResult.warning(
+        'Sync could not finish. Pending changes are retained; please retry.',
+      );
     }
+  }
+
+  Future<void> _reconcilePurged(_SyncSession session) async {
+    var cursor = await _database.receiptCursor(session.userId);
+    final visited = <String>{};
+    do {
+      final suffix = '?cursor=${Uri.encodeComponent(cursor)}';
+      final response = await _request(session, 'sync/purged$suffix');
+      // Older servers continue using their soft-delete reconciliation contract.
+      if (response.statusCode == 404 || response.statusCode == 405) return;
+      _requireSuccess(response, 'Permanent deletion reconciliation');
+      final page = jsonDecode(response.body) as Map<String, dynamic>;
+      final records = page['purged'];
+      if (records is! List)
+        throw const FormatException('Missing deletion receipts');
+      final decks = <String>{}, cards = <String>{};
+      for (final raw in records) {
+        if (raw is! Map ||
+            raw['id'] is! String ||
+            !['deck', 'card'].contains(raw['entity'])) {
+          throw const FormatException('Invalid deletion receipt');
+        }
+        (raw['entity'] == 'deck' ? decks : cards).add(raw['id'] as String);
+      }
+      final next = page['next_cursor'] as String?;
+      final checkpoint = page['checkpoint_cursor'] as String? ?? next;
+      if (checkpoint != null &&
+          (int.tryParse(checkpoint) == null ||
+              int.parse(checkpoint) < int.parse(cursor))) {
+        throw const FormatException('Invalid deletion checkpoint');
+      }
+      await _database.transaction(() async {
+        await _assertActive(session);
+        if (decks.isEmpty && cards.isEmpty) {
+          if (checkpoint != null)
+            await _database.saveReceiptCursor(session.userId, checkpoint);
+          await _assertActive(session);
+          return;
+        }
+        // Database files and requests are both account scoped. Receipts override
+        // pending edits/undo: permanent IDs must never be uploaded as new content.
+        final children =
+            await (_database.select(_database.cards)
+              ..where((t) => t.deckId.isIn(decks))).get();
+        cards.addAll(children.map((c) => c.id));
+        await _database.rememberPurged(session.userId, 'deck', decks);
+        await _database.rememberPurged(session.userId, 'card', cards);
+        final pending =
+            await (_database.select(_database.syncQueueItems)
+              ..where((t) => t.synced.equals(false))).get();
+        final discard = <String>[];
+        for (final item in pending) {
+          if (item.entity != 'deck' && item.entity != 'card') continue;
+          final raw = _pendingPayload(item.payload);
+          if (raw == null) continue;
+          if ((item.entity == 'deck' && decks.contains(raw['id'])) ||
+              (item.entity == 'card' &&
+                  (cards.contains(raw['id']) ||
+                      decks.contains(raw['deck_id'])))) {
+            discard.add(item.operationId);
+          }
+        }
+        for (var i = 0; i < discard.length; i += 400) {
+          await (_database.delete(_database.syncQueueItems)..where(
+            (t) => t.operationId.isIn(discard.skip(i).take(400).toList()),
+          )).go();
+        }
+        // Reviews are historical records and intentionally survive content purge.
+        for (final id in cards) {
+          await (_database.delete(_database.cards)
+            ..where((t) => t.id.equals(id))).go();
+        }
+        for (final id in decks) {
+          await (_database.delete(_database.decks)..where(
+            (t) => t.id.equals(id) & t.userId.equals(session.userId),
+          )).go();
+        }
+        // The receipt merge and its cursor commit together. Older servers lack
+        // a terminal cursor: retain their last full-page cursor (<=500 replay).
+        if (checkpoint != null) {
+          await _database.saveReceiptCursor(session.userId, checkpoint);
+        }
+        await _assertActive(session);
+      });
+      if (next != null && !visited.add(next))
+        throw const FormatException('Repeated deletion cursor');
+      if (next == null) return;
+      cursor = next;
+    } while (true);
   }
 
   // Snapshot IDs first, then read payloads in bounded groups. Compact redundant
   // deck/card edits to the newest queued state; every distinct review is kept.
-  Future<void> _uploadPendingChanges(
+  Future<int> _uploadPendingChanges(
     _SyncSession session,
     Map<String, String> fingerprints,
   ) async {
@@ -212,6 +320,7 @@ class DeckSyncService {
             )
             .get();
     final groups = <String, _PendingGroup>{};
+    var rejected = 0;
     for (var offset = 0; offset < snapshot.length; offset += 200) {
       await _assertActive(session);
       final ids =
@@ -224,13 +333,12 @@ class DeckSyncService {
           await (_database.select(_database.syncQueueItems)
             ..where((t) => t.operationId.isIn(ids))).get();
       for (final item in items) {
-        final raw = jsonDecode(item.payload);
-        if (raw is! Map<String, dynamic> ||
+        final raw = _pendingPayload(item.payload);
+        if (raw == null ||
             !['deck', 'card', 'review_log'].contains(item.entity) ||
             raw['id'] is! String) {
-          throw const FormatException(
-            'Invalid pending sync operation; no operation was discarded.',
-          );
+          rejected++;
+          continue;
         }
         final id = raw['id'] as String;
         final key = '${item.entity}:$id';
@@ -239,7 +347,8 @@ class DeckSyncService {
               (raw['updated_at'] ?? raw['created_at'] ?? '').toString(),
             )?.toUtc() ??
             item.createdAt;
-        final version = (raw['version'] as num?)?.toInt() ?? 0;
+        final version =
+            raw['version'] is num ? (raw['version'] as num).toInt() : 0;
         final deckId =
             item.entity == 'deck' ? id : (raw['deck_id']?.toString() ?? '');
         final group = groups.putIfAbsent(
@@ -286,7 +395,13 @@ class DeckSyncService {
           if (row == null) continue; // Undo may have removed it.
           final size = utf8.encode(row.payload).length;
           if (batch.isNotEmpty && bytes + size > (1 << 20)) {
-            await _sendBatch(session, entity, batch, payloads, fingerprints);
+            rejected += await _sendBatch(
+              session,
+              entity,
+              batch,
+              payloads,
+              fingerprints,
+            );
             batch = [];
             payloads = [];
             bytes = 0;
@@ -296,12 +411,19 @@ class DeckSyncService {
           bytes += size;
         }
         if (batch.isNotEmpty)
-          await _sendBatch(session, entity, batch, payloads, fingerprints);
+          rejected += await _sendBatch(
+            session,
+            entity,
+            batch,
+            payloads,
+            fingerprints,
+          );
       }
     }
+    return rejected;
   }
 
-  Future<void> _sendBatch(
+  Future<int> _sendBatch(
     _SyncSession session,
     String entity,
     List<_PendingGroup> groups,
@@ -309,6 +431,44 @@ class DeckSyncService {
     Map<String, String> fingerprints,
   ) async {
     await _assertActive(session);
+    final liveOperations =
+        (await (_database.select(_database.syncQueueItems)..where(
+              (t) => t.operationId.isIn(groups.map((g) => g.chosen).toList()),
+            )).get())
+            .map((r) => r.operationId)
+            .toSet();
+    final goneDecks = await _database.purgedIds(
+      session.userId,
+      'deck',
+      groups.map((g) => g.deckId),
+    );
+    final goneEntities = await _database.purgedIds(
+      session.userId,
+      entity,
+      groups.map((g) => g.id),
+    );
+    final keep = <int>[];
+    for (var i = 0; i < groups.length; i++) {
+      final group = groups[i];
+      if (!liveOperations.contains(group.chosen)) continue;
+      if (entity != 'review_log' &&
+          (goneEntities.contains(group.id) ||
+              goneDecks.contains(group.deckId))) {
+        for (final operation in group.operations) {
+          await (_database.delete(_database.syncQueueItems)
+            ..where((t) => t.operationId.equals(operation))).go();
+        }
+        continue;
+      }
+      keep.add(i);
+    }
+    groups = keep.map((i) => groups[i]).toList();
+    payloads = keep.map((i) => payloads[i]).toList();
+    if (groups.isEmpty) return 0;
+    if (groups.length == 1 &&
+        utf8.encode(jsonEncode(payloads.single)).length > (4 << 20) - 128) {
+      return 1;
+    }
     final affected =
         groups.map((g) => g.deckId).where((id) => id.isNotEmpty).toSet();
     if (entity == 'review_log') {
@@ -323,7 +483,11 @@ class DeckSyncService {
     }
     // Persist invalidation before acknowledging queue rows, even if a later
     // batch fails or an unchanged server revision rejects a stale local edit.
-    await _metadata.write(session.userId, fingerprints);
+    await _metadata.write(
+      session.userId,
+      fingerprints,
+      expectedRevision: session.metadataRevision,
+    );
     final key =
         {
           'deck': 'decks',
@@ -335,6 +499,26 @@ class DeckSyncService {
       'sync/upload',
       payload: {'decks': [], 'cards': [], 'review_logs': [], key: payloads},
     );
+    // Validation is atomic server-side. Bisect only input/size failures so one
+    // historical or malformed operation cannot hold unrelated changes hostage.
+    if ([400, 413, 422].contains(response.statusCode)) {
+      if (groups.length == 1) return 1;
+      final middle = groups.length ~/ 2;
+      return await _sendBatch(
+            session,
+            entity,
+            groups.sublist(0, middle),
+            payloads.sublist(0, middle),
+            fingerprints,
+          ) +
+          await _sendBatch(
+            session,
+            entity,
+            groups.sublist(middle),
+            payloads.sublist(middle),
+            fingerprints,
+          );
+    }
     _requireSuccess(response, 'Upload');
     await _database.transaction(() async {
       await _assertActive(session);
@@ -351,6 +535,16 @@ class DeckSyncService {
       }
       await _assertActive(session);
     });
+    return 0;
+  }
+
+  Map<String, dynamic>? _pendingPayload(String payload) {
+    try {
+      final raw = jsonDecode(payload);
+      return raw is Map<String, dynamic> ? raw : null;
+    } on FormatException {
+      return null;
+    }
   }
 
   Future<_ProtectedChanges> _protectedChanges() async {
@@ -359,7 +553,8 @@ class DeckSyncService {
         await (_database.select(_database.syncQueueItems)
           ..where((t) => t.synced.equals(false))).get();
     for (final row in rows) {
-      final raw = jsonDecode(row.payload) as Map<String, dynamic>;
+      final raw = _pendingPayload(row.payload);
+      if (raw == null) continue;
       final id = raw['id'].toString();
       if (row.entity == 'deck') {
         result.decks.add(id);
@@ -386,7 +581,7 @@ class DeckSyncService {
           cursor == null ? '' : '&cursor=${Uri.encodeComponent(cursor)}';
       final response = await _request(
         session,
-        'sync/manifest?limit=500$suffix',
+        'sync/manifest?limit=500&include_purged=false$suffix',
       );
       if (cursor == null &&
           (response.statusCode == 404 || response.statusCode == 405)) {
@@ -404,12 +599,15 @@ class DeckSyncService {
           await (_database.select(_database.decks)
             ..where((t) => t.id.isIn(ids))).get();
       final localIds = local.map((d) => d.id).toSet();
+      final purged = await _database.purgedIds(session.userId, 'deck', ids);
       final changed =
           entries
               .where(
                 (e) =>
-                    fingerprints[e['id']] != e['fingerprint'] ||
-                    !localIds.contains(e['id']),
+                    e['is_purged'] != true &&
+                    !purged.contains(e['id']) &&
+                    (fingerprints[e['id']] != e['fingerprint'] ||
+                        !localIds.contains(e['id'])),
               )
               .toList();
       seen.addAll(ids);
@@ -425,6 +623,7 @@ class DeckSyncService {
             payload: {
               'deck_ids': deckIds,
               'limit': 500,
+              'include_purged': false,
               if (cardCursor != null) 'cursor': cardCursor,
             },
           );
@@ -451,7 +650,11 @@ class DeckSyncService {
           }
         }
         await _assertActive(session);
-        await _metadata.write(session.userId, fingerprints);
+        await _metadata.write(
+          session.userId,
+          fingerprints,
+          expectedRevision: session.metadataRevision,
+        );
       }
       cursor = page['next_cursor'] as String?;
       if (cursor != null && !visited.add(cursor)) {
@@ -478,7 +681,11 @@ class DeckSyncService {
       (id, _) => id != '__reviews' && !seen.contains(id),
     );
     await _assertActive(session);
-    await _metadata.write(session.userId, fingerprints);
+    await _metadata.write(
+      session.userId,
+      fingerprints,
+      expectedRevision: session.metadataRevision,
+    );
   }
 
   Future<void> _reconcileReviews(_SyncSession session) async {
@@ -581,6 +788,15 @@ class DeckSyncService {
     await _database.transaction(() async {
       await _assertActive(session);
       final protected = await _protectedChanges();
+      final purgedDecks = await _database.purgedIds(localUserId, 'deck', [
+        ...deckIds,
+        ...remoteCards.map((e) => (e as Map)['deck_id'].toString()),
+      ]);
+      final purgedCards = await _database.purgedIds(
+        localUserId,
+        'card',
+        cardIds,
+      );
       final deckWrites = <db.DecksCompanion>[];
       final cardWrites = <db.CardsCompanion>[];
       final localDecks = {
@@ -615,7 +831,8 @@ class DeckSyncService {
 
         if (rawDeck['user_id']?.toString() != localUserId)
           throw const FormatException('Invalid deck owner');
-        if (protected.decks.contains(deckId)) continue;
+        if (protected.decks.contains(deckId) || purgedDecks.contains(deckId))
+          continue;
         final localDeck = localDecks[deckId];
 
         deckWrites.add(
@@ -663,7 +880,9 @@ class DeckSyncService {
                 )?.toUtc()
                 : null;
 
-        if (protected.cards.contains(cardId) ||
+        if (purgedCards.contains(cardId) ||
+            purgedDecks.contains(rawCard['deck_id']?.toString()) ||
+            protected.cards.contains(cardId) ||
             protected.decks.contains(rawCard['deck_id']?.toString()))
           continue;
         final localCard = localCards[cardId];

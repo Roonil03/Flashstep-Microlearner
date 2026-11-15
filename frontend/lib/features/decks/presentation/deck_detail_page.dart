@@ -1,3 +1,4 @@
+import '../../../core/network/api_errors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
 
@@ -93,7 +94,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save card: $e'),
+          content: Text('Failed to save card: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -143,7 +144,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update deck: $e'),
+          content: Text('Failed to update deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -214,7 +215,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete deck: $e'),
+          content: Text('Failed to delete deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -259,7 +260,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update card: $e'),
+          content: Text('Failed to update card: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -326,7 +327,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete card: $e'),
+          content: Text('Failed to delete card: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
