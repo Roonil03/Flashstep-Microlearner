@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
 import '../../../core/network/providers.dart';
+import '../../../core/network/api_errors.dart';
+import '../data/auth_api.dart';
 import '../data/auth_repository.dart';
 
 class LoginCubit extends Cubit<bool> {
@@ -94,8 +96,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
           backgroundColor:
               isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
-          content: const Text(
-            'Wrong email or password',
+          content: Text(
+            e is AuthApiException ? e.message : networkErrorMessage(e),
             style: TextStyle(color: Colors.white),
           ),
         ),

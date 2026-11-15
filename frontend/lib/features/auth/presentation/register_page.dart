@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/network/providers.dart';
+import '../../../core/network/api_errors.dart';
+import '../data/auth_api.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -95,7 +97,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       Navigator.pushReplacementNamed(context, AppRoutes.login);
     } catch (e) {
       if (!mounted) return;
-      showSnack("Registration failed: $e");
+      showSnack(e is AuthApiException ? e.message : networkErrorMessage(e));
     }
 
     if (mounted) setState(() => isLoading = false);

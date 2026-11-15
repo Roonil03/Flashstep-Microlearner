@@ -29,13 +29,16 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
   }
 
   Future<void> _refresh() async {
-    await ref
-        .read(analyticsRepositoryProvider)
-        .clearCachedDashboard(rangeDays: _rangeDays);
-    ref.invalidate(analyticsDashboardProvider(_rangeDays));
+    final rangeDays = _rangeDays;
     try {
-      await ref.read(analyticsDashboardProvider(_rangeDays).future);
-    } catch (_) {}
+      await ref.read(refreshAnalyticsProvider)(rangeDays);
+      if (mounted) ref.invalidate(analyticsDashboardProvider(rangeDays));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_resolveAnalyticsError(error).message)),
+      );
+    }
   }
 
   @override
@@ -224,11 +227,21 @@ _AnalyticsErrorData _resolveAnalyticsError(Object error) {
 
   final text = error.toString();
 
-  if (text.contains('signed in')) {
+  if (text.contains('signed in') ||
+      text.contains('Sign in') ||
+      text.contains('sign in')) {
     return const _AnalyticsErrorData(
       title: 'Sign in required',
       message: 'Please sign in again to view your analytics dashboard.',
       icon: Icons.lock_outline_rounded,
+    );
+  }
+
+  if (error is AnalyticsLoadException) {
+    return _AnalyticsErrorData(
+      title: 'Could not load analytics',
+      message: error.message,
+      icon: Icons.error_outline,
     );
   }
 
