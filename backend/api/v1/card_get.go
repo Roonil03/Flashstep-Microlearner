@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 func GetDeckCards(c *gin.Context) {
 	userID := c.GetString("user_id")
 	deckID := c.Param("deck_id")
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.deck_id, c.front, c.back, c.state,
 		       c.due_timestamp, c.updated_at, c.version, c.is_deleted
 		FROM cards c
@@ -23,7 +24,7 @@ func GetDeckCards(c *gin.Context) {
 		ORDER BY c.created_at DESC
 	`, deckID, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer rows.Close()
@@ -45,7 +46,7 @@ func GetDeckCards(c *gin.Context) {
 			&version,
 			&isDeleted,
 		); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperror.Internal(c, err)
 			return
 		}
 		cards = append(cards, gin.H{
@@ -61,7 +62,7 @@ func GetDeckCards(c *gin.Context) {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, cards)

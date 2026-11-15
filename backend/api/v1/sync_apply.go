@@ -57,7 +57,27 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, user.String()); err != nil {
 		return err
 	}
+	claims := []string{}
+	for _, d := range decks {
+		claims = append(claims, "deck:"+d.ID.String())
+	}
+	for _, c := range cards {
+		claims = append(claims, "card:"+c.ID.String(), "deck:"+c.DeckID.String())
+	}
+	for _, l := range logs {
+		claims = append(claims, "card:"+l.CardID.String())
+	}
+	if err := repositories.LockContentIDs(ctx, tx, claims); err != nil {
+		return err
+	}
+	decks, cards, archivedCards, err := filterPurgedChanges(ctx, tx, user, decks, cards, logs)
+	if err != nil {
+		return err
+	}
 	deckIDs, cardIDs, logIDs := []string{}, []string{}, []string{}
+	for _, deck := range archivedCards {
+		deckIDs = append(deckIDs, deck.String())
+	}
 	deletedDeckIDs := []string{}
 	for _, d := range decks {
 		deckIDs = append(deckIDs, d.ID.String())
@@ -342,6 +362,12 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			return invalidSync("review log user_id does not match authenticated user")
 		}
 		card, ok := cardState[l.CardID]
+		if !ok {
+			if deck, archived := archivedCards[l.CardID]; archived {
+				card = cardRevision{deck: deck, owner: user, deleted: true}
+				ok = true
+			}
+		}
 		if !ok || card.owner != user {
 			return invalidSync("review log references a missing or unauthorized card")
 		}
@@ -353,8 +379,12 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		}
 		acceptedLogs[l.ID] = l
 		existingLogs[l.ID] = logReference{user, l.CardID}
-		impactedCards[l.CardID] = true
-		impactedDecks[card.deck] = true
+		if _, archived := archivedCards[l.CardID]; !archived {
+			impactedCards[l.CardID] = true
+		}
+		if d, present := deckState[card.deck]; present && d.owner == user {
+			impactedDecks[card.deck] = true
+		}
 	}
 	cardRows := [][]any{}
 	cardWriteIDs := sortedSyncIDs(acceptedCards)

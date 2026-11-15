@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 	"time"
 
@@ -17,7 +18,7 @@ func GetDecks(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, user_id, title, description, is_public, created_at, updated_at, version, is_deleted
 		FROM decks
 		WHERE user_id=$1
@@ -25,7 +26,7 @@ func GetDecks(c *gin.Context) {
 		ORDER BY updated_at DESC, created_at DESC, id DESC
 	`, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer rows.Close()
@@ -51,7 +52,7 @@ func GetDecks(c *gin.Context) {
 			&version,
 			&isDeleted,
 		); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperror.Internal(c, err)
 			return
 		}
 
@@ -69,7 +70,7 @@ func GetDecks(c *gin.Context) {
 	}
 
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 

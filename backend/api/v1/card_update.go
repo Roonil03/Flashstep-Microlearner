@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 type UpdateCardRequest struct {
 	Front   string `json:"front"`
 	Back    string `json:"back"`
-	Version int    `json:"version"`
+	Version int    `json:"version" binding:"required,min=1"`
 }
 
 func UpdateCard(c *gin.Context) {
@@ -20,7 +21,7 @@ func UpdateCard(c *gin.Context) {
 
 	var req UpdateCardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
@@ -47,9 +48,9 @@ func UpdateCard(c *gin.Context) {
 			  AND is_deleted=false
 		  )
 	`
-	res, err := db.DB.Exec(query, req.Front, req.Back, id, req.Version, userID)
+	res, err := db.DB.ExecContext(c.Request.Context(), query, req.Front, req.Back, id, req.Version, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 

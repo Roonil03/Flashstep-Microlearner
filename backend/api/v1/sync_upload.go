@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"errors"
 	"net/http"
 	"sort"
@@ -331,12 +332,24 @@ func SyncUpload(c *gin.Context) {
 
 	var payload SyncUploadPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
 	decks := make([]syncDeck, 0, len(payload.Decks))
+	if len(payload.Decks)+len(payload.Cards)+len(payload.ReviewLogs) > 1000 {
+		c.JSON(400, gin.H{"error": "upload at most 1000 records per request"})
+		return
+	}
 	for _, raw := range payload.Decks {
+		if err := validateSyncRecord(raw, "deck"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if owner := asString(raw["user_id"]); owner != "" && owner != userID.String() {
+			c.JSON(400, gin.H{"error": "invalid deck owner"})
+			return
+		}
 		deck, err := normalizeDeck(raw)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -351,6 +364,10 @@ func SyncUpload(c *gin.Context) {
 
 	cards := make([]syncCard, 0, len(payload.Cards))
 	for _, raw := range payload.Cards {
+		if err := validateSyncRecord(raw, "card"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		card, err := normalizeCard(raw)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -367,6 +384,10 @@ func SyncUpload(c *gin.Context) {
 
 	reviewLogs := make([]syncReviewLog, 0, len(payload.ReviewLogs))
 	for _, raw := range payload.ReviewLogs {
+		if err := validateSyncRecord(raw, "review_log"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		reviewLog, err := normalizeReviewLog(raw, userID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -406,16 +427,20 @@ func SyncUpload(c *gin.Context) {
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer tx.Rollback()
 	if err := applySyncChanges(ctx, tx, userID, decks, cards, reviewLogs); err != nil {
-		c.JSON(syncErrorStatus(err), gin.H{"error": err.Error()})
+		if syncErrorStatus(err) == 400 {
+			c.JSON(400, gin.H{"error": err.Error()})
+		} else {
+			httperror.Internal(c, err)
+		}
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 

@@ -132,9 +132,9 @@ func (r *ProgressRepository) RecomputeDeckProgress(ctx context.Context, tx txRun
 			COUNT(*) FILTER (WHERE rl.rating <> 'again') AS correct_reviews,
 			MAX(DATE(rl.reviewed_at)) AS last_review_date
 		FROM review_logs rl
-		JOIN cards c ON c.id = rl.card_id
-		JOIN decks d ON d.id = c.deck_id
-		WHERE rl.user_id = $1 AND c.deck_id = $2 AND d.user_id = $1
+		LEFT JOIN cards c ON c.id = rl.card_id
+		JOIN decks d ON d.id = COALESCE(c.deck_id,rl.deck_id)
+		WHERE rl.user_id = $1 AND d.id = $2 AND d.user_id = $1
 	`, userID, deckID).Scan(&total, &correct, &lastReviewDate)
 	if err != nil {
 		return err
@@ -143,9 +143,9 @@ func (r *ProgressRepository) RecomputeDeckProgress(ctx context.Context, tx txRun
 	rows, err := tx.QueryContext(ctx, `
 		SELECT DISTINCT DATE(rl.reviewed_at) AS day
 		FROM review_logs rl
-		JOIN cards c ON c.id = rl.card_id
-		JOIN decks d ON d.id = c.deck_id
-		WHERE rl.user_id = $1 AND c.deck_id = $2 AND d.user_id = $1
+		LEFT JOIN cards c ON c.id = rl.card_id
+		JOIN decks d ON d.id = COALESCE(c.deck_id,rl.deck_id)
+		WHERE rl.user_id = $1 AND d.id = $2 AND d.user_id = $1
 		ORDER BY day ASC
 	`, userID, deckID)
 	if err != nil {

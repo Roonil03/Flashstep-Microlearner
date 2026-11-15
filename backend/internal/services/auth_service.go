@@ -15,8 +15,10 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrEmailAlreadyExists = repositories.ErrEmailAlreadyExists
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrInvalidRegistration   = errors.New("invalid registration details")
+	ErrEmailAlreadyExists    = repositories.ErrEmailAlreadyExists
+	ErrUsernameAlreadyExists = repositories.ErrUsernameAlreadyExists
 )
 
 type AuthService struct {
@@ -54,10 +56,13 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthRe
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
 	input.Password = strings.TrimSpace(input.Password)
 	if len(input.Password) < 8 {
-		return AuthResponse{}, errors.New("password must be at least 8 characters")
+		return AuthResponse{}, ErrInvalidRegistration
 	}
 	if input.Username == "" || input.Email == "" || input.Password == "" {
-		return AuthResponse{}, errors.New("username, email and password are required")
+		return AuthResponse{}, ErrInvalidRegistration
+	}
+	if len(input.Password) > 72 || len(input.Username) > 50 || len(input.Email) > 100 {
+		return AuthResponse{}, ErrInvalidRegistration
 	}
 	if _, err := s.users.FindByEmail(ctx, input.Email); err == nil {
 		return AuthResponse{}, ErrEmailAlreadyExists
@@ -97,9 +102,15 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthResponse
 	input.Password = strings.TrimSpace(input.Password)
 	user, err := s.users.FindByEmail(ctx, input.Email)
 	if err != nil {
-		return AuthResponse{}, ErrInvalidCredentials
+		if errors.Is(err, repositories.ErrUserNotFound) {
+			return AuthResponse{}, ErrInvalidCredentials
+		}
+		return AuthResponse{}, err
 	}
 	if user.IsDeleted {
+		return AuthResponse{}, ErrInvalidCredentials
+	}
+	if len(input.Password) > 72 {
 		return AuthResponse{}, ErrInvalidCredentials
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
@@ -107,6 +118,9 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthResponse
 	}
 	token, err := utils.GenerateJWT(s.jwtSecret, user.ID, user.Email, s.jwtTTL)
 	if err != nil {
+		return AuthResponse{}, err
+	}
+	if err := s.users.CleanupOnLogin(ctx, user.ID, time.Now().UTC()); err != nil {
 		return AuthResponse{}, err
 	}
 	return AuthResponse{
@@ -125,8 +139,8 @@ func (s *AuthService) Me(ctx context.Context, userID string) (models.UserPublic,
 
 func (s *AuthService) UpdateUsername(ctx context.Context, userID, username string) error {
 	username = strings.ToLower(strings.TrimSpace(username))
-	if username == "" {
-		return errors.New("username is required")
+	if username == "" || len(username) > 50 {
+		return ErrInvalidRegistration
 	}
-	return s.users.UpdateUsername(userID, username)
+	return s.users.UpdateUsername(ctx, userID, username)
 }

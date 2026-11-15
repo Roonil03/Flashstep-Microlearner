@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,16 +12,20 @@ func DeleteDeck(c *gin.Context) {
 	userID := c.GetString("user_id")
 	id := c.Param("id")
 
-	tx, err := db.DB.Begin()
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
+	if _, err = tx.ExecContext(c.Request.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
 
-	res, err := tx.Exec(`
+	res, err := tx.ExecContext(c.Request.Context(), `
 		UPDATE decks
 		SET is_deleted=true,
 		    updated_at=NOW(),
@@ -30,7 +35,7 @@ func DeleteDeck(c *gin.Context) {
 		  AND is_deleted=false
 	`, id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
@@ -40,7 +45,7 @@ func DeleteDeck(c *gin.Context) {
 		return
 	}
 
-	if _, err := tx.Exec(`
+	if _, err := tx.ExecContext(c.Request.Context(), `
 		UPDATE cards
 		SET is_deleted=true,
 		    updated_at=NOW(),
@@ -48,12 +53,12 @@ func DeleteDeck(c *gin.Context) {
 		WHERE deck_id=$1
 		  AND is_deleted=false
 	`, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 

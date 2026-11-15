@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 	"strings"
 
@@ -9,10 +10,10 @@ import (
 )
 
 type UpdateDeckRequest struct {
-	Title       string `json:"title"`
+	Title       string `json:"title" binding:"max=255"`
 	Description string `json:"description"`
 	IsPublic    bool   `json:"is_public"`
-	Version     int    `json:"version"`
+	Version     int    `json:"version" binding:"required,min=1"`
 }
 
 func UpdateDeck(c *gin.Context) {
@@ -21,7 +22,7 @@ func UpdateDeck(c *gin.Context) {
 
 	var req UpdateDeckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
@@ -44,9 +45,9 @@ func UpdateDeck(c *gin.Context) {
 		  AND user_id=$6
 		  AND is_deleted=false
 	`
-	res, err := db.DB.Exec(query, req.Title, nullIfEmpty(req.Description), req.IsPublic, id, req.Version, userID)
+	res, err := db.DB.ExecContext(c.Request.Context(), query, req.Title, nullIfEmpty(req.Description), req.IsPublic, id, req.Version, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 

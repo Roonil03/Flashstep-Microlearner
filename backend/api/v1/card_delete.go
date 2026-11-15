@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,17 @@ import (
 func DeleteCard(c *gin.Context) {
 	userID := c.GetString("user_id")
 	id := c.Param("id")
+	ctx := c.Request.Context()
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
 
 	query := `
 		UPDATE cards
@@ -24,15 +36,19 @@ func DeleteCard(c *gin.Context) {
 			WHERE user_id=$2
 		  )
 	`
-	res, err := db.DB.Exec(query, id, userID)
+	res, err := tx.ExecContext(ctx, query, id, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		httperror.Internal(c, err)
 		return
 	}
 

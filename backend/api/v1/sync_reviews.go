@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -40,7 +41,7 @@ SELECT id, user_id, card_id, rating, previous_interval, new_interval,
        reviewed_at, device_id, created_at
 FROM review_logs WHERE user_id=$1 AND id>$2 ORDER BY id LIMIT $3`, user, cursor, limit+1)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer rows.Close()
@@ -53,7 +54,7 @@ FROM review_logs WHERE user_id=$1 AND id>$2 ORDER BY id LIMIT $3`, user, cursor,
 		var reviewedAt, createdAt time.Time
 		var device sql.NullString
 		if err := rows.Scan(&id, &owner, &card, &rating, &previous, &newInterval, &reviewedAt, &device, &createdAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperror.Internal(c, err)
 			return
 		}
 		if len(logs) == limit {
@@ -72,7 +73,7 @@ FROM review_logs WHERE user_id=$1 AND id>$2 ORDER BY id LIMIT $3`, user, cursor,
 		})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"review_logs": logs, "next_cursor": next})
