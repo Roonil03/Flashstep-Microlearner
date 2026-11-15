@@ -6,8 +6,7 @@ ROOT_DIR := $(CURDIR)
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 DEPLOY_DIR := $(BACKEND_DIR)/deployments
-MIGRATION_FILE := $(BACKEND_DIR)/migrations/01.\ init.sql
-BACKEND_ENV := $(BACKEND_DIR)/$(DEPLOY_DIR)/.env
+BACKEND_ENV := $(BACKEND_DIR)/.env
 DOCKER ?= docker
 GO ?= go
 FLUTTER ?= flutter
@@ -16,15 +15,15 @@ ADB ?= adb
 
 ifeq ($(OS),Windows_NT)
 DETECTED_OS := windows
-SHELL := powershell.exe
-.SHELLFLAGS := -NoProfile -ExecutionPolicy Bypass -Command
-MAKE_HINT := Use GNU Make on Windows (for example, mingw32-make from Git Bash, MSYS2, or WSL).
+# Native GNU Make wraps multiline PowerShell recipes in a batch file. Use
+# the Bash shipped with Git for Windows for the same recipes on both platforms.
+SHELL := $(shell git --exec-path)/../../../bin/bash.exe
 else
 DETECTED_OS := linux
-SHELL := /usr/bin/env bash
-.SHELLFLAGS := -eu -o pipefail -c
-MAKE_HINT := GNU Make is already available on most Linux distributions.
+SHELL := /bin/bash
 endif
+.SHELLFLAGS := -eu -o pipefail -c
+MAKE_HINT := On Windows, install Git for Windows or run make inside WSL.
 
 help:
 	@echo "$(PROJECT_NAME) Makefile"
@@ -69,52 +68,14 @@ help:
 
 
 doctor:
-ifeq ($(OS),Windows_NT)
-	$$tools = @('$(DOCKER)', '$(GO)', '$(FLUTTER)', '$(DART)')
-	foreach ($$tool in $$tools) {
-	  if (-not (Get-Command $$tool -ErrorAction SilentlyContinue)) {
-	    Write-Error "Missing required tool: $$tool"
-	    exit 1
-	  }
-	}
-	Write-Host 'Optional for Android-on-phone targets: adb'
-	Write-Host 'All required core tools were found.' -ForegroundColor Green
-else
 	for tool in "$(DOCKER)" "$(GO)" "$(FLUTTER)" "$(DART)"; do
 	  command -v "$$tool" >/dev/null || { echo "Missing required tool: $$tool"; exit 1; }
 	done
 	echo "Optional for Android-on-phone targets: adb"
 	echo "All required core tools were found."
-endif
 
 backend-env:
-ifeq ($(OS),Windows_NT)
-	$$postgresUser = Read-Host 'PostgreSQL Username (default: postgres)'
-	if ([string]::IsNullOrWhiteSpace($$postgresUser)) { $$postgresUser = 'postgres' }
-	$$postgresPassword = Read-Host 'PostgreSQL Password (default: postgres)' -AsSecureString
-	$$plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToCoTaskMemUnicode($$postgresPassword))
-	if ([string]::IsNullOrWhiteSpace($$plainPassword)) { $$plainPassword = 'postgres' }
-	$$postgresDB = Read-Host 'PostgreSQL Database name (default: flashcards)'
-	if ([string]::IsNullOrWhiteSpace($$postgresDB)) { $$postgresDB = 'flashcards' }
-	$$jwtSecret = Read-Host 'JWT Secret (default: change-me-in-production)' -AsSecureString
-	$$plainJwtSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToCoTaskMemUnicode($$jwtSecret))
-	if ([string]::IsNullOrWhiteSpace($$plainJwtSecret)) { $$plainJwtSecret = 'change-me-in-production' }
-	@(
-	  "POSTGRES_USER=$$postgresUser",
-	  "POSTGRES_PASSWORD=$$plainPassword",
-	  "POSTGRES_DB=$$postgresDB",
-	  "PORT=8080",
-	  "DB_HOST=flashcards_postgres",
-	  "DB_PORT=5432",
-	  "DB_USER=$$postgresUser",
-	  "DB_PASSWORD=$$plainPassword",
-	  "DB_NAME=$$postgresDB",
-	  "DB_SSLMODE=disable",
-	  "JWT_SECRET=$$plainJwtSecret",
-	  "JWT_EXPIRY_MINUTES=120"
-	) | Set-Content -Path '$(BACKEND_ENV)'
-	Write-Host 'Created $(BACKEND_ENV)' -ForegroundColor Green
-else
+	umask 077
 	read -rp "PostgreSQL Username [postgres]: " postgres_user
 	postgres_user=$${postgres_user:-postgres}
 	read -rsp "PostgreSQL Password [postgres]: " postgres_password
@@ -122,9 +83,9 @@ else
 	postgres_password=$${postgres_password:-postgres}
 	read -rp "PostgreSQL Database name [flashcards]: " postgres_db
 	postgres_db=$${postgres_db:-flashcards}
-	read -rsp "JWT Secret [change-me-in-production]: " jwt_secret
+	read -rsp "JWT signing secret [generate]: " jwt_secret
 	echo
-	jwt_secret=$${jwt_secret:-change-me-in-production}
+	if [ -z "$$jwt_secret" ]; then jwt_secret=$$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n'); fi
 	printf '%s\n' \
 	  "POSTGRES_USER=$$postgres_user" \
 	  "POSTGRES_PASSWORD=$$postgres_password" \
@@ -139,26 +100,11 @@ else
 	  "JWT_SECRET=$$jwt_secret" \
 	  "JWT_EXPIRY_MINUTES=120" > '$(BACKEND_ENV)'
 	echo "Created $(BACKEND_ENV)"
-endif
 
 backend-env-defaults:
-ifeq ($(OS),Windows_NT)
-	@(
-	  "POSTGRES_USER=postgres",
-	  "POSTGRES_PASSWORD=postgres",
-	  "POSTGRES_DB=flashcards",
-	  "PORT=8080",
-	  "DB_HOST=flashcards_postgres",
-	  "DB_PORT=5432",
-	  "DB_USER=postgres",
-	  "DB_PASSWORD=postgres",
-	  "DB_NAME=flashcards",
-	  "DB_SSLMODE=disable",
-	  "JWT_SECRET=change-me-in-production",
-	  "JWT_EXPIRY_MINUTES=120"
-	) | Set-Content -Path '$(BACKEND_ENV)'
-	Write-Host 'Created $(BACKEND_ENV) with development defaults.' -ForegroundColor Yellow
-else
+	umask 077
+	[ ! -f '$(BACKEND_ENV)' ] || exit 0
+	jwt_secret=$$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 	printf '%s\n' \
 	  "POSTGRES_USER=postgres" \
 	  "POSTGRES_PASSWORD=postgres" \
@@ -170,10 +116,9 @@ else
 	  "DB_PASSWORD=postgres" \
 	  "DB_NAME=flashcards" \
 	  "DB_SSLMODE=disable" \
-	  "JWT_SECRET=change-me-in-production" \
+	  "JWT_SECRET=$$jwt_secret" \
 	  "JWT_EXPIRY_MINUTES=120" > '$(BACKEND_ENV)'
 	echo "Created $(BACKEND_ENV) with development defaults."
-endif
 
 backend-deps:
 	cd '$(BACKEND_DIR)'
@@ -188,15 +133,9 @@ frontend-deps:
 deps: backend-deps frontend-deps
 
 backend-up:
-ifeq ($(OS),Windows_NT)
-	if (-not (Test-Path '$(BACKEND_ENV)')) { Write-Error 'backend/.env not found. Run make backend-env or make backend-env-defaults first.'; exit 1 }
-	Set-Location '$(DEPLOY_DIR)'
-	$(DOCKER) compose --env-file ../.env up --build -d
-else
 	[ -f '$(BACKEND_ENV)' ] || { echo 'backend/.env not found. Run make backend-env or make backend-env-defaults first.'; exit 1; }
 	cd '$(DEPLOY_DIR)'
 	$(DOCKER) compose --env-file ../.env up --build -d
-endif
 
 backend-down:
 	cd '$(DEPLOY_DIR)'
@@ -205,71 +144,26 @@ backend-down:
 backend-reset:
 	cd '$(DEPLOY_DIR)'
 	$(DOCKER) compose --env-file ../.env down -v --remove-orphans
-	$(DOCKER) builder prune -a -f
-	$(DOCKER) system prune -a -f
 	$(DOCKER) compose --env-file ../.env up --build -d
 
 backend-migrate:
-ifeq ($(OS),Windows_NT)
-	if (-not (Test-Path '$(BACKEND_ENV)')) { Write-Error 'backend/.env not found. Run make backend-env or make backend-env-defaults first.'; exit 1 }
-	$$envMap = @{}
-	Get-Content '$(BACKEND_ENV)' | ForEach-Object {
-	  if ($$_ -match '^[A-Za-z_][A-Za-z0-9_]*=') {
-	    $$parts = $$_ -split '=', 2
-	    $$envMap[$$parts[0]] = $$parts[1]
-	  }
-	}
-	Get-Content '$(MIGRATION_FILE)' -Raw | $(DOCKER) exec -i flashcards_postgres psql -U $$envMap['POSTGRES_USER'] -d $$envMap['POSTGRES_DB']
-else
-	set -a
-	. '$(BACKEND_ENV)'
-	set +a
-	cat '$(MIGRATION_FILE)' | $(DOCKER) exec -i flashcards_postgres psql -U $$POSTGRES_USER -d $$POSTGRES_DB
-endif
+	$(DOCKER) exec flashcards_postgres sh -ec 'for migration in /docker-entrypoint-initdb.d/*.sql; do psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f "$$migration"; done'
 
 backend-logs:
 	cd '$(DEPLOY_DIR)'
 	$(DOCKER) compose --env-file ../.env logs -f
 
 backend-psql:
-ifeq ($(OS),Windows_NT)
-	$$envMap = @{}
-	Get-Content '$(BACKEND_ENV)' | ForEach-Object {
-	  if ($$_ -match '^[A-Za-z_][A-Za-z0-9_]*=') {
-	    $$parts = $$_ -split '=', 2
-	    $$envMap[$$parts[0]] = $$parts[1]
-	  }
-	}
-	$(DOCKER) exec -it flashcards_postgres psql -U $$envMap['POSTGRES_USER'] -d $$envMap['POSTGRES_DB']
-else
-	set -a
-	. '$(BACKEND_ENV)'
-	set +a
-	$(DOCKER) exec -it flashcards_postgres psql -U $$POSTGRES_USER -d $$POSTGRES_DB
-endif
+	$(DOCKER) exec -it flashcards_postgres sh -ec 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 backend-run-local:
-ifeq ($(OS),Windows_NT)
-	if (-not (Test-Path '$(BACKEND_ENV)')) { Write-Error 'backend/.env not found. Run make backend-env or make backend-env-defaults first.'; exit 1 }
-	Get-Content '$(BACKEND_ENV)' | ForEach-Object {
-	  if ($$_ -match '^[A-Za-z_][A-Za-z0-9_]*=') {
-	    $$parts = $$_ -split '=', 2
-	    [System.Environment]::SetEnvironmentVariable($$parts[0], $$parts[1], 'Process')
-	  }
-	}
-	[System.Environment]::SetEnvironmentVariable('DB_HOST', 'localhost', 'Process')
-	[System.Environment]::SetEnvironmentVariable('DB_PORT', '5433', 'Process')
-	Set-Location '$(BACKEND_DIR)'
-	$(GO) run ./cmd/server/main.go
-else
-	set -a
-	. '$(BACKEND_ENV)'
-	set +a
+	while IFS= read -r entry || [ -n "$$entry" ]; do
+	  if [[ "$$entry" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then export "$${entry%$$'\r'}"; fi
+	done < '$(BACKEND_ENV)'
 	export DB_HOST=localhost
 	export DB_PORT=5433
 	cd '$(BACKEND_DIR)'
 	$(GO) run ./cmd/server/main.go
-endif
 
 frontend-codegen: frontend-deps
 	cd $(FRONTEND_DIR)
@@ -286,7 +180,7 @@ frontend-run:
 phone-dev:
 	$(ADB) reverse tcp:8080 tcp:8080
 	cd $(FRONTEND_DIR)
-	$(FLUTTER) run
+	$(FLUTTER) run --dart-define=API_BASE_URL=http://127.0.0.1:8080/api/v1
 
 apk-debug:
 	cd $(FRONTEND_DIR)

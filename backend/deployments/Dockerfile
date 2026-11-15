@@ -14,6 +14,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 
 WORKDIR /app
 COPY --from=builder /app/out/server /app/server
+USER 65534:65534
 
 EXPOSE 8080
 
