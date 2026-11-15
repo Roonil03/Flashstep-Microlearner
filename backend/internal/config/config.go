@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
+	TrustedProxies  []string
 	Port            string
 	DatabaseURL     string
 	DBHost          string
@@ -28,13 +30,24 @@ func Load() *Config {
 		Port:            getEnv("PORT", "8080"),
 		DatabaseURL:     getEnv("DATABASE_URL", ""),
 		DBHost:          getEnv("DB_HOST", "localhost"),
-		DBPort:          getEnv("GO_PORT", "5432"),
+		DBPort:          getEnv("DB_PORT", getEnv("GO_PORT", "5432")),
 		DBUser:          getEnv("DB_USER", "postgres"),
 		DBPassword:      getEnv("DB_PASSWORD", "postgres"),
 		DBName:          getEnv("DB_NAME", "flashcards"),
 		DBSSLMode:       getEnv("DB_SSLMODE", "disable"),
-		JWTSecret:       getEnv("JWT_SECRET", "change-this-in-real-use"),
+		JWTSecret:       getEnv("JWT_SECRET", ""),
 		JWTExpiryMinute: getEnvInt("JWT_EXPIRY_MINUTES", 120),
+	}
+	if proxies := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDRS")); proxies != "" {
+		for _, proxy := range strings.Split(proxies, ",") {
+			cfg.TrustedProxies = append(cfg.TrustedProxies, strings.TrimSpace(proxy))
+		}
+	}
+	if len(strings.TrimSpace(cfg.JWTSecret)) < 32 || cfg.JWTSecret == "change-this-in-real-use" {
+		log.Fatal("JWT_SECRET must be configured with at least 32 random characters")
+	}
+	if cfg.JWTExpiryMinute <= 0 {
+		log.Fatal("JWT_EXPIRY_MINUTES must be positive")
 	}
 	log.Printf("DB CONFIG → host=%s port=%s user=%s db=%s",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBName)

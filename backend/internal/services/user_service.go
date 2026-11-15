@@ -12,6 +12,8 @@ type UserService struct {
 	repo *repositories.UserRepository
 }
 
+var ErrInvalidOldPassword = errors.New("invalid old password")
+
 func NewUserService(repo *repositories.UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
@@ -25,7 +27,7 @@ func (s *UserService) ChangePassword(userID, oldPassword, newPassword string) er
 		return errors.New("user not found")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
-		return errors.New("invalid old password")
+		return ErrInvalidOldPassword
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
