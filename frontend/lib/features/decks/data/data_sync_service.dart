@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import '../../../core/network/api_errors.dart';
 import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
@@ -167,8 +168,8 @@ class DeckSyncService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _SyncHttpException(
         statusCode: response.statusCode,
-        message:
-            '$action failed with status ${response.statusCode}. Your pending changes are retained.',
+        message: '$action could not finish. ${apiErrorMessage(response)} '
+            'Your pending changes are retained.',
       );
     }
   }
