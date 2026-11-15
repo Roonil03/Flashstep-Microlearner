@@ -123,7 +123,6 @@ backend-env-defaults:
 backend-deps:
 	cd '$(BACKEND_DIR)'
 	$(GO) mod download
-	$(GO) mod tidy
 	$(GO) mod verify
 
 frontend-deps:
