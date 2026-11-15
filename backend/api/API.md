@@ -17,6 +17,10 @@ fingerprint to the first manifest page. Deploy it before distributing the
 v1.2.0 frontend so review history and daily limits reconcile across devices.
 Earlier clients continue using their existing sync routes; no migration is needed.
 
+The v1.3.0 backend adds permanent deletion receipts and public bug reporting.
+Apply both PostgreSQL migrations before upgrading an existing service.
+[Upgrade instructions](../../INSTALL.md)
+
 ### Health Check
 
 `GET /health` is outside `/api/v1` and does not require authentication.
@@ -26,7 +30,9 @@ Response `200 OK`:
 {"status": "ok"}
 ```
 
-This checks HTTP service availability; it does not execute a database health query.
+Startup verifies the required database schema before serving traffic. The health
+endpoint checks PostgreSQL connectivity with a short timeout and returns `503`
+if the database is unavailable.
 
 ## Auth Header
 Protected routes require:
@@ -76,8 +82,8 @@ Registration email rules:
 - An email remains reserved while its user row exists, including a soft-deleted
   account. Concurrent requests for the same normalized email cannot create
   multiple accounts.
-- `409 Conflict` with `{"error":"email already exists"}` indicates an email
-  already in use. Invalid input and other registration failures return `400`.
+- A duplicate email or username returns `409`. Invalid input returns `400`.
+  Storage failures return `500`.
 
 ### Login
 `POST /auth/login`
@@ -103,6 +109,11 @@ Response `200 OK`:
   "token": "jwt_token"
 }
 ```
+
+The first successful password login per account and UTC calendar day permanently
+removes its deleted deck and card content. Concurrent logins share the same
+cleanup transaction. Failed credentials do not start cleanup. The remaining
+deletion IDs allow offline clients to reconcile, and review history is retained.
 
 ### Get Current User
 `GET /me`
@@ -476,6 +487,20 @@ Behavior notes:
 
 ## SYNC APIs
 
+### Permanent deletions (v1.3.0)
+
+`GET /sync/purged?cursor=<decimal receipt cursor>`
+
+Omit the cursor to start at the beginning. A page contains up to 500 entries in
+receipt order, scoped to the authenticated account. Each entry in `purged`
+contains `entity` (`deck` or `card`), its UUID in `id`, and a decimal-string
+`receipt_id`. Follow a non-null `next_cursor` to read another page. The
+`checkpoint_cursor` on each page, including the last page, is the high-water
+mark for the next sync. Keep it with the local database. Invalid cursors return
+`400`. Apply a page locally before saving progress. A permanent deletion wins
+over later edits to the same UUID, even when the offline device has a newer timestamp.
+[Sync protocol and compatibility](../../docs/sync_protocol.md)
+
 ### Deck Manifest (v1.1.0)
 
 `GET /sync/manifest?cursor=<deck UUID>&limit=500`
@@ -491,7 +516,8 @@ Response `200 OK`:
   "decks": [
     {
       "id": "11111111-1111-4111-8111-111111111111",
-      "fingerprint": "opaque revision digest"
+      "fingerprint": "opaque revision digest",
+      "is_purged": false
     }
   ],
   "next_cursor": null,
@@ -499,7 +525,11 @@ Response `200 OK`:
 }
 ```
 
-Only owned decks are returned, ordered by UUID, including deleted decks.
+Only owned decks are returned, ordered by UUID, including deleted decks. A
+v1.3.0 manifest marks permanently deleted deck entries with `is_purged: true`.
+Clients that process the receipt feed may use `include_purged=false` on
+manifest requests and `"include_purged": false` in fetch requests to avoid
+downloading synthetic tombstones for already purged cards and decks.
 Fingerprints include the deck revision/timestamp/deletion flag and ordered
 child-card IDs, parent IDs, revisions, timestamps, and deletion flags. Treat the
 fingerprint as an opaque equality token, not a timestamp or authentication value.
@@ -699,10 +729,9 @@ Upload behavior:
   UUIDs. Active decks require a title; active cards require front and back.
   Reviews require a rating (`again`, `hard`, `good`, or `easy`) and may supply
   a nullable `device_id` UUID. Reuse the same review-log ID when retrying.
-- Supply valid RFC3339 timestamps with fractional precision as needed. Current
-  normalization substitutes server time for missing/malformed `created_at`,
-  `updated_at`, and review timestamps; malformed optional card dates become
-  `null`. Clients should preserve valid original timestamps for conflict resolution.
+- Supply RFC3339 timestamps with fractional precision as needed. The API rejects
+  malformed timestamps, invalid enum values and out-of-range numeric values.
+  Each upload accepts up to 1,000 deck, card and review records combined.
 - Each request is atomic: accepted deck/card changes, new review logs, affected
   progress, and relevant analytics commit together. Failed requests roll back;
   concurrent uploads for the same account are serialized. Separate HTTP batches
@@ -719,7 +748,7 @@ Upload behavior:
   these are ignored while their parent is active, protecting separately batched
   children after a rejected/undone deck deletion. Individual-card deletes omit
   the marker. It is not stored in the database or returned in downloads.
-- Restore a deleted deck through a newer `is_deleted=false` deck mutation.
+- Before daily cleanup, restore a deleted deck through a newer `is_deleted=false` deck mutation.
   Restoring the deck does not automatically restore its cards: upload newer
   card mutations explicitly after the deck. An active card change against a
   deleted parent is ignored if stale relative to the parent, otherwise rejected.
@@ -876,6 +905,13 @@ At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollup
 
 ## Error Format
 
+Protected routes require an active account. Errors use a short message suitable
+for display. Clients should branch on the HTTP status rather than the wording.
+The overall request body limit is 4 MiB, with lower limits on individual routes.
+Expect `413` for an oversized request, `429` for throttling, and `503` when
+the server has reached its concurrency limit. Honor `Retry-After` when provided.
+Date-range analytics requests accept ordered ranges of up to 366 days.
+
 ```json
 {
   "error": "error message"
@@ -887,3 +923,25 @@ At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollup
 - On app launch, the splash flow first checks for a stored session and re-enters the app without prompting for credentials again.
 - The login screen should only reappear after an explicit logout or when `GET /me` returns an authentication failure such as `401 Unauthorized` / `403 Forbidden`.
 - Temporary connectivity failures must not be treated as logout events by the client.
+
+## Bug reports
+
+`POST /bug-reports` requires an active account. The app asks the user to confirm
+public posting before sending the following fields.
+
+```json
+{
+  "title": "Text clipped in Settings",
+  "description": "The last line of the setting label is cut off.",
+  "reproduction": "",
+  "expected": "The full label is visible.",
+  "actual": "The last line is partly hidden.",
+  "public_confirmed": true
+}
+```
+
+The maximum request size is 48 KiB. Reproduction steps are optional. A `202`
+response includes a `report_id` and a `message` confirming that GitHub accepted
+the posting request. An identical accepted submission returns the existing ID.
+Invalid fields or missing consent return `400`, a submission limit returns `429`,
+and unavailable delivery returns `503`. [Field limits and delivery setup](../../docs/bug_reporting.md)

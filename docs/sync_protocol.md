@@ -9,4 +9,3 @@ New clients request `include_purged=false` on the manifest and in fetch payloads
 Deck titles accept up to 255 Unicode characters, matching PostgreSQL `VARCHAR(255)`. Description, front, and back retain their historical `TEXT` behavior, bounded by the 4 MiB HTTP request limit. Normal offline edits validate title length and individual payload size before committing. Sync batches target 1 MiB and 200 operations. Invalid JSON and individually oversized queued operations remain recoverable locally. Atomic server validation/size failures are split to isolate rejected operations, allowing valid operations to continue. A sync with rejected pending changes reports a warning and does not advance the last-successful-sync time.
 
 Account metadata deletion invalidates active sync sessions and serializes manifest writes with removal of both final and temporary files. A late response from the deleted session cannot recreate its manifest.
-

@@ -3,7 +3,7 @@
 ## Requirements
 Common:
 - Docker + Docker Compose
-- Go
+- Go with automatic toolchain selection enabled, or Go 1.27.4 (the version used for the production server image)
 - Flutter SDK
 - Dart SDK (usually bundled with Flutter)
 - GNU Make
@@ -13,6 +13,8 @@ Android phone targets additionally need:
 - USB debugging enabled on the phone
 
 ### Windows note
+Native Windows builds use the Bash shell bundled with Git for Windows. Alternatively, run GNU Make and Bash inside WSL.
+
 Use GNU Make from one of these:
 - Git Bash
 - MSYS2
@@ -48,6 +50,21 @@ make frontend-codegen
 
 ## Local development flows
 
+### Upgrade an existing PostgreSQL database to v1.3.0
+
+Back up the existing database. Apply both v1.3.0 migrations to the database that serves the API **before deploying** the new backend. An existing Docker volume does not run initialization scripts again.
+
+For the local Compose stack, run `make backend-migrate`. For a hosted PostgreSQL instance, use the deployment's migration connection with `psql` from the repository root:
+
+```sh
+psql -v ON_ERROR_STOP=1 -f backend/migrations/02_daily_login_purge.sql
+psql -v ON_ERROR_STOP=1 -f backend/migrations/02_bug_reports.sql
+```
+
+These commands use the connection configured for `psql`. Check the target database before running them. A new, empty database requires `backend/migrations/01_init.sql` first. The daily cleanup migration preserves historical review references when cards are permanently removed. Applying it can take locks while it backfills those references.
+
+Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 32 characters. If the old secret needs replacement, existing users will have to sign in again. Set `TRUSTED_PROXY_CIDRS` only to the known addresses of reverse proxies that sanitize forwarding headers. Direct deployments can leave it unset. Public bug reporting requires additional GitHub configuration. [Bug reporting setup](docs/bug_reporting.md)
+
 ### Run the full app locally
 
 Start the backend stack:
@@ -75,8 +92,7 @@ That target temporarily overrides the DB connection to `localhost:5433` for the 
 
 ## Android phone development
 
-If the app still points to `localhost:8080`, a real phone cannot reach your laptop directly.
-For development, use:
+To run against the local backend over USB, use:
 
 ```bash
 make phone-dev
@@ -84,7 +100,7 @@ make phone-dev
 
 That runs:
 - `adb reverse tcp:8080 tcp:8080`
-- `flutter run`
+- `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080/api/v1`
 
 So the phone can talk to your local backend through USB.
 
