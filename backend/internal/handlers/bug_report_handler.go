@@ -102,7 +102,9 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		reportUnavailable(c)
 		return
 	}
-	digest := sha256.Sum256(payload.Bytes())
+	// Keep deduplication independent of the transport encoding.
+	canonical, _ := json.Marshal(report)
+	digest := sha256.Sum256(canonical)
 	tx, err := h.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		reportUnavailable(c)
