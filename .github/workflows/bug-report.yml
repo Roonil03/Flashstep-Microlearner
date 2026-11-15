@@ -1,0 +1,105 @@
+name: Publish app bug report
+run-name: Publish app bug report
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_id:
+        description: Backend-generated report UUID
+        required: true
+        type: string
+      report:
+        description: Validated report JSON (public text only)
+        required: true
+        type: string
+
+# No checkout, third-party action, repository write token, or user script.
+permissions: {}
+concurrency:
+  group: app-bug-report-${{ inputs.report_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Roonil03/Flashstep-Microlearner' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Validate and publish public text
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json
+          import os
+          import re
+          import unicodedata
+          import urllib.request
+          import uuid
+
+          # The event file is data, never substituted into this program/shell.
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as source:
+              inputs = json.load(source)['inputs']
+          report_id = str(uuid.UUID(inputs['report_id']))
+          report = json.loads(inputs['report'])
+          limits = {'title': (5, 120), 'description': (20, 4000),
+                    'reproduction': (0, 3000), 'expected': (5, 2000), 'actual': (5, 2000)}
+          if set(report) != set(limits) | {'public_confirmed'} or report['public_confirmed'] is not True:
+              raise ValueError('Invalid report or missing public posting consent')
+          for field, (minimum, maximum) in limits.items():
+              value = report[field]
+              if not isinstance(value, str) or not minimum <= len(value.strip()) <= maximum:
+                  raise ValueError('Invalid report field')
+              if any(unicodedata.category(ch) == 'Cc' and ch not in '\n\r\t' for ch in value):
+                  raise ValueError('Invalid control character')
+              if field == 'title' and any(ch in value for ch in '\n\r\t'):
+                  raise ValueError('Invalid title')
+
+          base = 'https://api.github.com/repos/Roonil03/Flashstep-Microlearner'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                     'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
+                     'Content-Type': 'application/json'}
+
+          def api(path, data=None):
+              request = urllib.request.Request(base + path, headers=headers,
+                  data=None if data is None else json.dumps(data).encode('utf-8'))
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return json.load(response)
+              except Exception:
+                  # Never print request bodies, headers, or user text on failure.
+                  raise RuntimeError('GitHub issue request failed; rerun this job safely') from None
+
+          marker = '<!-- flashstep-bug-report:' + report_id + ' -->'
+          # Read every issue page (including closed reports) to handle an accepted
+          # POST whose response was lost. Concurrency serializes the same UUID.
+          page = 1
+          duplicate = False
+          while True:
+              issues = api('/issues?state=all&per_page=100&page=' + str(page))
+              if any(issue.get('user', {}).get('login') == 'github-actions[bot]'
+                     and (issue.get('body') or '').rstrip().endswith(marker) for issue in issues):
+                  duplicate = True
+                  break
+              if len(issues) < 100:
+                  break
+              page += 1
+
+          def literal(value):
+              # A longer fence keeps embedded Markdown, mentions and HTML inert.
+              longest = max((len(match) for match in re.findall(r'`+', value)), default=0)
+              fence = '`' * max(3, longest + 1)
+              return fence + '\n' + value.strip() + '\n' + fence
+
+          if not duplicate:
+              sections = [('Description', 'description'), ('Steps to reproduce (optional)', 'reproduction'),
+                          ('Expected behavior', 'expected'), ('Actual behavior', 'actual')]
+              body = 'Submitted from the app with explicit consent to public posting.\n\n'
+              body += '\n\n'.join('### ' + title + '\n\n' + literal(report[field] or 'Not provided')
+                                  for title, field in sections)
+              body += '\n\n' + marker
+              # Fullwidth @ avoids notifying accounts named in an issue title.
+              api('/issues', {'title': '[App bug] ' + report['title'].strip().replace('@', '＠'), 'body': body})
+          print('Report was published or already exists.')
