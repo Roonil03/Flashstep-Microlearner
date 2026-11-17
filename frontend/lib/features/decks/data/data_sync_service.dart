@@ -67,7 +67,10 @@ class _PendingGroup {
 }
 
 class _ProtectedChanges {
-  final Set<String> decks = {}, cards = {}, affectedDecks = {};
+  final Set<String> decks = {},
+      cards = {},
+      affectedDecks = {},
+      newCardDecks = {};
 }
 
 class DeckSyncService {
@@ -365,7 +368,7 @@ class DeckSyncService {
         (r) => group.operations.contains(r.operationId) && r.type == 'create',
       );
     }
-    final holds = await _deletionHolds();
+    final holds = _deletionHolds();
     final reviewParents = <String, String>{};
     if (entity == 'review_log') {
       final cards =
@@ -532,24 +535,12 @@ class DeckSyncService {
     return ids.cast<String>().toSet();
   }
 
-  // Queue timestamps survive restarts, when visible Undo holds do not.
-  Future<_ProtectedChanges> _deletionHolds() async {
+  // Only a visible Undo action delays upload. Once finalized or restarted,
+  // the server starts its retention window when it accepts the tombstone.
+  _ProtectedChanges _deletionHolds() {
     final holds = _ProtectedChanges();
     holds.decks.addAll(_database.heldDeckDeletions);
     holds.cards.addAll(_database.heldCardDeletions);
-    final now = DateTime.now().toUtc();
-    final deletes =
-        await (_database.select(_database.syncQueueItems)..where(
-          (t) => t.synced.equals(false) & t.type.equals('delete'),
-        )).get();
-    for (final row in deletes) {
-      final grace = Duration(seconds: row.entity == 'deck' ? 10 : 2);
-      if (now.difference(row.createdAt) >= grace) continue;
-      final raw = _pendingPayload(row.payload);
-      if (raw == null || raw['id'] is! String) continue;
-      if (row.entity == 'deck') holds.decks.add(raw['id'] as String);
-      if (row.entity == 'card') holds.cards.add(raw['id'] as String);
-    }
     return holds;
   }
 
@@ -563,8 +554,9 @@ class DeckSyncService {
   }
 
   Future<_ProtectedChanges> _protectedChanges() async {
-    final result = await _deletionHolds();
+    final result = _deletionHolds();
     result.affectedDecks.addAll(result.decks);
+    final newCardIds = <String>{};
     final rows =
         await (_database.select(_database.syncQueueItems)
           ..where((t) => t.synced.equals(false))).get();
@@ -579,7 +571,20 @@ class DeckSyncService {
       if (row.entity == 'card') {
         result.cards.add(id);
         result.affectedDecks.add(raw['deck_id'].toString());
+        if (row.type == 'create') newCardIds.add(id);
       }
+    }
+    // Keep unacknowledged new content reachable when its existing parent was
+    // deleted elsewhere. A later local deletion must still hide that content.
+    final ids = newCardIds.toList();
+    for (var offset = 0; offset < ids.length; offset += 400) {
+      final cards =
+          await (_database.select(_database.cards)..where(
+            (t) =>
+                t.id.isIn(ids.skip(offset).take(400).toList()) &
+                t.isDeleted.equals(false),
+          )).get();
+      result.newCardDecks.addAll(cards.map((card) => card.deckId));
     }
     return result;
   }
@@ -732,7 +737,9 @@ class DeckSyncService {
         final pending = await _protectedChanges();
         for (final entry in group) {
           final id = entry['id'] as String;
-          if (pending.affectedDecks.contains(id) || missingDecks.contains(id)) {
+          if (!completeCards ||
+              pending.affectedDecks.contains(id) ||
+              missingDecks.contains(id)) {
             fingerprints.remove(id);
           } else {
             fingerprints[id] = entry['fingerprint'] as String;
@@ -769,12 +776,15 @@ class DeckSyncService {
                 )
                 ..limit(1))
               .get();
-      if (pendingReviews.isEmpty) {
+      if (authoritative && pendingReviews.isEmpty) {
         fingerprints['__reviews'] = reviewsFingerprint;
       } else {
         fingerprints.remove('__reviews');
       }
     }
+    // Capability must hold across every manifest page. Otherwise cleanup was
+    // deferred, and caching any page could prevent a later compatible refetch.
+    if (!authoritative) fingerprints.clear();
     fingerprints.removeWhere(
       (id, _) => id != '__reviews' && !seen.contains(id),
     );
@@ -958,7 +968,11 @@ class DeckSyncService {
         if (rawDeck['user_id']?.toString() != localUserId) {
           throw const FormatException('Invalid deck owner');
         }
-        if (protected.decks.contains(deckId)) continue;
+        if (protected.decks.contains(deckId) ||
+            (rawDeck['is_deleted'] == true &&
+                protected.newCardDecks.contains(deckId))) {
+          continue;
+        }
         final localDeck = localDecks[deckId];
 
         deckWrites.add(
