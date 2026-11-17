@@ -22,7 +22,7 @@ Flashstep Microlearner is a full-stack flashcard learning platform with:
 - device-relative font-size choices and grouped appearance and review settings
 - a Legal page for privacy, terms, and open-source licenses
 - public bug reporting from Settings, with optional reproduction steps
-- daily cleanup of deleted study content while retaining review history across devices
+- cleanup of deleted accounts, decks, and cards when the backend is active, with timed Undo notifications
 
 The goal of the project is to make short, repeatable learning sessions feel smooth, fast, and reliable, even when connectivity is inconsistent.
 

@@ -17,8 +17,8 @@ fingerprint to the first manifest page. Deploy it before distributing the
 v1.2.0 frontend so review history and daily limits reconcile across devices.
 Earlier clients continue using their existing sync routes; no migration is needed.
 
-The v1.3.0 backend adds permanent deletion receipts and public bug reporting.
-Apply both PostgreSQL migrations before upgrading an existing service.
+The v1.3.0 backend adds activity-triggered deletion cleanup and public bug reporting
+using the existing PostgreSQL schema. No migration from v1.2.0 is required.
 [Upgrade instructions](../../INSTALL.md)
 
 ### Health Check
@@ -110,10 +110,12 @@ Response `200 OK`:
 }
 ```
 
-The first successful password login per account and UTC calendar day permanently
-removes its deleted deck and card content. Concurrent logins share the same
-cleanup transaction. Failed credentials do not start cleanup. The remaining
-deletion IDs allow offline clients to reconcile, and review history is retained.
+Cleanup uses backend activity instead of a daily login schedule. Deleted accounts
+become eligible after 24 hours, decks after 10 seconds, and individual cards after
+2 seconds. Grace periods start from the server's deletion timestamp. Eligible work
+runs when the service handles requests, so a sleeping backend may remove content
+later. Permanent deletion follows the existing foreign keys, including removal of
+associated review logs. The updated sync protocol reconciles absent records.
 
 ### Get Current User
 `GET /me`
@@ -186,7 +188,7 @@ Response `200 OK`:
 Behavior notes:
 - this endpoint performs a **soft delete** of the authenticated user,
 - the account becomes unavailable for normal use immediately,
-- permanent cleanup is handled later by backend maintenance.
+- permanent cleanup becomes eligible after 24 hours and runs during later API activity.
 
 ---
 
@@ -481,25 +483,28 @@ Behavior notes:
 - delete is a **logical delete** (`is_deleted=true`),
 - only the targeted card is deleted,
 - deleted rows may still appear in sync payloads with `is_deleted=true`,
-- the client may provide a short undo window before permanently removing the card from the local database.
+- the app offers a 2-second Undo window before finalizing local deletion,
+- server removal becomes eligible 2 seconds after the server accepts the tombstone and runs on later activity for the account.
 
 ---
 
 ## SYNC APIs
 
-### Permanent deletions (v1.3.0)
+### Permanent deletion reconciliation (v1.3.0)
 
-`GET /sync/purged?cursor=<decimal receipt cursor>`
+Deletion cleanup uses the existing tables and timestamps. The updated manifest and
+fetch responses advertise `reconciliation_version: 1`. A completed manifest
+enumerates existing owned decks, including rows still in their deletion grace
+period. A completed card fetch enumerates existing cards for its selected decks.
 
-Omit the cursor to start at the beginning. A page contains up to 500 entries in
-receipt order, scoped to the authenticated account. Each entry in `purged`
-contains `entity` (`deck` or `card`), its UUID in `id`, and a decimal-string
-`receipt_id`. Follow a non-null `next_cursor` to read another page. The
-`checkpoint_cursor` on each page, including the last page, is the high-water
-mark for the next sync. Keep it with the local database. Invalid cursors return
-`400`. Apply a page locally before saving progress. A permanent deletion wins
-over later edits to the same UUID, even when the offline device has a newer timestamp.
-[Sync protocol and compatibility](../../docs/sync_protocol.md)
+Updated clients compare completed results with local records to find records
+removed from the server. Pending new creations, unsent reviews, and active Undo
+operations require protection. A missing record alone cannot establish whether
+an unacknowledged creation was previously accepted and later removed.
+
+`GET /sync/purged` remains a compatibility endpoint returning an empty `purged`
+array, a null `next_cursor`, and `reconciliation_version: 1`. It supplies no
+persistent deletion history.
 
 ### Deck Manifest (v1.1.0)
 
@@ -526,16 +531,13 @@ Response `200 OK`:
 ```
 
 Only owned decks are returned, ordered by UUID, including deleted decks. A
-v1.3.0 manifest marks permanently deleted deck entries with `is_purged: true`.
-Clients that process the receipt feed may use `include_purged=false` on
-manifest requests and `"include_purged": false` in fetch requests to avoid
-downloading synthetic tombstones for already purged cards and decks.
+The v1.3.0 manifest includes `reconciliation_version: 1`. Its entries represent existing rows. The legacy `include_purged` option is accepted for compatibility.
 Fingerprints include the deck revision/timestamp/deletion flag and ordered
 child-card IDs, parent IDs, revisions, timestamps, and deletion flags. Treat the
 fingerprint as an opaque equality token, not a timestamp or authentication value.
 No card bodies or review logs are returned. Empty results use `decks: []`.
 The first page (without `cursor`) also includes `reviews_fingerprint`, an
-opaque token that changes when immutable review history is appended. Later
+opaque token that changes when review history is appended or removed. Later
 manifest pages omit it. Earlier backend versions omit it on every page; clients
 should continue deck reconciliation without review-history download in that case.
 
@@ -581,9 +583,14 @@ fractional precision; nullable card dates and deck descriptions remain `null`.
 
 Errors:
 - `400 Bad Request`: malformed/oversized JSON, missing or invalid deck IDs,
-  more than 25 input IDs, any missing/unauthorized deck, invalid cursor or limit
+  more than 25 input IDs, any unauthorized deck, invalid cursor or limit
 - `401 Unauthorized`: missing or invalid JWT
 - `500 Internal Server Error`: database/read/transaction failure
+
+For v1.3.0, `missing_deck_ids` lists requested IDs absent from the database.
+This allows clients to reconcile a deck removed between manifest and fetch.
+An existing deck owned by another user still rejects the request.
+The response advertises `reconciliation_version: 1`.
 
 ### Fetch Review History (v1.2.0)
 
@@ -649,6 +656,20 @@ Only a manifest `404`/`405` selects the older-backend fallback: call
 errors fail the sync for retry. A device-clock checkpoint can miss late offline
 uploads, so the updated frontend does not use it to filter reconciliation.
 Account changes stop further work; only acknowledged queue operations are removed.
+
+For the v1.3.0 reconciliation contract, send `reconciliation_version: 1` at the
+top level of an upload and `allow_create: true` only for deck/card records
+whose original create operation remains unacknowledged. Missing records with
+creation disallowed are skipped. The successful upload response identifies
+`missing_deck_ids`, `missing_card_ids`, and `missing_review_log_ids`.
+A missing parent also appears in `missing_deck_ids`. Clients must process
+these lists before acknowledging their local queue. Failed new creations and
+reviews remain available locally with a sync warning.
+
+Legacy uploads that omit the contract version keep their existing upsert
+behavior. Consequently, an older client can recreate a previously removed UUID.
+A lost acknowledgement of a new creation has the same ambiguity. Permanent
+receipt storage would be needed to resolve those cases across server restarts.
 
 ### Upload Changes
 `POST /sync/upload`
@@ -899,7 +920,7 @@ Returns all-time performance per deck using persisted `user_progress` rows.
 - `analytics_rollups` stores the current 7 / 30 / 90 day dashboard rollups.
 
 ### Midnight UTC maintenance
-At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollups for active users.
+While the process is running, its midnight task recomputes analytics daily rows and dashboard rollups for active users. Analytics requests also refresh their account's values. Deletion cleanup is triggered by requests and does not depend on reaching midnight.
 
 ---
 

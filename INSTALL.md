@@ -52,16 +52,11 @@ make frontend-codegen
 
 ### Upgrade an existing PostgreSQL database to v1.3.0
 
-Back up the existing database. Apply both v1.3.0 migrations to the database that serves the API **before deploying** the new backend. An existing Docker volume does not run initialization scripts again.
+Version 1.3.0 uses the PostgreSQL schema already present in version 1.2.0. Deploying it over that schema requires no migration. A new, empty database uses `backend/migrations/01_init.sql` through Docker initialization or `make backend-migrate`.
 
-For the local Compose stack, run `make backend-migrate`. For a hosted PostgreSQL instance, use the deployment's migration connection with `psql` from the repository root:
+Cleanup is triggered by backend activity. Deleted accounts become eligible after 24 hours, decks after 10 seconds, and individual cards after 2 seconds. A sleeping service performs eligible work when it resumes handling requests. The existing foreign keys cascade permanent card deletion into review logs, so historical analytics may change after cleanup.
 
-```sh
-psql -v ON_ERROR_STOP=1 -f backend/migrations/02_daily_login_purge.sql
-psql -v ON_ERROR_STOP=1 -f backend/migrations/02_bug_reports.sql
-```
-
-These commands use the connection configured for `psql`. Check the target database before running them. A new, empty database requires `backend/migrations/01_init.sql` first. The daily cleanup migration preserves historical review references when cards are permanently removed. Applying it can take locks while it backfills those references.
+Earlier drafts of this branch included two additional migration scripts. They have been removed. If those drafts were applied to a separate database, check that database's foreign keys and review behavior before using it with this release.
 
 Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 32 characters. If the old secret needs replacement, existing users will have to sign in again. Set `TRUSTED_PROXY_CIDRS` only to the known addresses of reverse proxies that sanitize forwarding headers. Direct deployments can leave it unset. Public bug reporting requires additional GitHub configuration. [Bug reporting setup](docs/bug_reporting.md)
 

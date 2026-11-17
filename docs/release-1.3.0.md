@@ -1,19 +1,20 @@
 # Release 1.3.0
 
-Flashstep Microlearner 1.3.0 adds public bug reporting and clears deleted study content when you sign in.
+Flashstep Microlearner 1.3.0 adds public bug reporting, timed notifications, and cleanup of deleted content while you use the app.
 
 ## New Features
 
 - **Report a bug from Settings.** Choose **Settings → Report a Bug**, or open it just below **Open-source licenses** in **Legal**. Describe the problem, what you expected, and what happened. You can include steps to reproduce it. Before you submit, the app asks you to confirm that your text can appear in a public GitHub issue.
-- **Daily cleanup of deleted cards and decks.** On your first successful login each UTC day, Flashstep permanently removes your account’s deleted cards and decks from the server. You can use Undo while the deleted content is still recoverable. Your past reviews continue to count toward your study history.
+- **Cleanup when the service is active.** Deleted accounts become eligible for permanent removal after 24 hours, decks after 10 seconds, and individual cards after 2 seconds. Cleanup runs when requests reach the backend, including after it wakes from inactivity. Removal can happen later if the service is sleeping. The app offers Undo for 10 seconds after deleting a deck and 2 seconds after deleting a card.
 
 ## Improvements
 
-- **Offline sync.** A device returning online can learn which cards and decks were permanently removed. An old edit cannot bring back their contents.
+- **Offline sync.** Updated devices reconcile records that have disappeared from the server and distinguish new offline content from edits to previously synced content.
+- **Notifications that dismiss automatically.** Action messages close after their allotted time, with additional time available when accessibility navigation is enabled.
 - **Offline analytics.** If a refresh fails, the last saved dashboard stays visible. Deleting an account also removes its saved analytics from that device.
 - **Clearer error messages.** The app explains when to sign in again, correct an entry, wait, or retry. The API limits request size and concurrent work and checks ownership before accepting changes.
 - **Artwork attribution.** Open-source licenses now points to the asset license on the project’s main branch.
 
 ## Compatibility
 
-Existing clients can continue using the deck, card and sync endpoints. Operators must apply the PostgreSQL migrations before deploying the backend. Public bug reporting also requires the GitHub workflow and its backend credential. [Installation and upgrade instructions](../INSTALL.md) · [Bug reporting setup](bug_reporting.md)
+The backend uses the existing database design and requires no migration from version 1.2.0. Its existing relationships remove associated review logs when cards or decks are permanently deleted, which can change historical analytics. Public bug reporting requires the GitHub workflow and its backend credential. [Installation and upgrade instructions](../INSTALL.md) · [Bug reporting setup](bug_reporting.md)
