@@ -719,12 +719,6 @@ class DeckRepository {
       if (stillPresent == null ||
           parent == null ||
           parent.isDeleted ||
-          (await _database.purgedIds(currentUserId, 'card', [
-            deletion.snapshot.id,
-          ])).isNotEmpty ||
-          (await _database.purgedIds(currentUserId, 'deck', [
-            deletion.snapshot.deckId,
-          ])).isNotEmpty ||
           await _requireUserId() != currentUserId) {
         throw StateError(
           'This card has been permanently deleted and cannot be restored.',
@@ -925,9 +919,6 @@ class DeckRepository {
           )).getSingleOrNull();
       if (stillPresent == null ||
           deletion.snapshot.userId != currentUserId ||
-          (await _database.purgedIds(currentUserId, 'deck', [
-            deletion.snapshot.id,
-          ])).isNotEmpty ||
           await _requireUserId() != currentUserId) {
         throw StateError(
           'This deck has been permanently deleted and cannot be restored.',
@@ -976,11 +967,7 @@ class DeckRepository {
         final currentCard =
             await (_database.select(_database.cards)
               ..where((tbl) => tbl.id.equals(card.id))).getSingleOrNull();
-        if (currentCard == null ||
-            (await _database.purgedIds(currentUserId, 'card', [
-              card.id,
-            ])).isNotEmpty)
-          continue;
+        if (currentCard == null) continue;
         final nextVersion = currentCard.version + 1;
 
         await _database

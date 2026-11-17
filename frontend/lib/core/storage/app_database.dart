@@ -119,79 +119,13 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 3;
 
-  // Checkpoints live in the SQLite file they describe. Recreating or clearing
-  // that file cannot leave a cursor that skips deletions on a fresh database.
+  // Version 3 also opens prerelease databases that used receipt tables.
+  // Released version 2 databases require no DDL or data migration.
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) async {
-      await m.createAll();
-      await _createReceiptTables();
-    },
-    onUpgrade: (m, from, to) async {
-      if (from < 3) await _createReceiptTables();
-    },
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {},
   );
-
-  Future<void> _createReceiptTables() async {
-    await customStatement(
-      'CREATE TABLE IF NOT EXISTS local_purged_entities (user_id TEXT NOT NULL, entity TEXT NOT NULL, entity_id TEXT NOT NULL, PRIMARY KEY(user_id,entity,entity_id))',
-    );
-    await customStatement(
-      'CREATE TABLE IF NOT EXISTS sync_receipt_checkpoints (user_id TEXT PRIMARY KEY, cursor TEXT NOT NULL)',
-    );
-  }
-
-  Future<String> receiptCursor(String userId) async {
-    final rows =
-        await customSelect(
-          'SELECT cursor FROM sync_receipt_checkpoints WHERE user_id=?',
-          variables: [Variable(userId)],
-        ).get();
-    return rows.isEmpty ? '0' : rows.single.read<String>('cursor');
-  }
-
-  Future<void> saveReceiptCursor(String userId, String cursor) async {
-    await customStatement(
-      'INSERT INTO sync_receipt_checkpoints(user_id,cursor) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET cursor=excluded.cursor WHERE CAST(excluded.cursor AS INTEGER)>CAST(cursor AS INTEGER)',
-      [userId, cursor],
-    );
-  }
-
-  Future<void> rememberPurged(
-    String userId,
-    String entity,
-    Iterable<String> ids,
-  ) async {
-    for (final id in ids) {
-      await customStatement(
-        'INSERT OR IGNORE INTO local_purged_entities(user_id,entity,entity_id) VALUES(?,?,?)',
-        [userId, entity, id],
-      );
-    }
-  }
-
-  Future<Set<String>> purgedIds(
-    String userId,
-    String entity,
-    Iterable<String> ids,
-  ) async {
-    final values = ids.toSet().toList();
-    final result = <String>{};
-    for (var offset = 0; offset < values.length; offset += 400) {
-      final chunk = values.skip(offset).take(400).toList();
-      final rows =
-          await customSelect(
-            'SELECT entity_id FROM local_purged_entities WHERE user_id=? AND entity=? AND entity_id IN (${List.filled(chunk.length, '?').join(',')})',
-            variables: [
-              Variable(userId),
-              Variable(entity),
-              ...chunk.map(Variable.new),
-            ],
-          ).get();
-      result.addAll(rows.map((r) => r.read<String>('entity_id')));
-    }
-    return result;
-  }
 
   Future<void> clearAllLocalData() async {
     await transaction(() async {
@@ -200,8 +134,6 @@ class AppDatabase extends _$AppDatabase {
       await delete(cards).go();
       await delete(decks).go();
       await delete(users).go();
-      await customStatement('DELETE FROM local_purged_entities');
-      await customStatement('DELETE FROM sync_receipt_checkpoints');
     });
   }
 }

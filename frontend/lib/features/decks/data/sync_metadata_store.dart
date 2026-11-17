@@ -39,13 +39,15 @@ class SyncMetadataStore {
       final value = jsonDecode(await file.readAsString());
       if (value is! Map ||
           value['user_id'] != userId ||
-          value['version'] != 1 ||
-          value['decks'] is! Map)
+          value['version'] != 2 ||
+          value['decks'] is! Map) {
         return {};
+      }
       final entries = value['decks'] as Map;
       if (entries.keys.any((key) => key is! String) ||
-          entries.values.any((value) => value is! String))
+          entries.values.any((value) => value is! String)) {
         return {};
+      }
       return Map<String, String>.from(entries);
     } catch (_) {
       return {};
@@ -65,7 +67,7 @@ class SyncMetadataStore {
       await file.parent.create(recursive: true);
       final temporary = File('${file.path}.tmp');
       await temporary.writeAsString(
-        jsonEncode({'version': 1, 'user_id': userId, 'decks': snapshot}),
+        jsonEncode({'version': 2, 'user_id': userId, 'decks': snapshot}),
         flush: true,
       );
       if (revision(userId) != generation) {
