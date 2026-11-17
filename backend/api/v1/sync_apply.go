@@ -200,7 +200,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	}
 
 	acceptedDecks := map[uuid.UUID]syncDeck{}
-	acceptedCards := map[uuid.UUID]syncCard{}
+	acceptedCards := []syncCard{}
 	cascades := map[uuid.UUID]time.Time{}
 	impactedCards := map[uuid.UUID]bool{}
 	impactedDecks := map[uuid.UUID]bool{}
@@ -210,6 +210,12 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			return invalidSync("deck id belongs to another account")
 		}
 		if !exists && result.Version == 1 && !d.AllowCreate {
+			result.MissingDeckIDs = append(result.MissingDeckIDs, d.ID.String())
+			continue
+		}
+		if exists && result.Version == 1 && old.deleted && !d.IsDeleted && d.AllowCreate {
+			// A create whose acknowledgment was lost can collide with a later
+			// remote deletion. Keep the tombstone and report the local content.
 			result.MissingDeckIDs = append(result.MissingDeckIDs, d.ID.String())
 			continue
 		}
@@ -349,6 +355,13 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			result.MissingCardIDs = append(result.MissingCardIDs, c.ID.String())
 			continue
 		}
+		if exists && result.Version == 1 && old.deleted && !c.IsDeleted && c.AllowCreate {
+			result.MissingCardIDs = append(result.MissingCardIDs, c.ID.String())
+			if deck.deleted {
+				result.MissingDeckIDs = append(result.MissingDeckIDs, c.DeckID.String())
+			}
+			continue
+		}
 		if exists && result.Version == 1 && c.IsDeleted != old.deleted && c.Version <= old.version {
 			continue
 		}
@@ -361,6 +374,13 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			continue
 		}
 		if deck.deleted && !c.IsDeleted {
+			if !exists && result.Version == 1 {
+				// A new offline card still needs its parent even while the parent
+				// tombstone is retained. Do not acknowledge an unpersisted create.
+				result.MissingDeckIDs = append(result.MissingDeckIDs, c.DeckID.String())
+				result.MissingCardIDs = append(result.MissingCardIDs, c.ID.String())
+				continue
+			}
 			if !c.UpdatedAt.After(deck.updated) {
 				continue
 			}
@@ -381,7 +401,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		if c.IsDeleted {
 			c.UpdatedAt = time.Now().UTC()
 		}
-		acceptedCards[c.ID] = c
+		acceptedCards = append(acceptedCards, c)
 		cardState[c.ID] = cardRevision{c.Version, c.DeckID, user, c.UpdatedAt, c.IsDeleted, old.reviewed}
 		if old.reviewed {
 			impactedCards[c.ID] = true
@@ -417,29 +437,30 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			impactedDecks[card.deck] = true
 		}
 	}
-	cardRows := [][]any{}
-	cardWriteIDs := sortedSyncIDs(acceptedCards)
-	// Preserve validated mutation order: a deletion/move may free capacity
-	// needed by a later insertion. UUID sorting alone breaks existing triggers.
-	sort.SliceStable(cardWriteIDs, func(i, j int) bool {
-		a, b := acceptedCards[cardWriteIDs[i]], acceptedCards[cardWriteIDs[j]]
-		if !a.UpdatedAt.Equal(b.UpdatedAt) {
-			return a.UpdatedAt.Before(b.UpdatedAt)
+	// Keep every accepted mutation in validation order. Tombstone timestamps
+	// use server receipt time, and repeated IDs may have intermediate moves
+	// that free capacity required by later writes under main's card limit trigger.
+	for offset := 0; offset < len(acceptedCards); {
+		cardRows := [][]any{}
+		batchIDs := map[uuid.UUID]bool{}
+		end := offset
+		for end < len(acceptedCards) && len(cardRows) < 200 {
+			c := acceptedCards[end]
+			if batchIDs[c.ID] {
+				// PostgreSQL cannot update one ID twice in a single UPSERT.
+				break
+			}
+			batchIDs[c.ID] = true
+			cardRows = append(cardRows, []any{c.ID, c.DeckID, c.Front, c.Back, c.State, c.Interval, c.EaseFactor, c.RepetitionCount, nullableTimeValue(c.DueTimestamp), nullableTimeValue(c.LastReviewedAt), c.CreatedAt, c.UpdatedAt, c.Version, c.IsDeleted})
+			end++
 		}
-		if !a.CreatedAt.Equal(b.CreatedAt) {
-			return a.CreatedAt.Before(b.CreatedAt)
+		if err := writeSyncRows(ctx, tx, `INSERT INTO cards(id,deck_id,front,back,state,interval,ease_factor,repetition_count,due_timestamp,last_reviewed_at,created_at,updated_at,version,is_deleted) VALUES `,
+			` ON CONFLICT(id) DO UPDATE SET deck_id=EXCLUDED.deck_id,front=EXCLUDED.front,back=EXCLUDED.back,state=EXCLUDED.state,interval=EXCLUDED.interval,ease_factor=EXCLUDED.ease_factor,repetition_count=EXCLUDED.repetition_count,due_timestamp=EXCLUDED.due_timestamp,last_reviewed_at=EXCLUDED.last_reviewed_at,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE cards.deck_id IN(SELECT id FROM decks WHERE user_id=(SELECT user_id FROM decks WHERE id=EXCLUDED.deck_id))`, cardRows); err != nil {
+			return err
 		}
-		return a.ID.String() < b.ID.String()
-	})
-	for _, id := range cardWriteIDs {
-		c := acceptedCards[id]
-		cardRows = append(cardRows, []any{c.ID, c.DeckID, c.Front, c.Back, c.State, c.Interval, c.EaseFactor, c.RepetitionCount, nullableTimeValue(c.DueTimestamp), nullableTimeValue(c.LastReviewedAt), c.CreatedAt, c.UpdatedAt, c.Version, c.IsDeleted})
+		offset = end
 	}
-	if err := writeSyncRows(ctx, tx, `INSERT INTO cards(id,deck_id,front,back,state,interval,ease_factor,repetition_count,due_timestamp,last_reviewed_at,created_at,updated_at,version,is_deleted) VALUES `,
-		` ON CONFLICT(id) DO UPDATE SET deck_id=EXCLUDED.deck_id,front=EXCLUDED.front,back=EXCLUDED.back,state=EXCLUDED.state,interval=EXCLUDED.interval,ease_factor=EXCLUDED.ease_factor,repetition_count=EXCLUDED.repetition_count,due_timestamp=EXCLUDED.due_timestamp,last_reviewed_at=EXCLUDED.last_reviewed_at,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE cards.deck_id IN(SELECT id FROM decks WHERE user_id=(SELECT user_id FROM decks WHERE id=EXCLUDED.deck_id))`, cardRows); err != nil {
-		return err
-	}
-	if len(cardRows) > 0 {
+	if len(acceptedCards) > 0 {
 		var bad bool
 		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM cards c JOIN decks d ON d.id=c.deck_id WHERE c.id=ANY($1::uuid[]) AND d.user_id<>$2)`, pq.Array(cardIDs), user).Scan(&bad); err != nil {
 			return err

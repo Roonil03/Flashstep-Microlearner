@@ -32,6 +32,17 @@ func UpdateDeck(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return
 	}
+	ctx := c.Request.Context()
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
 
 	query := `
 		UPDATE decks
@@ -45,7 +56,7 @@ func UpdateDeck(c *gin.Context) {
 		  AND user_id=$6
 		  AND is_deleted=false
 	`
-	res, err := db.DB.ExecContext(c.Request.Context(), query, req.Title, nullIfEmpty(req.Description), req.IsPublic, id, req.Version, userID)
+	res, err := tx.ExecContext(ctx, query, req.Title, nullIfEmpty(req.Description), req.IsPublic, id, req.Version, userID)
 	if err != nil {
 		httperror.Internal(c, err)
 		return
@@ -54,6 +65,10 @@ func UpdateDeck(c *gin.Context) {
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		c.JSON(http.StatusConflict, gin.H{"error": "version conflict or deck not found"})
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		httperror.Internal(c, err)
 		return
 	}
 
