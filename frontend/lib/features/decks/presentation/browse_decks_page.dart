@@ -29,11 +29,6 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
     unawaited(ref.read(deckSyncServiceProvider).syncNow());
   }
 
-  Future<void> _undoDeckDeletion(PendingDeckDeletion deletion) async {
-    await ref.read(deckRepositoryProvider).undoDeckDeletion(deletion);
-    _triggerBackgroundSync();
-  }
-
   @override
   void initState() {
     super.initState();
@@ -167,33 +162,56 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
 
     try {
       final repo = ref.read(deckRepositoryProvider);
+      final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markDeckDeletedOffline(deck.id);
-      _triggerBackgroundSync();
-      if (!mounted) return;
+      unawaited(sync.syncNow());
+      if (!mounted) {
+        await repo.finalizeDeckDeletion(deletion);
+        unawaited(sync.syncNow());
+        return;
+      }
 
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       final controller = messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 10),
+          persist: MediaQuery.accessibleNavigationOf(context),
           behavior: SnackBarBehavior.floating,
           content: Text('Deck deleted: ${deck.title}'),
           action: SnackBarAction(
             label: 'UNDO',
             onPressed: () {
-              unawaited(_undoDeckDeletion(deletion).catchError((_) {}));
+              unawaited(
+                repo
+                    .undoDeckDeletion(deletion)
+                    .then((_) {
+                      unawaited(sync.syncNow());
+                    })
+                    .catchError((_) async {
+                      try {
+                        await repo.finalizeDeckDeletion(deletion);
+                        await sync.syncNow();
+                      } catch (_) {
+                        // An account switch may have closed this database.
+                      }
+                    }),
+              );
             },
           ),
         ),
       );
 
       unawaited(
-        controller.closed.then((reason) async {
-          if (reason == SnackBarClosedReason.action) {
-            return;
-          }
-          await repo.finalizeDeckDeletion(deletion);
-        }),
+        controller.closed
+            .then((reason) async {
+              if (reason == SnackBarClosedReason.action) {
+                return;
+              }
+              await repo.finalizeDeckDeletion(deletion);
+              await sync.syncNow();
+            })
+            .catchError((_) {}),
       );
     } catch (e) {
       if (!mounted) return;

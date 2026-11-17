@@ -99,6 +99,7 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('"${deck.title}" was added to your decks.'),
+          persist: MediaQuery.accessibleNavigationOf(context),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
             label: 'Open',
@@ -311,7 +312,8 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                                             ),
                                           )
                                           : LearningAction(
-                                            onPressed: () => _downloadDeck(deck),
+                                            onPressed:
+                                                () => _downloadDeck(deck),
                                             icon: Icons.download_rounded,
                                             label: 'Add to my decks',
                                           ),

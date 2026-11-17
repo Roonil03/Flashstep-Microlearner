@@ -89,6 +89,11 @@ class Cards extends Table {
 
 @DriftDatabase(tables: [ReviewLogs, SyncQueueItems, Users, Decks, Cards])
 class AppDatabase extends _$AppDatabase {
+  // A visible Undo action can outlive the normal timeout for accessibility.
+  // Keep its changes local until the action is used or dismissed.
+  final Set<String> heldDeckDeletions = {};
+  final Set<String> heldCardDeletions = {};
+
   AppDatabase.forTesting(super.executor) : databaseFileName = ':memory:';
 
   AppDatabase._({required this.databaseFileName})

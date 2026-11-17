@@ -36,16 +36,6 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     unawaited(ref.read(deckSyncServiceProvider).syncNow());
   }
 
-  Future<void> _undoDeckDeletion(PendingDeckDeletion deletion) async {
-    await ref.read(deckRepositoryProvider).undoDeckDeletion(deletion);
-    _triggerBackgroundSync();
-  }
-
-  Future<void> _undoCardDeletion(PendingCardDeletion deletion) async {
-    await ref.read(deckRepositoryProvider).undoCardDeletion(deletion);
-    _triggerBackgroundSync();
-  }
-
   @override
   void initState() {
     super.initState();
@@ -179,21 +169,42 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
 
     try {
       final repo = ref.read(deckRepositoryProvider);
+      final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markDeckDeletedOffline(deck.id);
-      _triggerBackgroundSync();
-      if (!mounted) return;
+      unawaited(sync.syncNow());
+      if (!mounted) {
+        await repo.finalizeDeckDeletion(deletion);
+        unawaited(sync.syncNow());
+        return;
+      }
 
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       final controller = messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 10),
+          persist: MediaQuery.accessibleNavigationOf(context),
           behavior: SnackBarBehavior.floating,
           content: Text('Deck deleted: ${deck.title}'),
           action: SnackBarAction(
             label: 'UNDO',
             onPressed: () {
-              unawaited(_undoDeckDeletion(deletion).catchError((_) {}));
+              // The detail page has already popped when Undo is pressed.
+              unawaited(
+                repo
+                    .undoDeckDeletion(deletion)
+                    .then((_) {
+                      unawaited(sync.syncNow());
+                    })
+                    .catchError((_) async {
+                      try {
+                        await repo.finalizeDeckDeletion(deletion);
+                        await sync.syncNow();
+                      } catch (_) {
+                        // An account switch may have closed this database.
+                      }
+                    }),
+              );
             },
           ),
         ),
@@ -204,12 +215,15 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       }
 
       unawaited(
-        controller.closed.then((reason) async {
-          if (reason == SnackBarClosedReason.action) {
-            return;
-          }
-          await repo.finalizeDeckDeletion(deletion);
-        }),
+        controller.closed
+            .then((reason) async {
+              if (reason == SnackBarClosedReason.action) {
+                return;
+              }
+              await repo.finalizeDeckDeletion(deletion);
+              await sync.syncNow();
+            })
+            .catchError((_) {}),
       );
     } catch (e) {
       if (!mounted) return;
@@ -275,7 +289,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
               (context) => AlertDialog(
                 title: const Text('Delete card?'),
                 content: const Text(
-                  'This card will be removed. You can undo this for 10 seconds.',
+                  'This card will be removed. You can undo this for 2 seconds.',
                 ),
                 actions: [
                   TextButton(
@@ -295,33 +309,56 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
 
     try {
       final repo = ref.read(deckRepositoryProvider);
+      final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markCardDeletedOffline(card.id);
-      _triggerBackgroundSync();
-      if (!mounted) return;
+      unawaited(sync.syncNow());
+      if (!mounted) {
+        await repo.finalizeCardDeletion(deletion);
+        unawaited(sync.syncNow());
+        return;
+      }
 
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       final controller = messenger.showSnackBar(
         SnackBar(
-          duration: const Duration(seconds: 10),
+          duration: const Duration(seconds: 2),
+          persist: MediaQuery.accessibleNavigationOf(context),
           behavior: SnackBarBehavior.floating,
           content: const Text('Card deleted'),
           action: SnackBarAction(
             label: 'UNDO',
             onPressed: () {
-              unawaited(_undoCardDeletion(deletion).catchError((_) {}));
+              unawaited(
+                repo
+                    .undoCardDeletion(deletion)
+                    .then((_) {
+                      unawaited(sync.syncNow());
+                    })
+                    .catchError((_) async {
+                      try {
+                        await repo.finalizeCardDeletion(deletion);
+                        await sync.syncNow();
+                      } catch (_) {
+                        // An account switch may have closed this database.
+                      }
+                    }),
+              );
             },
           ),
         ),
       );
 
       unawaited(
-        controller.closed.then((reason) async {
-          if (reason == SnackBarClosedReason.action) {
-            return;
-          }
-          await repo.finalizeCardDeletion(deletion);
-        }),
+        controller.closed
+            .then((reason) async {
+              if (reason == SnackBarClosedReason.action) {
+                return;
+              }
+              await repo.finalizeCardDeletion(deletion);
+              await sync.syncNow();
+            })
+            .catchError((_) {}),
       );
     } catch (e) {
       if (!mounted) return;

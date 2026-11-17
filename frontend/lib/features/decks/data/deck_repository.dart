@@ -640,39 +640,47 @@ class DeckRepository {
     final nextVersion = card.version + 1;
     final operationId = _newOperationId();
 
-    await _database.transaction(() async {
-      await (_database.update(_database.cards)
-        ..where((tbl) => tbl.id.equals(card.id))).write(
-        db.CardsCompanion(
-          isDeleted: const Value(true),
-          updatedAt: Value(now),
-          version: Value(nextVersion),
-        ),
-      );
+    if (!_database.heldCardDeletions.add(card.id)) {
+      throw StateError('Card deletion is already pending.');
+    }
+    await _database
+        .transaction(() async {
+          await (_database.update(_database.cards)
+            ..where((tbl) => tbl.id.equals(card.id))).write(
+            db.CardsCompanion(
+              isDeleted: const Value(true),
+              updatedAt: Value(now),
+              version: Value(nextVersion),
+            ),
+          );
 
-      await _enqueueSyncOperation(
-        operationId: operationId,
-        type: 'delete',
-        entity: 'card',
-        payload: _cardPayload(
-          id: card.id,
-          deckId: card.deckId,
-          front: card.front,
-          back: card.back,
-          state: card.state,
-          interval: card.interval,
-          easeFactor: card.easeFactor,
-          repetitionCount: card.repetitionCount,
-          dueTimestamp: card.dueTimestamp,
-          lastReviewedAt: card.lastReviewedAt,
-          createdAt: card.createdAt,
-          updatedAt: now,
-          version: nextVersion,
-          isDeleted: true,
-        ),
-        createdAt: now,
-      );
-    });
+          await _enqueueSyncOperation(
+            operationId: operationId,
+            type: 'delete',
+            entity: 'card',
+            payload: _cardPayload(
+              id: card.id,
+              deckId: card.deckId,
+              front: card.front,
+              back: card.back,
+              state: card.state,
+              interval: card.interval,
+              easeFactor: card.easeFactor,
+              repetitionCount: card.repetitionCount,
+              dueTimestamp: card.dueTimestamp,
+              lastReviewedAt: card.lastReviewedAt,
+              createdAt: card.createdAt,
+              updatedAt: now,
+              version: nextVersion,
+              isDeleted: true,
+            ),
+            createdAt: now,
+          );
+        })
+        .catchError((Object error, StackTrace stack) {
+          _database.heldCardDeletions.remove(card.id);
+          Error.throwWithStackTrace(error, stack);
+        });
 
     return PendingCardDeletion(operationId: operationId, snapshot: card);
   }
@@ -768,6 +776,7 @@ class DeckRepository {
         createdAt: now,
       );
     });
+    _database.heldCardDeletions.remove(deletion.snapshot.id);
   }
 
   Future<void> finalizeCardDeletion(PendingCardDeletion deletion) async {
@@ -776,11 +785,13 @@ class DeckRepository {
           (tbl) => tbl.id.equals(deletion.snapshot.id),
         )).getSingleOrNull();
     if (existing == null || !existing.isDeleted) {
+      _database.heldCardDeletions.remove(deletion.snapshot.id);
       return;
     }
 
     await (_database.delete(_database.cards)
       ..where((tbl) => tbl.id.equals(deletion.snapshot.id))).go();
+    _database.heldCardDeletions.remove(deletion.snapshot.id);
   }
 
   Future<PendingDeckDeletion> markDeckDeletedOffline(String deckId) async {
@@ -810,73 +821,81 @@ class DeckRepository {
     final deckOperationId = _newOperationId();
     final cardDeleteOperationIds = <String>[];
 
-    await _database.transaction(() async {
-      await (_database.update(_database.decks)
-        ..where((tbl) => tbl.id.equals(deck.id))).write(
-        db.DecksCompanion(
-          isDeleted: const Value(true),
-          updatedAt: Value(now),
-          version: Value(deckNextVersion),
-        ),
-      );
+    if (!_database.heldDeckDeletions.add(deck.id)) {
+      throw StateError('Deck deletion is already pending.');
+    }
+    await _database
+        .transaction(() async {
+          await (_database.update(_database.decks)
+            ..where((tbl) => tbl.id.equals(deck.id))).write(
+            db.DecksCompanion(
+              isDeleted: const Value(true),
+              updatedAt: Value(now),
+              version: Value(deckNextVersion),
+            ),
+          );
 
-      await _enqueueSyncOperation(
-        operationId: deckOperationId,
-        type: 'delete',
-        entity: 'deck',
-        payload: _deckPayload(
-          id: deck.id,
-          userId: deck.userId,
-          title: deck.title,
-          description: deck.description,
-          isPublic: deck.isPublic,
-          createdAt: deck.createdAt,
-          updatedAt: now,
-          version: deckNextVersion,
-          isDeleted: true,
-        ),
-        createdAt: now,
-      );
+          await _enqueueSyncOperation(
+            operationId: deckOperationId,
+            type: 'delete',
+            entity: 'deck',
+            payload: _deckPayload(
+              id: deck.id,
+              userId: deck.userId,
+              title: deck.title,
+              description: deck.description,
+              isPublic: deck.isPublic,
+              createdAt: deck.createdAt,
+              updatedAt: now,
+              version: deckNextVersion,
+              isDeleted: true,
+            ),
+            createdAt: now,
+          );
 
-      for (final card in activeCards) {
-        final nextVersion = card.version + 1;
-        final operationId = _newOperationId();
-        cardDeleteOperationIds.add(operationId);
+          for (final card in activeCards) {
+            final nextVersion = card.version + 1;
+            final operationId = _newOperationId();
+            cardDeleteOperationIds.add(operationId);
 
-        await (_database.update(_database.cards)
-          ..where((tbl) => tbl.id.equals(card.id))).write(
-          db.CardsCompanion(
-            isDeleted: const Value(true),
-            updatedAt: Value(now),
-            version: Value(nextVersion),
-          ),
-        );
+            await (_database.update(_database.cards)
+              ..where((tbl) => tbl.id.equals(card.id))).write(
+              db.CardsCompanion(
+                isDeleted: const Value(true),
+                updatedAt: Value(now),
+                version: Value(nextVersion),
+              ),
+            );
 
-        await _enqueueSyncOperation(
-          operationId: operationId,
-          type: 'delete',
-          entity: 'card',
-          payload: _cardPayload(
-            id: card.id,
-            deckId: card.deckId,
-            front: card.front,
-            back: card.back,
-            state: card.state,
-            interval: card.interval,
-            easeFactor: card.easeFactor,
-            repetitionCount: card.repetitionCount,
-            dueTimestamp: card.dueTimestamp,
-            lastReviewedAt: card.lastReviewedAt,
-            createdAt: card.createdAt,
-            updatedAt: now,
-            version: nextVersion,
-            isDeleted: true,
-            fromDeckDeletion: true,
-          ),
-          createdAt: now,
-        );
-      }
-    });
+            await _enqueueSyncOperation(
+              operationId: operationId,
+              type: 'delete',
+              entity: 'card',
+              payload: _cardPayload(
+                id: card.id,
+                deckId: card.deckId,
+                front: card.front,
+                back: card.back,
+                state: card.state,
+                interval: card.interval,
+                easeFactor: card.easeFactor,
+                repetitionCount: card.repetitionCount,
+                dueTimestamp: card.dueTimestamp,
+                lastReviewedAt: card.lastReviewedAt,
+                createdAt: card.createdAt,
+                updatedAt: now,
+                version: nextVersion,
+                isDeleted: true,
+                fromDeckDeletion: true,
+              ),
+              createdAt: now,
+            );
+          }
+        })
+        .catchError((Object error, StackTrace stack) {
+          _database.heldDeckDeletions.remove(deck.id);
+          Error.throwWithStackTrace(error, stack);
+        });
 
     return PendingDeckDeletion(
       operationId: deckOperationId,
@@ -1009,6 +1028,7 @@ class DeckRepository {
         );
       }
     });
+    _database.heldDeckDeletions.remove(deletion.snapshot.id);
   }
 
   Future<void> finalizeDeckDeletion(PendingDeckDeletion deletion) async {
@@ -1017,6 +1037,7 @@ class DeckRepository {
           (tbl) => tbl.id.equals(deletion.snapshot.id),
         )).getSingleOrNull();
     if (existing == null || !existing.isDeleted) {
+      _database.heldDeckDeletions.remove(deletion.snapshot.id);
       return;
     }
 
@@ -1026,6 +1047,7 @@ class DeckRepository {
       await (_database.delete(_database.decks)
         ..where((tbl) => tbl.id.equals(deletion.snapshot.id))).go();
     });
+    _database.heldDeckDeletions.remove(deletion.snapshot.id);
   }
 
   Future<List<PublicDeckSummary>> fetchPublicDecks([String? query]) async {
