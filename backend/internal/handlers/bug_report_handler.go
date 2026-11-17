@@ -1,12 +1,8 @@
 package handlers
 
 import (
-	"backend/internal/repositories"
 	"bytes"
-	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -23,13 +19,20 @@ import (
 const bugReportDispatchURL = "https://api.github.com/repos/Roonil03/Flashstep-Microlearner/actions/workflows/bug-report.yml/dispatches"
 
 type BugReportHandler struct {
-	db     *sql.DB
-	token  string
-	client *http.Client
+	db      *sql.DB
+	token   string
+	client  *http.Client
+	reports *bugReportLimiter
+	idKey   []byte
 }
 
-func NewBugReportHandler(db *sql.DB) *BugReportHandler {
-	return &BugReportHandler{db: db, token: strings.TrimSpace(os.Getenv("BUG_REPORT_GITHUB_TOKEN")), client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+func NewBugReportHandler(db *sql.DB, jwtSecret string) *BugReportHandler {
+	return &BugReportHandler{
+		db: db, token: strings.TrimSpace(os.Getenv("BUG_REPORT_GITHUB_TOKEN")),
+		client:  &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+		reports: &bugReportLimiter{entries: make(map[string]*bugReportReservation)},
+		idKey:   []byte(jwtSecret),
+	}
 }
 
 type bugReportRequest struct {
@@ -67,7 +70,8 @@ func (r *bugReportRequest) normalizeAndValidate() bool {
 // solely for private quota/deduplication; only explicitly supplied text is sent.
 func (h *BugReportHandler) Create(c *gin.Context) {
 	userID := c.GetString("user_id")
-	if _, err := uuid.Parse(userID); err != nil {
+	accountID, err := uuid.Parse(userID)
+	if err != nil || accountID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Sign in to report a bug."})
 		return
 	}
@@ -89,7 +93,7 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report. Check field lengths and public posting consent."})
 		return
 	}
-	if h.token == "" {
+	if h.token == "" || len(h.idKey) == 0 {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bug reporting is temporarily unavailable. Your report has not been sent."})
 		return
 	}
@@ -102,81 +106,26 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		reportUnavailable(c)
 		return
 	}
-	// Keep deduplication independent of the transport encoding.
-	canonical, _ := json.Marshal(report)
-	digest := sha256.Sum256(canonical)
-	tx, err := h.db.BeginTx(c.Request.Context(), nil)
+	// Only the baseline users table is consulted; reports never change the DB.
+	var active bool
+	err = h.db.QueryRowContext(c.Request.Context(), "SELECT EXISTS (SELECT 1 FROM users WHERE id=$1 AND is_deleted=false)", accountID.String()).Scan(&active)
 	if err != nil {
 		reportUnavailable(c)
 		return
 	}
-	defer tx.Rollback()
-	// Serialize reservations across all server replicas, including per-account and
-	// global quotas. Lock the account so deletion cannot race with reservation.
-	if _, err = tx.ExecContext(c.Request.Context(), "SELECT pg_advisory_xact_lock($1)", repositories.BugReportQuotaLock); err != nil {
-		reportUnavailable(c)
-		return
-	}
-	var active bool
-	err = tx.QueryRowContext(c.Request.Context(), "SELECT NOT is_deleted FROM users WHERE id=$1 FOR UPDATE", userID).Scan(&active)
-	if err == sql.ErrNoRows || (err == nil && !active) {
+	if !active {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Sign in to an active account to report a bug."})
 		return
 	}
-	if err != nil {
-		reportUnavailable(c)
-		return
-	}
-	if err = repositories.CleanupBugReportMetadata(c.Request.Context(), tx); err != nil {
-		reportUnavailable(c)
-		return
-	}
-	var id, status string
-	var recentlyAttempted bool
-	err = tx.QueryRowContext(c.Request.Context(), `SELECT id,status,last_attempt_at > NOW() - INTERVAL '1 minute' FROM bug_report_submissions WHERE user_id=$1 AND content_hash=$2`, userID, hex.EncodeToString(digest[:])).Scan(&id, &status, &recentlyAttempted)
-	if err != nil && err != sql.ErrNoRows {
-		reportUnavailable(c)
-		return
-	}
-	exists := err == nil
-	if exists && status == "accepted" {
+	canonical, _ := json.Marshal(report)
+	id, accountKey := bugReportIdentity(h.idKey, accountID, canonical)
+	reservation, duplicate, permitted := h.reports.reserve(id, accountKey, time.Now())
+	if duplicate {
 		c.JSON(http.StatusAccepted, gin.H{"report_id": id, "message": "This report has already been queued for public posting."})
 		return
 	}
-	if exists && recentlyAttempted {
+	if !permitted {
 		reportLimited(c)
-		return
-	}
-	var accountAttempts, globalAttempts int
-	if err = tx.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FILTER (WHERE s.user_id=$1 AND a.attempted_at > NOW() - INTERVAL '24 hours'), COUNT(*) FILTER (WHERE a.attempted_at > NOW() - INTERVAL '1 hour') FROM bug_report_attempts a JOIN bug_report_submissions s ON s.id=a.submission_id`, userID).Scan(&accountAttempts, &globalAttempts); err != nil {
-		reportUnavailable(c)
-		return
-	}
-	var recentAccount bool
-	if err = tx.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM bug_report_submissions WHERE user_id=$1 AND last_attempt_at > NOW() - INTERVAL '5 minutes')`, userID).Scan(&recentAccount); err != nil {
-		reportUnavailable(c)
-		return
-	}
-	if accountAttempts >= 3 || globalAttempts >= 30 || (!exists && recentAccount) {
-		reportLimited(c)
-		return
-	}
-	if exists {
-		_, err = tx.ExecContext(c.Request.Context(), "UPDATE bug_report_submissions SET status='pending',attempts=attempts+1,last_attempt_at=NOW() WHERE id=$1", id)
-	} else {
-		id = uuid.NewString()
-		_, err = tx.ExecContext(c.Request.Context(), "INSERT INTO bug_report_submissions(id,user_id,content_hash,status) VALUES($1,$2,$3,'pending')", id, userID, hex.EncodeToString(digest[:]))
-	}
-	if err != nil {
-		reportUnavailable(c)
-		return
-	}
-	if _, err = tx.ExecContext(c.Request.Context(), "INSERT INTO bug_report_attempts(submission_id,attempted_at) SELECT id,last_attempt_at FROM bug_report_submissions WHERE id=$1", id); err != nil {
-		reportUnavailable(c)
-		return
-	}
-	if err = tx.Commit(); err != nil {
-		reportUnavailable(c)
 		return
 	}
 	dispatch, _ := json.Marshal(map[string]any{"ref": "main", "inputs": map[string]string{"report_id": id, "report": payload.String()}})
@@ -194,15 +143,9 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 	if response != nil {
 		response.Body.Close()
 	}
-	status = "retry"
-	if accepted {
-		status = "accepted"
-	}
-	// A failed status update leaves a retryable reservation with the same report
-	// ID; the workflow also deduplicates by ID before creating an issue.
-	statusCtx, cancelStatus := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 2*time.Second)
-	defer cancelStatus()
-	_, _ = h.db.ExecContext(statusCtx, "UPDATE bug_report_submissions SET status=$1 WHERE id=$2", status, id)
+	// The same private ID is regenerated after restarts, so the workflow's
+	// bot-owned issue marker also deduplicates uncertain delivery retries.
+	h.reports.finish(id, reservation, accepted)
 	if !accepted {
 		reportUnavailable(c)
 		return
