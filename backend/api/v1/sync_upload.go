@@ -17,12 +17,14 @@ import (
 const maxCardsPerDeck = 50
 
 type SyncUploadPayload struct {
-	Decks      []map[string]any `json:"decks"`
-	Cards      []map[string]any `json:"cards"`
-	ReviewLogs []map[string]any `json:"review_logs"`
+	ReconciliationVersion int              `json:"reconciliation_version"`
+	Decks                 []map[string]any `json:"decks"`
+	Cards                 []map[string]any `json:"cards"`
+	ReviewLogs            []map[string]any `json:"review_logs"`
 }
 
 type syncDeck struct {
+	AllowCreate bool
 	ID          uuid.UUID
 	Title       string
 	Description *string
@@ -34,6 +36,7 @@ type syncDeck struct {
 }
 
 type syncCard struct {
+	AllowCreate      bool
 	ID               uuid.UUID
 	DeckID           uuid.UUID
 	Front            string
@@ -212,6 +215,7 @@ func normalizeDeck(raw map[string]interface{}) (syncDeck, error) {
 	}
 
 	return syncDeck{
+		AllowCreate: asBool(raw["allow_create"]),
 		ID:          id,
 		Title:       asString(raw["title"]),
 		Description: normalizeNullableString(raw["description"]),
@@ -250,6 +254,7 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 	}
 
 	return syncCard{
+		AllowCreate:      asBool(raw["allow_create"]),
 		ID:               id,
 		DeckID:           deckID,
 		Front:            asString(raw["front"]),
@@ -336,6 +341,10 @@ func SyncUpload(c *gin.Context) {
 		return
 	}
 
+	if payload.ReconciliationVersion < 0 || payload.ReconciliationVersion > 1 {
+		c.JSON(400, gin.H{"error": "unsupported reconciliation_version"})
+		return
+	}
 	decks := make([]syncDeck, 0, len(payload.Decks))
 	if len(payload.Decks)+len(payload.Cards)+len(payload.ReviewLogs) > 1000 {
 		c.JSON(400, gin.H{"error": "upload at most 1000 records per request"})
@@ -431,7 +440,8 @@ func SyncUpload(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-	if err := applySyncChanges(ctx, tx, userID, decks, cards, reviewLogs); err != nil {
+	result := syncReconciliation{Version: payload.ReconciliationVersion, MissingDeckIDs: []string{}, MissingCardIDs: []string{}, MissingReviewLogIDs: []string{}}
+	if err := applySyncChanges(ctx, tx, userID, decks, cards, reviewLogs, &result); err != nil {
 		if syncErrorStatus(err) == 400 {
 			c.JSON(400, gin.H{"error": err.Error()})
 		} else {
@@ -445,10 +455,14 @@ func SyncUpload(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":                "synced",
-		"decks_processed":       len(decks),
-		"cards_processed":       len(cards),
-		"review_logs_processed": len(reviewLogs),
-		"server_time":           time.Now().UTC().Format(time.RFC3339),
+		"status":                 "synced",
+		"reconciliation_version": 1,
+		"missing_deck_ids":       result.MissingDeckIDs,
+		"missing_card_ids":       result.MissingCardIDs,
+		"missing_review_log_ids": result.MissingReviewLogIDs,
+		"decks_processed":        len(decks),
+		"cards_processed":        len(cards),
+		"review_logs_processed":  len(reviewLogs),
+		"server_time":            time.Now().UTC().Format(time.RFC3339),
 	})
 }

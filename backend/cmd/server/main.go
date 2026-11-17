@@ -31,8 +31,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	maintenance.StartDeletedUserCleanup(conn)
-	maintenance.StartBugReportCleanup(conn)
 	maintenance.StartAnalyticsAggregation(conn)
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
@@ -42,7 +40,7 @@ func main() {
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	userService := services.NewUserService(userRepo)
 	userHandler := handlers.NewUserHandler(userService)
-	reportHandler := handlers.NewBugReportHandler(conn)
+	reportHandler := handlers.NewBugReportHandler(conn, cfg.JWTSecret)
 	// router := gin.Default()
 	router := gin.New()
 	router.Use(middleware.Recovery(), middleware.RequestLimits())
@@ -66,7 +64,7 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := router.Group("/api/v1")
-	api.Use(middleware.RateLimit(6000, time.Minute))
+	api.Use(middleware.RateLimit(6000, time.Minute), middleware.CleanupDeletedAccounts(conn))
 	{
 		authLimit := middleware.RateLimit(120, time.Minute)
 		api.POST("/auth/register", authLimit, authHandler.Register)

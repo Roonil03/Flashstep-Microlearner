@@ -131,7 +131,7 @@ func (r *UserRepository) SoftDeleteUser(userID string) error {
 		SET is_deleted = TRUE,
 		    updated_at = NOW(),
 		    version = version + 1
-		WHERE id = $1
+		WHERE id = $1 AND is_deleted = FALSE
 	`, userID)
 	return err
 }

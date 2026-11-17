@@ -58,17 +58,12 @@ func SyncManifest(c *gin.Context) {
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
- WITH revisions AS (
- SELECT id,user_id,version,updated_at,is_deleted FROM decks
- UNION ALL SELECT entity_id,user_id,1,purged_at,true FROM purged_entities WHERE entity='deck' AND $4),
- page AS (SELECT id,version,updated_at,is_deleted FROM revisions WHERE user_id=$1 AND id>$2 ORDER BY id LIMIT $3)
+ WITH page AS (SELECT id,version,updated_at,is_deleted FROM decks WHERE user_id=$1 AND id>$2 ORDER BY id LIMIT $3)
  SELECT d.id,md5(jsonb_build_array(d.id,d.version,EXTRACT(EPOCH FROM d.updated_at),d.is_deleted,
- COALESCE(children.revisions,'[]'::jsonb))::text),
- EXISTS(SELECT 1 FROM purged_entities p WHERE p.entity='deck' AND p.entity_id=d.id AND p.user_id=$1)
+ COALESCE(children.revisions,'[]'::jsonb))::text)
  FROM page d LEFT JOIN LATERAL (
  SELECT jsonb_agg(jsonb_build_array(c.id,c.deck_id,c.version,EXTRACT(EPOCH FROM c.updated_at),c.is_deleted) ORDER BY c.id) AS revisions
- FROM (SELECT id,deck_id,version,updated_at,is_deleted FROM cards
- UNION ALL SELECT entity_id,parent_id,1,purged_at,true FROM purged_entities WHERE entity='card' AND user_id=$1 AND $4) c WHERE c.deck_id=d.id) children ON true ORDER BY d.id`, user, cursor, limit+1, c.Query("include_purged") != "false")
+ FROM cards c WHERE c.deck_id=d.id) children ON true ORDER BY d.id`, user, cursor, limit+1)
 	if err != nil {
 		httperror.Internal(c, err)
 		return
@@ -79,8 +74,7 @@ func SyncManifest(c *gin.Context) {
 	for rows.Next() {
 		var id uuid.UUID
 		var fingerprint string
-		var purged bool
-		if err := rows.Scan(&id, &fingerprint, &purged); err != nil {
+		if err := rows.Scan(&id, &fingerprint); err != nil {
 			httperror.Internal(c, err)
 			return
 		}
@@ -88,13 +82,13 @@ func SyncManifest(c *gin.Context) {
 			next = out[len(out)-1]["id"]
 			break
 		}
-		out = append(out, gin.H{"id": id.String(), "fingerprint": fingerprint, "is_purged": purged})
+		out = append(out, gin.H{"id": id.String(), "fingerprint": fingerprint, "is_purged": false})
 	}
 	if err := rows.Err(); err != nil {
 		httperror.Internal(c, err)
 		return
 	}
-	response := gin.H{"decks": out, "next_cursor": next}
+	response := gin.H{"decks": out, "next_cursor": next, "reconciliation_version": 1}
 	if cursor == uuid.Nil {
 		var reviewsFingerprint string
 		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT md5(count(*)::text || ':' || COALESCE(max(created_at)::text, '')) FROM review_logs WHERE user_id=$1`, user).Scan(&reviewsFingerprint)
@@ -160,14 +154,29 @@ func SyncFetch(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	var unauthorized bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM decks WHERE id=ANY($1::uuid[]) AND user_id<>$2)`, pq.Array(ids), user).Scan(&unauthorized); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	if unauthorized {
+		c.JSON(400, gin.H{"error": "missing or unauthorized deck"})
+		return
+	}
 	decks, err := readSyncDecks(ctx, tx, `WHERE d.user_id=$1 AND d.id=ANY($2::uuid[]) ORDER BY d.id`, user, pq.Array(ids))
 	if err != nil {
 		httperror.Internal(c, err)
 		return
 	}
-	if len(decks) != len(ids) {
-		c.JSON(400, gin.H{"error": "missing or unauthorized deck"})
-		return
+	missing := []string{}
+	found := map[string]bool{}
+	for _, d := range decks {
+		found[d["id"].(string)] = true
+	}
+	for _, id := range ids {
+		if !found[id] {
+			missing = append(missing, id)
+		}
 	}
 	includePurged := request.IncludePurged == nil || *request.IncludePurged
 	cards, err := readSyncCardsIncludingPurged(ctx, tx, includePurged, `WHERE d.user_id=$1 AND c.deck_id=ANY($2::uuid[]) AND c.id>$3 ORDER BY c.id LIMIT $4`, user, pq.Array(ids), cursor, limit+1)
@@ -184,5 +193,5 @@ func SyncFetch(c *gin.Context) {
 		httperror.Internal(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"decks": decks, "cards": cards, "next_cursor": next})
+	c.JSON(200, gin.H{"decks": decks, "cards": cards, "next_cursor": next, "missing_deck_ids": missing, "reconciliation_version": 1})
 }

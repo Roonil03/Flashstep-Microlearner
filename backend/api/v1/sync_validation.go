@@ -19,7 +19,7 @@ func validateSyncRecord(raw map[string]any, entity string) error {
 			}
 		}
 	}
-	for _, field := range []string{"is_deleted", "is_public", "from_deck_deletion"} {
+	for _, field := range []string{"is_deleted", "is_public", "from_deck_deletion", "allow_create"} {
 		if value, ok := raw[field]; ok {
 			if _, ok := value.(bool); !ok {
 				return bad

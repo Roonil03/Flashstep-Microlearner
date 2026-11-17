@@ -62,15 +62,6 @@ func CreateCard(c *gin.Context) {
 		httperror.Internal(c, err)
 		return
 	}
-	var claimed bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM purged_entities WHERE entity='card' AND entity_id=$1)`, id).Scan(&claimed); err != nil {
-		httperror.Internal(c, err)
-		return
-	}
-	if claimed {
-		c.JSON(409, gin.H{"error": "card id unavailable; try again"})
-		return
-	}
 	var lockedID uuid.UUID
 	err = tx.QueryRowContext(ctx, `SELECT id FROM decks WHERE id=$1 AND user_id=$2 AND is_deleted=false FOR UPDATE`, deckID, userID).Scan(&lockedID)
 	if err == sql.ErrNoRows {

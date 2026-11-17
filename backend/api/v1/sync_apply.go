@@ -14,17 +14,26 @@ import (
 	"github.com/lib/pq"
 )
 
+type syncReconciliation struct {
+	Version             int
+	MissingDeckIDs      []string
+	MissingCardIDs      []string
+	MissingReviewLogIDs []string
+}
+
 type syncInputError struct{ message string }
 
 func (e *syncInputError) Error() string { return e.message }
 func invalidSync(message string) error  { return &syncInputError{message} }
 
 type deckRevision struct {
+	version int
 	owner   uuid.UUID
 	updated time.Time
 	deleted bool
 }
 type cardRevision struct {
+	version           int
 	deck, owner       uuid.UUID
 	updated           time.Time
 	deleted, reviewed bool
@@ -53,7 +62,7 @@ func writeSyncRows(ctx context.Context, tx *sql.Tx, prefix, suffix string, rows 
 	return nil
 }
 
-func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []syncDeck, cards []syncCard, logs []syncReviewLog) error {
+func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []syncDeck, cards []syncCard, logs []syncReviewLog, result *syncReconciliation) error {
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, user.String()); err != nil {
 		return err
 	}
@@ -70,14 +79,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	if err := repositories.LockContentIDs(ctx, tx, claims); err != nil {
 		return err
 	}
-	decks, cards, archivedCards, err := filterPurgedChanges(ctx, tx, user, decks, cards, logs)
-	if err != nil {
-		return err
-	}
 	deckIDs, cardIDs, logIDs := []string{}, []string{}, []string{}
-	for _, deck := range archivedCards {
-		deckIDs = append(deckIDs, deck.String())
-	}
 	deletedDeckIDs := []string{}
 	for _, d := range decks {
 		deckIDs = append(deckIDs, d.ID.String())
@@ -112,14 +114,14 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		return err
 	}
 	deckState := map[uuid.UUID]deckRevision{}
-	rows, err := tx.QueryContext(ctx, `SELECT id,user_id,updated_at,is_deleted FROM decks WHERE id=ANY($1::uuid[]) OR id IN(SELECT deck_id FROM cards WHERE id=ANY($2::uuid[]))`, pq.Array(deckIDs), pq.Array(cardIDs))
+	rows, err := tx.QueryContext(ctx, `SELECT id,user_id,updated_at,is_deleted,version FROM decks WHERE id=ANY($1::uuid[]) OR id IN(SELECT deck_id FROM cards WHERE id=ANY($2::uuid[]))`, pq.Array(deckIDs), pq.Array(cardIDs))
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var id uuid.UUID
 		var d deckRevision
-		if err = rows.Scan(&id, &d.owner, &d.updated, &d.deleted); err != nil {
+		if err = rows.Scan(&id, &d.owner, &d.updated, &d.deleted, &d.version); err != nil {
 			rows.Close()
 			return err
 		}
@@ -138,7 +140,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	}
 	cardState := map[uuid.UUID]cardRevision{}
 	counts := map[uuid.UUID]int{}
-	rows, err = tx.QueryContext(ctx, `SELECT c.id,c.deck_id,d.user_id,c.updated_at,c.is_deleted,
+	rows, err = tx.QueryContext(ctx, `SELECT c.id,c.deck_id,d.user_id,c.updated_at,c.is_deleted,c.version,
  EXISTS(SELECT 1 FROM review_logs rl WHERE rl.card_id=c.id AND rl.user_id=$1)
 	 FROM cards c JOIN decks d ON d.id=c.deck_id WHERE c.deck_id=ANY($2::uuid[]) OR c.id=ANY($3::uuid[])`, user, pq.Array(deletedDeckIDs), pq.Array(cardIDs))
 	if err != nil {
@@ -147,7 +149,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	for rows.Next() {
 		var id uuid.UUID
 		var c cardRevision
-		if err = rows.Scan(&id, &c.deck, &c.owner, &c.updated, &c.deleted, &c.reviewed); err != nil {
+		if err = rows.Scan(&id, &c.deck, &c.owner, &c.updated, &c.deleted, &c.version, &c.reviewed); err != nil {
 			rows.Close()
 			return err
 		}
@@ -207,10 +209,23 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		if exists && old.owner != user {
 			return invalidSync("deck id belongs to another account")
 		}
-		if exists && !d.UpdatedAt.After(old.updated) {
+		if !exists && result.Version == 1 && !d.AllowCreate {
+			result.MissingDeckIDs = append(result.MissingDeckIDs, d.ID.String())
 			continue
 		}
-		deckState[d.ID] = deckRevision{user, d.UpdatedAt, d.IsDeleted}
+		if exists && result.Version == 1 && d.IsDeleted != old.deleted && d.Version <= old.version {
+			continue
+		}
+		if exists && old.deleted && d.IsDeleted {
+			continue
+		}
+		if exists && !d.UpdatedAt.After(old.updated) && !(d.IsDeleted != old.deleted && d.Version > old.version) {
+			continue
+		}
+		if d.IsDeleted {
+			d.UpdatedAt = time.Now().UTC()
+		}
+		deckState[d.ID] = deckRevision{d.Version, user, d.UpdatedAt, d.IsDeleted}
 		acceptedDecks[d.ID] = d
 		if d.IsDeleted {
 			// Only the first accepted cascade sees active child rows. A later deck undo
@@ -240,7 +255,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		deckRows = append(deckRows, []any{d.ID, user, d.Title, nullableStringValue(d.Description), d.IsPublic, d.CreatedAt, d.UpdatedAt, d.Version, d.IsDeleted})
 	}
 	if err := writeSyncRows(ctx, tx, `INSERT INTO decks(id,user_id,title,description,is_public,created_at,updated_at,version,is_deleted) VALUES `,
-		` ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,description=EXCLUDED.description,is_public=EXCLUDED.is_public,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE decks.user_id=EXCLUDED.user_id AND decks.updated_at<EXCLUDED.updated_at`, deckRows); err != nil {
+		` ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,description=EXCLUDED.description,is_public=EXCLUDED.is_public,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE decks.user_id=EXCLUDED.user_id`, deckRows); err != nil {
 		return err
 	}
 	// Detect concurrent cross-account UUID collisions without acknowledging them.
@@ -267,14 +282,14 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 	for id := range deckState {
 		revisionIDs = append(revisionIDs, id.String())
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT id,user_id,updated_at,is_deleted FROM decks WHERE id=ANY($1::uuid[])`, pq.Array(revisionIDs))
+	rows, err = tx.QueryContext(ctx, `SELECT id,user_id,updated_at,is_deleted,version FROM decks WHERE id=ANY($1::uuid[])`, pq.Array(revisionIDs))
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var id uuid.UUID
 		var d deckRevision
-		if err = rows.Scan(&id, &d.owner, &d.updated, &d.deleted); err != nil {
+		if err = rows.Scan(&id, &d.owner, &d.updated, &d.deleted, &d.version); err != nil {
 			rows.Close()
 			return err
 		}
@@ -290,7 +305,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		for id := range cascades {
 			ids = append(ids, id.String())
 		}
-		rows, err = tx.QueryContext(ctx, `SELECT id,updated_at,is_deleted FROM cards WHERE deck_id=ANY($1::uuid[])`, pq.Array(ids))
+		rows, err = tx.QueryContext(ctx, `SELECT id,updated_at,is_deleted,version FROM cards WHERE deck_id=ANY($1::uuid[])`, pq.Array(ids))
 		if err != nil {
 			return err
 		}
@@ -298,13 +313,15 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			var id uuid.UUID
 			var stamp time.Time
 			var deleted bool
-			if err = rows.Scan(&id, &stamp, &deleted); err != nil {
+			var version int
+			if err = rows.Scan(&id, &stamp, &deleted, &version); err != nil {
 				rows.Close()
 				return err
 			}
 			c := cardState[id]
 			c.updated = stamp
 			c.deleted = deleted
+			c.version = version
 			cardState[id] = c
 		}
 		err = rows.Err()
@@ -320,8 +337,23 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			return invalidSync("card id belongs to another account")
 		}
 		deck, ok := deckState[c.DeckID]
+		if !ok && result.Version == 1 {
+			result.MissingDeckIDs = append(result.MissingDeckIDs, c.DeckID.String())
+			result.MissingCardIDs = append(result.MissingCardIDs, c.ID.String())
+			continue
+		}
 		if !ok || deck.owner != user {
 			return invalidSync("card references a missing or unauthorized deck")
+		}
+		if !exists && result.Version == 1 && !c.AllowCreate {
+			result.MissingCardIDs = append(result.MissingCardIDs, c.ID.String())
+			continue
+		}
+		if exists && result.Version == 1 && c.IsDeleted != old.deleted && c.Version <= old.version {
+			continue
+		}
+		if exists && old.deleted && c.IsDeleted {
+			continue
 		}
 		if c.IsDeleted && c.FromDeckDeletion && !deck.deleted {
 			// A rejected or subsequently undone parent deletion must not leave
@@ -334,7 +366,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			}
 			return invalidSync("cannot apply active card changes to a deleted deck")
 		}
-		if exists && !c.UpdatedAt.After(old.updated) {
+		if exists && !c.UpdatedAt.After(old.updated) && !(c.IsDeleted != old.deleted && c.Version > old.version) {
 			continue
 		}
 		if exists && !old.deleted {
@@ -346,8 +378,11 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 				return invalidSync("a deck can contain at most 50 cards")
 			}
 		}
+		if c.IsDeleted {
+			c.UpdatedAt = time.Now().UTC()
+		}
 		acceptedCards[c.ID] = c
-		cardState[c.ID] = cardRevision{c.DeckID, user, c.UpdatedAt, c.IsDeleted, old.reviewed}
+		cardState[c.ID] = cardRevision{c.Version, c.DeckID, user, c.UpdatedAt, c.IsDeleted, old.reviewed}
 		if old.reviewed {
 			impactedCards[c.ID] = true
 			impactedDecks[c.DeckID] = true
@@ -362,11 +397,9 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			return invalidSync("review log user_id does not match authenticated user")
 		}
 		card, ok := cardState[l.CardID]
-		if !ok {
-			if deck, archived := archivedCards[l.CardID]; archived {
-				card = cardRevision{deck: deck, owner: user, deleted: true}
-				ok = true
-			}
+		if !ok && result.Version == 1 {
+			result.MissingReviewLogIDs = append(result.MissingReviewLogIDs, l.ID.String())
+			continue
 		}
 		if !ok || card.owner != user {
 			return invalidSync("review log references a missing or unauthorized card")
@@ -379,9 +412,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		}
 		acceptedLogs[l.ID] = l
 		existingLogs[l.ID] = logReference{user, l.CardID}
-		if _, archived := archivedCards[l.CardID]; !archived {
-			impactedCards[l.CardID] = true
-		}
+		impactedCards[l.CardID] = true
 		if d, present := deckState[card.deck]; present && d.owner == user {
 			impactedDecks[card.deck] = true
 		}
@@ -405,7 +436,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		cardRows = append(cardRows, []any{c.ID, c.DeckID, c.Front, c.Back, c.State, c.Interval, c.EaseFactor, c.RepetitionCount, nullableTimeValue(c.DueTimestamp), nullableTimeValue(c.LastReviewedAt), c.CreatedAt, c.UpdatedAt, c.Version, c.IsDeleted})
 	}
 	if err := writeSyncRows(ctx, tx, `INSERT INTO cards(id,deck_id,front,back,state,interval,ease_factor,repetition_count,due_timestamp,last_reviewed_at,created_at,updated_at,version,is_deleted) VALUES `,
-		` ON CONFLICT(id) DO UPDATE SET deck_id=EXCLUDED.deck_id,front=EXCLUDED.front,back=EXCLUDED.back,state=EXCLUDED.state,interval=EXCLUDED.interval,ease_factor=EXCLUDED.ease_factor,repetition_count=EXCLUDED.repetition_count,due_timestamp=EXCLUDED.due_timestamp,last_reviewed_at=EXCLUDED.last_reviewed_at,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE cards.updated_at<EXCLUDED.updated_at AND cards.deck_id IN(SELECT id FROM decks WHERE user_id=(SELECT user_id FROM decks WHERE id=EXCLUDED.deck_id))`, cardRows); err != nil {
+		` ON CONFLICT(id) DO UPDATE SET deck_id=EXCLUDED.deck_id,front=EXCLUDED.front,back=EXCLUDED.back,state=EXCLUDED.state,interval=EXCLUDED.interval,ease_factor=EXCLUDED.ease_factor,repetition_count=EXCLUDED.repetition_count,due_timestamp=EXCLUDED.due_timestamp,last_reviewed_at=EXCLUDED.last_reviewed_at,updated_at=EXCLUDED.updated_at,version=EXCLUDED.version,is_deleted=EXCLUDED.is_deleted WHERE cards.deck_id IN(SELECT id FROM decks WHERE user_id=(SELECT user_id FROM decks WHERE id=EXCLUDED.deck_id))`, cardRows); err != nil {
 		return err
 	}
 	if len(cardRows) > 0 {

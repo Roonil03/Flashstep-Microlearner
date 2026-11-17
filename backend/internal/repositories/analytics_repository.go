@@ -375,8 +375,11 @@ func (r *AnalyticsRepository) RefreshUserAnalytics(ctx context.Context, userID s
 	return tx.Commit()
 }
 
-// RefreshUserAnalyticsTx keeps derived data atomic with an upload.
+// RefreshUserAnalyticsTx keeps derived data atomic with upload or deletion.
 func (r *AnalyticsRepository) RefreshUserAnalyticsTx(ctx context.Context, tx *sql.Tx, userID string, asOf time.Time) error {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID); err != nil {
+		return err
+	}
 	asOf = utcDay(asOf)
 	from := asOf.AddDate(0, 0, -89)
 	windowDays := []int{7, 30, 90}

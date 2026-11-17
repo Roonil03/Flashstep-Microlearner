@@ -13,10 +13,7 @@ type syncQuerier interface {
 }
 
 func readSyncDecks(ctx context.Context, q syncQuerier, filter string, args ...any) ([]gin.H, error) {
-	rows, err := q.QueryContext(ctx, `SELECT d.id,d.user_id,d.title,d.description,d.is_public,d.created_at,d.updated_at,d.version,d.is_deleted FROM (
- SELECT id,user_id,title,description,is_public,created_at,updated_at,version,is_deleted FROM decks
- UNION ALL SELECT entity_id,user_id,'',NULL,false,purged_at,purged_at,1,true FROM purged_entities WHERE entity='deck'
- ) d `+filter, args...)
+	rows, err := q.QueryContext(ctx, `SELECT d.id,d.user_id,d.title,d.description,d.is_public,d.created_at,d.updated_at,d.version,d.is_deleted FROM decks d `+filter, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -42,14 +39,7 @@ func readSyncCards(ctx context.Context, q syncQuerier, filter string, args ...an
 }
 
 func readSyncCardsIncludingPurged(ctx context.Context, q syncQuerier, includePurged bool, filter string, args ...any) ([]gin.H, error) {
-	receiptFilter := ""
-	if !includePurged {
-		receiptFilter = " AND false"
-	}
-	rows, err := q.QueryContext(ctx, `SELECT c.id,c.deck_id,c.front,c.back,c.state,c.interval,c.ease_factor,c.repetition_count,c.due_timestamp,c.last_reviewed_at,c.created_at,c.updated_at,c.version,c.is_deleted FROM (
- SELECT id,deck_id,front,back,state,interval,ease_factor,repetition_count,due_timestamp,last_reviewed_at,created_at,updated_at,version,is_deleted FROM cards
- UNION ALL SELECT entity_id,parent_id,'','','new',0,2.5,0,NULL,NULL,purged_at,purged_at,1,true FROM purged_entities WHERE entity='card'`+receiptFilter+`
- ) c JOIN (SELECT id,user_id FROM decks UNION ALL SELECT entity_id,user_id FROM purged_entities WHERE entity='deck'`+receiptFilter+`) d ON d.id=c.deck_id `+filter, args...)
+	rows, err := q.QueryContext(ctx, `SELECT c.id,c.deck_id,c.front,c.back,c.state,c.interval,c.ease_factor,c.repetition_count,c.due_timestamp,c.last_reviewed_at,c.created_at,c.updated_at,c.version,c.is_deleted FROM cards c JOIN decks d ON d.id=c.deck_id `+filter, args...)
 	if err != nil {
 		return nil, err
 	}

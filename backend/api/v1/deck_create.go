@@ -56,15 +56,6 @@ func CreateDeck(c *gin.Context) {
 		httperror.Internal(c, err)
 		return
 	}
-	var claimed bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM purged_entities WHERE entity='deck' AND entity_id=$1)`, id).Scan(&claimed); err != nil {
-		httperror.Internal(c, err)
-		return
-	}
-	if claimed {
-		c.JSON(409, gin.H{"error": "deck id unavailable; try again"})
-		return
-	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO decks (
 			id, user_id, title, description, is_public,
