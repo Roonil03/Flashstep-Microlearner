@@ -17,4 +17,4 @@ Flashstep Microlearner 1.3.0 adds public bug reporting, timed notifications, and
 
 ## Compatibility
 
-The backend uses the existing database design and requires no migration from version 1.2.0. Its existing relationships remove associated review logs when cards or decks are permanently deleted, which can change historical analytics. Public bug reporting requires the GitHub workflow and its backend credential. [Installation and upgrade instructions](../INSTALL.md) · [Bug reporting setup](bug_reporting.md)
+The backend uses the existing database design and requires no migration from version 1.2.0. Its existing relationships remove associated review logs when cards or decks are permanently deleted, which can change historical analytics. Public bug reporting requires the GitHub workflow and its backend credential.
