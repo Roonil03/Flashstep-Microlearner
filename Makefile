@@ -185,13 +185,22 @@ apk-debug:
 	cd $(FRONTEND_DIR)
 	$(FLUTTER) build apk --debug
 
-apk-release:
+# Generate the native registrant in the same mode that Gradle will compile.
+.PHONY: apk-release-prepare
+apk-release-prepare: export FLUTTER_WINDOWS := false
+apk-release-prepare: export FLUTTER_LINUX := false
+apk-release-prepare:
 	cd $(FRONTEND_DIR)
-	$(FLUTTER) build apk --release
+	$(FLUTTER) build apk --release --config-only
+	$(DART) run build_runner build --delete-conflicting-outputs
 
-apk-release-split:
+apk-release: apk-release-prepare
 	cd $(FRONTEND_DIR)
-	$(FLUTTER) build apk --release --split-per-abi
+	$(FLUTTER) build apk --release --no-pub
+
+apk-release-split: apk-release-prepare
+	cd $(FRONTEND_DIR)
+	$(FLUTTER) build apk --release --no-pub --split-per-abi
 
 apk-install-debug: apk-debug
 	$(ADB) install -r '$(FRONTEND_DIR)/build/app/outputs/flutter-apk/app-debug.apk'

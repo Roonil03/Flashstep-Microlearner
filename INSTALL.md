@@ -107,6 +107,14 @@ For device integration tests, set `FLASHSTEP_DEVICE_TEST=true` when building the
 
 ## Build APKs
 
+The release targets generate Drift code and refresh Android plugin registration
+for release, including immediately after a device test. Keep `integration_test`
+in `dev_dependencies`. If invoking Flutter directly, use `flutter build apk --release`
+after code generation. For a CI job that compiles with `--no-pub`, run
+`make apk-release-prepare` after the last debug build or test. It uses
+`flutter build apk --release --config-only` to generate the release registration
+that `flutter build apk --release --no-pub` will reuse.
+
 ### Debug APK
 
 ```bash
