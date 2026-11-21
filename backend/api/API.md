@@ -769,7 +769,8 @@ Upload behavior:
   these are ignored while their parent is active, protecting separately batched
   children after a rejected/undone deck deletion. Individual-card deletes omit
   the marker. It is not stored in the database or returned in downloads.
-- Before daily cleanup, restore a deleted deck through a newer `is_deleted=false` deck mutation.
+- While the deck's tombstone still exists, a newer `is_deleted=false` deck mutation can restore it.
+  Cleanup can remove the tombstone on authenticated activity 10 seconds after the server records deletion.
   Restoring the deck does not automatically restore its cards: upload newer
   card mutations explicitly after the deck. An active card change against a
   deleted parent is ignored if stale relative to the parent, otherwise rejected.
