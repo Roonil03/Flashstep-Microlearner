@@ -747,7 +747,11 @@ class DeckSyncService {
                 !deckIds.contains(card['deck_id'])) {
               throw const FormatException('Invalid card fetch');
             }
-            seenCards.add(card['id'] as String);
+            final cardId = card['id'] as String;
+            seenCards.add(cardId);
+            // A card missing from an earlier group may have moved into this
+            // one. Its downloaded state must survive the final cleanup.
+            absentCards.remove(cardId);
           }
           await _mergeDownloadedData(fetched.body, session);
           cardCursor = value['next_cursor'] as String?;

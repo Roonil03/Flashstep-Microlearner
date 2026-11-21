@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 
 /// Rebuildable reconciliation metadata. It is separate from the learning schema.
 class SyncMetadataStore {
+  // Refetch once to repair cards hidden by the old cross-group move cleanup.
+  static const _formatVersion = 3;
   static final _revisions = <String, int>{};
   static final _pending = <String, Future<void>>{};
   final Directory? directory;
@@ -39,7 +41,7 @@ class SyncMetadataStore {
       final value = jsonDecode(await file.readAsString());
       if (value is! Map ||
           value['user_id'] != userId ||
-          value['version'] != 2 ||
+          value['version'] != _formatVersion ||
           value['decks'] is! Map) {
         return {};
       }
@@ -67,7 +69,11 @@ class SyncMetadataStore {
       await file.parent.create(recursive: true);
       final temporary = File('${file.path}.tmp');
       await temporary.writeAsString(
-        jsonEncode({'version': 2, 'user_id': userId, 'decks': snapshot}),
+        jsonEncode({
+          'version': _formatVersion,
+          'user_id': userId,
+          'decks': snapshot,
+        }),
         flush: true,
       );
       if (revision(userId) != generation) {
