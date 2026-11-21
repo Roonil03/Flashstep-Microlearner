@@ -17,7 +17,7 @@ fingerprint to the first manifest page. Deploy it before distributing the
 v1.2.0 frontend so review history and daily limits reconcile across devices.
 Earlier clients continue using their existing sync routes; no migration is needed.
 
-The v1.3.0 backend adds activity-triggered deletion cleanup and public bug reporting
+The v1.3.0 backend adds activity-triggered account maintenance and public bug reporting
 using the existing PostgreSQL schema. No migration from v1.2.0 is required.
 [Upgrade instructions](../../INSTALL.md)
 
@@ -110,12 +110,9 @@ Response `200 OK`:
 }
 ```
 
-Cleanup uses backend activity instead of a daily login schedule. Deleted accounts
-become eligible after 24 hours, decks after 10 seconds, and individual cards after
-2 seconds. Grace periods start from the server's deletion timestamp. Eligible work
-runs when the service handles requests, so a sleeping backend may remove content
-later. Permanent deletion follows the existing foreign keys, including removal of
-associated review logs. The updated sync protocol reconciles absent records.
+Login and authenticated reads leave deck and card tombstones available for sync.
+API activity schedules bounded account maintenance in the background. A health
+probe alone does not trigger this work.
 
 ### Get Current User
 `GET /me`
@@ -188,7 +185,7 @@ Response `200 OK`:
 Behavior notes:
 - this endpoint performs a **soft delete** of the authenticated user,
 - the account becomes unavailable for normal use immediately,
-- permanent cleanup becomes eligible after 24 hours and runs during later API activity.
+- the account stays marked deleted for at least 24 hours. A later maintenance pass deletes the user row. The existing foreign keys cascade the deletion to the account's decks, cards, review logs, progress, collaboration links, and analytics. Other users' independent deck copies retain their own IDs and data.
 
 ---
 
@@ -484,18 +481,17 @@ Behavior notes:
 - only the targeted card is deleted,
 - deleted rows may still appear in sync payloads with `is_deleted=true`,
 - the app offers a 2-second Undo window before finalizing local deletion,
-- server removal becomes eligible 2 seconds after the server accepts the tombstone and runs on later activity for the account.
+- the server retains the card and its review history after Undo expires. Other devices receive its deletion flag through sync.
 
 ---
 
 ## SYNC APIs
 
-### Permanent deletion reconciliation (v1.3.0)
+### Deletion reconciliation (v1.3.0)
 
-Deletion cleanup uses the existing tables and timestamps. The updated manifest and
-fetch responses advertise `reconciliation_version: 1`. A completed manifest
-enumerates existing owned decks, including rows still in their deletion grace
-period. A completed card fetch enumerates existing cards for its selected decks.
+The manifest and fetch responses advertise `reconciliation_version: 1`. A completed
+manifest enumerates existing owned decks, including soft-deleted decks. A completed
+card fetch includes soft-deleted cards for its selected decks.
 
 Updated clients compare completed results with local records to find records
 removed from the server. Pending new creations, unsent reviews, and active Undo
@@ -764,13 +760,19 @@ Upload behavior:
 - A repeated review-log ID for the same account/card is an idempotent no-op,
   not an update to its rating or history. New logs and accepted edits to reviewed
   cards recompute affected progress; duplicate logs skip expensive recomputation.
+- A retried card UUID identifies the same card. Matching front and back text on
+  different UUIDs does not merge their histories. For existing decks and cards,
+  a mutation without `updated_at` must carry a strictly higher version to change
+  server state. Missing timestamps on new records can still default to receipt time.
+  New decks and cards start at version 1 if the version is omitted or null.
+  An accepted timestamped edit without a version preserves an existing positive version.
 - Only an accepted authorized deck deletion cascades to active child cards.
   Whole-deck child tombstones can additionally send `from_deck_deletion: true`;
   these are ignored while their parent is active, protecting separately batched
   children after a rejected/undone deck deletion. Individual-card deletes omit
   the marker. It is not stored in the database or returned in downloads.
 - While the deck's tombstone still exists, a newer `is_deleted=false` deck mutation can restore it.
-  Cleanup can remove the tombstone on authenticated activity 10 seconds after the server records deletion.
+  Expiry of the app's Undo timer leaves the server tombstone available for sync.
   Restoring the deck does not automatically restore its cards: upload newer
   card mutations explicitly after the deck. An active card change against a
   deleted parent is ignored if stale relative to the parent, otherwise rejected.
@@ -921,7 +923,7 @@ Returns all-time performance per deck using persisted `user_progress` rows.
 - `analytics_rollups` stores the current 7 / 30 / 90 day dashboard rollups.
 
 ### Midnight UTC maintenance
-While the process is running, its midnight task recomputes analytics daily rows and dashboard rollups for active users. Analytics requests also refresh their account's values. Deletion cleanup is triggered by requests and does not depend on reaching midnight.
+While the process is running, its midnight task recomputes daily rows and dashboard rollups for active users. After a cold start, analytics requests refresh the requesting account's values. Eligible account pruning runs on its own activity-driven schedule.
 
 ---
 

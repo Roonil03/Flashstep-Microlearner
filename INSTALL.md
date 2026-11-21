@@ -54,7 +54,9 @@ make frontend-codegen
 
 Version 1.3.0 uses the PostgreSQL schema already present in version 1.2.0. Deploying it over that schema requires no migration. A new, empty database uses `backend/migrations/01_init.sql` through Docker initialization or `make backend-migrate`.
 
-Cleanup is triggered by backend activity. Deleted accounts become eligible after 24 hours, decks after 10 seconds, and individual cards after 2 seconds. A sleeping service performs eligible work when it resumes handling requests. The existing foreign keys cascade permanent card deletion into review logs, so historical analytics may change after cleanup.
+Keep the existing database connection when deploying the new backend. Startup checks the schema without applying migrations. Deck and card deletions remain recorded for offline devices. Sync identifies cards by UUID, so two separately created cards can have identical text and retain independent review histories.
+
+The first API request after a restart schedules a background account check after two seconds. Health probes and an idle process do not schedule checks. Each process starts at most one pass per 15 minutes, with a five-second timeout. Concurrent replicas use a PostgreSQL advisory lock. A pass can remove up to 100 accounts marked deleted for at least 24 hours. This includes accounts already marked deleted before deployment. PostgreSQL cascades that deletion to their decks, cards, and dependent study records. The cooldown starts fresh on restart.
 
 Earlier drafts of this branch included two additional migration scripts. They have been removed. If those drafts were applied to a separate database, check that database's foreign keys and review behavior before using it with this release.
 
