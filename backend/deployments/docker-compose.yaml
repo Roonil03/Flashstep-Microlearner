@@ -3,23 +3,20 @@ services:
     image: postgres:16-alpine
     container_name: flashcards_postgres
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../migrations:/docker-entrypoint-initdb.d:ro
-    # healthcheck:
-    #   test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-flashcards}"]
-    #   interval: 130s
-    #   timeout: 10s
-    #   retries: 20
-    #   start_period: 120s
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   app:
     build:
@@ -28,12 +25,15 @@ services:
     container_name: flashcards_backend
     restart: unless-stopped
     env_file:
-      - .env
+      - ../.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
-      - postgres
-    #     condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

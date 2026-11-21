@@ -89,8 +89,15 @@ class Cards extends Table {
 
 @DriftDatabase(tables: [ReviewLogs, SyncQueueItems, Users, Decks, Cards])
 class AppDatabase extends _$AppDatabase {
+  // A visible Undo action can outlive the normal timeout for accessibility.
+  // Keep its changes local until the action is used or dismissed.
+  final Set<String> heldDeckDeletions = {};
+  final Set<String> heldCardDeletions = {};
+
+  AppDatabase.forTesting(super.executor) : databaseFileName = ':memory:';
+
   AppDatabase._({required this.databaseFileName})
-      : super(_openConnection(databaseFileName));
+    : super(_openConnection(databaseFileName));
 
   factory AppDatabase.forUser({String? userId}) {
     final fileName = fileNameForUser(userId);
@@ -110,7 +117,15 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
+
+  // Version 3 also opens prerelease databases that used receipt tables.
+  // Released version 2 databases require no DDL or data migration.
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {},
+  );
 
   Future<void> clearAllLocalData() async {
     await transaction(() async {

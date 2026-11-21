@@ -3,19 +3,34 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../../../core/storage/database_manager.dart';
+import '../../../core/storage/analytics_cache_store.dart';
 import '../../../core/storage/session_storage.dart';
+import '../../../core/network/api_errors.dart';
+import '../../decks/data/sync_metadata_store.dart';
 import 'auth_api.dart';
 
 class AuthRepository {
   final AuthApi api;
   final SessionStorage storage;
   final DatabaseManager databaseManager;
+  final AnalyticsCacheStore analyticsCache;
+  final SyncMetadataStore syncMetadata;
+  static Future<void> _sessionMutation = Future<void>.value();
+
+  Future<T> _mutateSession<T>(Future<T> Function() action) {
+    final next = _sessionMutation.then((_) => action());
+    _sessionMutation = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
 
   AuthRepository({
     required this.api,
     required this.storage,
     required this.databaseManager,
-  });
+    AnalyticsCacheStore? analyticsCache,
+    SyncMetadataStore? syncMetadata,
+  }) : analyticsCache = analyticsCache ?? AnalyticsCacheStore(),
+       syncMetadata = syncMetadata ?? const SyncMetadataStore();
 
   Future<String> _requireToken() async {
     final token = await storage.readToken();
@@ -64,6 +79,7 @@ class AuthRepository {
           resolvedEmail = me.email;
         }
       } on TimeoutException {
+        // The token claims may still provide enough information to sign in.
       } on AuthApiException catch (e) {
         if (e.statusCode == 401 || e.statusCode == 403) {
           rethrow;
@@ -75,14 +91,16 @@ class AuthRepository {
       throw StateError('Login succeeded but user id could not be resolved.');
     }
 
-    await storage.saveToken(session.token);
-    await storage.writeUserId(resolvedUserId);
-
-    if (resolvedUsername.isNotEmpty) {
-      await storage.writeUsername(resolvedUsername);
-    }
-
-    await databaseManager.switchToUser(resolvedUserId);
+    // Never expose a new token together with the previous account's ID or DB.
+    await _mutateSession(() async {
+      await storage.clearAll();
+      await databaseManager.switchToUser(resolvedUserId);
+      await storage.writeUserId(resolvedUserId);
+      if (resolvedUsername.isNotEmpty) {
+        await storage.writeUsername(resolvedUsername);
+      }
+      await storage.saveToken(session.token);
+    });
 
     return AuthSession(
       token: session.token,
@@ -113,29 +131,26 @@ class AuthRepository {
 
     final claims = _decodeJwtClaims(token);
     if (_isExpired(claims)) {
-      await _resetSessionOnly();
+      await _resetSessionOnly(expectedToken: token);
       return false;
     }
 
-    String? resolvedUserId = await storage.readUserId();
-    resolvedUserId ??= _claimAsString(claims, 'user_id');
-    resolvedUserId ??= _claimAsString(claims, 'sub');
+    String? resolvedUserId =
+        _claimAsString(claims, 'user_id') ??
+        _claimAsString(claims, 'sub') ??
+        await storage.readUserId();
 
     if (resolvedUserId == null || resolvedUserId.trim().isEmpty) {
       try {
         final me = await api.getMe(token).timeout(const Duration(seconds: 3));
         if (me.userId.isEmpty) {
-          await _resetSessionOnly();
+          await _resetSessionOnly(expectedToken: token);
           return false;
         }
         resolvedUserId = me.userId;
-        await storage.writeUserId(me.userId);
-        if (me.username.isNotEmpty) {
-          await storage.writeUsername(me.username);
-        }
       } on AuthApiException catch (e) {
         if (e.statusCode == 401 || e.statusCode == 403) {
-          await _resetSessionOnly();
+          await _resetSessionOnly(expectedToken: token);
           return false;
         }
         return false;
@@ -146,10 +161,15 @@ class AuthRepository {
       }
     }
 
-    await storage.writeUserId(resolvedUserId.trim());
-    await databaseManager.switchToUser(resolvedUserId.trim());
+    final restored = await _mutateSession(() async {
+      if (await storage.readToken() != token) return false;
+      await storage.writeUserId(resolvedUserId!.trim());
+      await databaseManager.switchToUser(resolvedUserId.trim());
+      return true;
+    });
+    if (!restored) return false;
 
-    unawaited(_refreshSessionProfile(token));
+    unawaited(_refreshSessionProfile(token, resolvedUserId.trim()));
     return true;
   }
 
@@ -172,38 +192,67 @@ class AuthRepository {
   Future<void> changeUsername({required String username}) async {
     final token = await _requireToken();
     await api.changeUsername(token: token, username: username);
-    await storage.writeUsername(username);
+    await _mutateSession(() async {
+      if (await storage.readToken() == token) {
+        await storage.writeUsername(username);
+      }
+    });
   }
 
   Future<void> deleteAccount() async {
     final token = await _requireToken();
     final userId = await storage.readUserId();
+    if (userId == null ||
+        userId.isEmpty ||
+        await storage.readToken() != token) {
+      throw StateError(
+        'Your account changed. Sign in again before deleting it.',
+      );
+    }
     await api.deleteAccount(token: token);
-    await storage.clearAll();
-    if (userId != null && userId.isNotEmpty) {
-      await NavigationTourStorage(storage).clear(userId);
-      await storage.clearLastSyncAt(userId: userId);
-      await databaseManager.deleteDatabaseForUser(userId);
-    } else {
-      await databaseManager.switchToAnonymous();
+    // Attempt every account-scoped cleanup even if one local store fails.
+    final cleanup = await Future.wait(
+      [
+        Future.sync(() => analyticsCache.deleteForUser(userId)),
+        Future.sync(() => syncMetadata.delete(userId)),
+        Future.sync(() => NavigationTourStorage(storage).clear(userId)),
+        Future.sync(() => storage.clearLastSyncAt(userId: userId)),
+        _mutateSession(() async {
+          if (await storage.readToken() == token &&
+              await storage.readUserId() == userId) {
+            await storage.clearAll();
+          }
+        }),
+        _mutateSession(() => databaseManager.deleteDatabaseForUser(userId)),
+      ].map(
+        (operation) => operation.then<Object?>(
+          (_) => null,
+          onError: (Object error) => error,
+        ),
+      ),
+    );
+    if (cleanup.any((error) => error != null)) {
+      throw const ApiRequestException(
+        'Your account was deleted. Some local data could not be cleared. Restart the app and clear its local storage.',
+      );
     }
   }
 
-  Future<void> _refreshSessionProfile(String token) async {
+  Future<void> _refreshSessionProfile(String token, String userId) async {
     try {
       final me = await api.getMe(token).timeout(const Duration(seconds: 3));
-      if (me.userId.isEmpty) {
-        return;
-      }
-
-      await storage.writeUserId(me.userId);
-      if (me.username.isNotEmpty) {
-        await storage.writeUsername(me.username);
-      }
-      await databaseManager.switchToUser(me.userId);
+      await _mutateSession(() async {
+        if (me.userId == userId &&
+            me.username.isNotEmpty &&
+            await storage.readToken() == token &&
+            await storage.readUserId() == userId) {
+          await storage.writeUsername(me.username);
+        }
+      });
     } on AuthApiException catch (e) {
-      if (e.statusCode == 401 || e.statusCode == 403) {
-        await _resetSessionOnly();
+      if ((e.statusCode == 401 || e.statusCode == 403) &&
+          await storage.readToken() == token) {
+        await _resetSessionOnly(expectedToken: token);
       }
     } on TimeoutException {
       // Keep the locally restored session.
@@ -259,8 +308,13 @@ class AuthRepository {
     return null;
   }
 
-  Future<void> _resetSessionOnly() async {
-    await storage.clearAll();
-    await databaseManager.switchToAnonymous();
-  }
+  Future<void> _resetSessionOnly({String? expectedToken}) => _mutateSession(
+    () async {
+      if (expectedToken != null && await storage.readToken() != expectedToken) {
+        return;
+      }
+      await storage.clearAll();
+      await databaseManager.switchToAnonymous();
+    },
+  );
 }

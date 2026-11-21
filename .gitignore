@@ -33,4 +33,9 @@ frontend/macos/.symlinks/
 
 **/atl.md
 **/.github/
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/bug-report.yml
 **/.vscode/

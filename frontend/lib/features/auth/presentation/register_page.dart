@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/network/providers.dart';
+import '../../../core/network/api_errors.dart';
+import '../data/auth_api.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -95,7 +97,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       Navigator.pushReplacementNamed(context, AppRoutes.login);
     } catch (e) {
       if (!mounted) return;
-      showSnack("Registration failed: $e");
+      showSnack(e is AuthApiException ? e.message : networkErrorMessage(e));
     }
 
     if (mounted) setState(() => isLoading = false);
@@ -284,8 +286,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         if (label == 'Email' &&
             !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text))
           return 'Enter a valid email address';
-        if (label == 'Username' && (text.length < 3 || text.length > 50))
-          return 'Use 3 to 50 characters';
+        if (label == 'Username') {
+          final usernameLength = text.toLowerCase().runes.length;
+          if (usernameLength < 3 || usernameLength > 50) {
+            return 'Use 3 to 50 characters';
+          }
+        }
         if (obscure && text.length < 8) return 'Use at least 8 characters';
         if (label == 'Confirm Password' &&
             text != passwordController.text.trim())

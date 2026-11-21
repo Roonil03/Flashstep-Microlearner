@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func SyncManifest(c *gin.Context) {
  SELECT jsonb_agg(jsonb_build_array(c.id,c.deck_id,c.version,EXTRACT(EPOCH FROM c.updated_at),c.is_deleted) ORDER BY c.id) AS revisions
  FROM cards c WHERE c.deck_id=d.id) children ON true ORDER BY d.id`, user, cursor, limit+1)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer rows.Close()
@@ -74,25 +75,25 @@ func SyncManifest(c *gin.Context) {
 		var id uuid.UUID
 		var fingerprint string
 		if err := rows.Scan(&id, &fingerprint); err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
+			httperror.Internal(c, err)
 			return
 		}
 		if len(out) == limit {
 			next = out[len(out)-1]["id"]
 			break
 		}
-		out = append(out, gin.H{"id": id.String(), "fingerprint": fingerprint})
+		out = append(out, gin.H{"id": id.String(), "fingerprint": fingerprint, "is_purged": false})
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
-	response := gin.H{"decks": out, "next_cursor": next}
+	response := gin.H{"decks": out, "next_cursor": next, "reconciliation_version": 1}
 	if cursor == uuid.Nil {
 		var reviewsFingerprint string
 		err = db.DB.QueryRowContext(c.Request.Context(), `SELECT md5(count(*)::text || ':' || COALESCE(max(created_at)::text, '')) FROM review_logs WHERE user_id=$1`, user).Scan(&reviewsFingerprint)
 		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
+			httperror.Internal(c, err)
 			return
 		}
 		response["reviews_fingerprint"] = reviewsFingerprint
@@ -101,9 +102,10 @@ func SyncManifest(c *gin.Context) {
 }
 
 type syncFetchRequest struct {
-	DeckIDs []string `json:"deck_ids"`
-	Cursor  string   `json:"cursor"`
-	Limit   int      `json:"limit"`
+	DeckIDs       []string `json:"deck_ids"`
+	Cursor        string   `json:"cursor"`
+	Limit         int      `json:"limit"`
+	IncludePurged *bool    `json:"include_purged"`
 }
 
 // SyncFetch pages all selected decks' cards by UUID, including every tombstone.
@@ -148,22 +150,38 @@ func SyncFetch(c *gin.Context) {
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer tx.Rollback()
-	decks, err := readSyncDecks(ctx, tx, `WHERE d.user_id=$1 AND d.id=ANY($2::uuid[]) ORDER BY d.id`, user, pq.Array(ids))
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	var unauthorized bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM decks WHERE id=ANY($1::uuid[]) AND user_id<>$2)`, pq.Array(ids), user).Scan(&unauthorized); err != nil {
+		httperror.Internal(c, err)
 		return
 	}
-	if len(decks) != len(ids) {
+	if unauthorized {
 		c.JSON(400, gin.H{"error": "missing or unauthorized deck"})
 		return
 	}
-	cards, err := readSyncCards(ctx, tx, `WHERE d.user_id=$1 AND c.deck_id=ANY($2::uuid[]) AND c.id>$3 ORDER BY c.id LIMIT $4`, user, pq.Array(ids), cursor, limit+1)
+	decks, err := readSyncDecks(ctx, tx, `WHERE d.user_id=$1 AND d.id=ANY($2::uuid[]) ORDER BY d.id`, user, pq.Array(ids))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
+		return
+	}
+	missing := []string{}
+	found := map[string]bool{}
+	for _, d := range decks {
+		found[d["id"].(string)] = true
+	}
+	for _, id := range ids {
+		if !found[id] {
+			missing = append(missing, id)
+		}
+	}
+	includePurged := request.IncludePurged == nil || *request.IncludePurged
+	cards, err := readSyncCardsIncludingPurged(ctx, tx, includePurged, `WHERE d.user_id=$1 AND c.deck_id=ANY($2::uuid[]) AND c.id>$3 ORDER BY c.id LIMIT $4`, user, pq.Array(ids), cursor, limit+1)
+	if err != nil {
+		httperror.Internal(c, err)
 		return
 	}
 	var next any
@@ -172,8 +190,8 @@ func SyncFetch(c *gin.Context) {
 		cards = cards[:limit]
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"decks": decks, "cards": cards, "next_cursor": next})
+	c.JSON(200, gin.H{"decks": decks, "cards": cards, "next_cursor": next, "missing_deck_ids": missing, "reconciliation_version": 1})
 }

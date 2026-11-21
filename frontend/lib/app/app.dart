@@ -14,6 +14,7 @@ import '../features/decks/presentation/browse_decks_page.dart';
 import '../features/analytics/presentation/analytics_page.dart';
 import '../features/legal/presentation/legal_document_page.dart';
 import '../features/legal/presentation/legal_settings_page.dart';
+import '../features/bug_reports/presentation/bug_report_page.dart';
 import '../features/decks/data/auto_sync_service.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
@@ -51,6 +52,7 @@ class App extends ConsumerWidget {
         AppRoutes.analytics: (_) => const AnalyticsPage(),
         AppRoutes.settings: (_) => const SettingsPage(),
         AppRoutes.legal: (_) => const LegalSettingsPage(),
+        AppRoutes.bugReport: (_) => const BugReportPage(),
         AppRoutes.privacyPolicy: (_) => const LegalDocumentPage.privacy(),
         AppRoutes.termsOfService: (_) => const LegalDocumentPage.terms(),
         AppRoutes.navigationTour: (_) => const NavigationTourPage(),

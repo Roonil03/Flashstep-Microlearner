@@ -12,6 +12,7 @@ import (
 
 var ErrUserNotFound = errors.New("user not found")
 var ErrEmailAlreadyExists = errors.New("email already exists")
+var ErrUsernameAlreadyExists = errors.New("username already exists")
 
 type UserRepository struct {
 	DB *sql.DB
@@ -49,11 +50,7 @@ func (r *UserRepository) Create(ctx context.Context, u models.User) error {
 		u.CreatedAt, u.UpdatedAt, u.Version, u.IsDeleted,
 	)
 	if err != nil {
-		var conflict *pq.Error
-		if errors.As(err, &conflict) && conflict.Code == "23505" && conflict.Constraint == "users_email_key" {
-			return ErrEmailAlreadyExists
-		}
-		return err
+		return classifyUserConflict(err)
 	}
 	return tx.Commit()
 }
@@ -134,18 +131,31 @@ func (r *UserRepository) SoftDeleteUser(userID string) error {
 		SET is_deleted = TRUE,
 		    updated_at = NOW(),
 		    version = version + 1
-		WHERE id = $1
+		WHERE id = $1 AND is_deleted = FALSE
 	`, userID)
 	return err
 }
 
-func (r *UserRepository) UpdateUsername(userID, username string) error {
-	_, err := r.DB.Exec(`
+func (r *UserRepository) UpdateUsername(ctx context.Context, userID, username string) error {
+	_, err := r.DB.ExecContext(ctx, `
 		UPDATE users
 		SET username = $1,
 		    updated_at = NOW(),
 		    version = version + 1
 		WHERE id = $2 AND is_deleted = FALSE
 	`, username, userID)
+	return classifyUserConflict(err)
+}
+
+func classifyUserConflict(err error) error {
+	var conflict *pq.Error
+	if errors.As(err, &conflict) && conflict.Code == "23505" {
+		switch conflict.Constraint {
+		case "users_email_key":
+			return ErrEmailAlreadyExists
+		case "users_username_key":
+			return ErrUsernameAlreadyExists
+		}
+	}
 	return err
 }

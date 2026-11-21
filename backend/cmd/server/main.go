@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,9 +25,16 @@ func main() {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	maintenance.StartDeletedUserCleanup(conn)
+	schemaCtx, cancelSchema := context.WithTimeout(context.Background(), 5*time.Second)
+	err = db.CheckSchema(schemaCtx, conn)
+	cancelSchema()
+	if err != nil {
+		log.Fatal(err)
+	}
 	maintenance.StartAnalyticsAggregation(conn)
-	v1.InitBloomFilter()
+	maintenanceCtx, cancelMaintenance := context.WithCancel(context.Background())
+	defer cancelMaintenance()
+	accountCleanup := maintenance.StartDeletedAccountCleanup(maintenanceCtx, conn)
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -34,22 +43,41 @@ func main() {
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	userService := services.NewUserService(userRepo)
 	userHandler := handlers.NewUserHandler(userService)
+	reportHandler := handlers.NewBugReportHandler(conn, cfg.JWTSecret)
 	// router := gin.Default()
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
-	if err := router.SetTrustedProxies(nil); err != nil {
+	router.Use(middleware.Recovery(), middleware.RequestLimits())
+	router.HandleMethodNotAllowed = true
+	router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested endpoint could not be found."})
+	})
+	router.NoMethod(func(c *gin.Context) {
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "This endpoint does not support that request method."})
+	})
+	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		log.Fatal(err)
 	}
 	router.GET("/health", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+		if err := conn.PingContext(ctx); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable"})
+			return
+		}
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := router.Group("/api/v1")
+	api.Use(middleware.RateLimit(6000, time.Minute), middleware.TrackMaintenanceActivity(accountCleanup))
 	{
-		api.POST("/auth/register", authHandler.Register)
-		api.POST("/auth/login", authHandler.Login)
+		authLimit := middleware.RateLimit(120, time.Minute)
+		api.POST("/auth/register", authLimit, authHandler.Register)
+		api.POST("/auth/login", authLimit, authHandler.Login)
 		protected := api.Group("")
 		protected.Use(middleware.Auth(cfg.JWTSecret))
+		protected.Use(middleware.RateLimit(1200, time.Minute))
+		protected.Use(middleware.RequireActiveUser(conn))
 		protected.GET("/me", authHandler.Me)
+		protected.POST("/bug-reports", reportHandler.Create)
 		{
 			protected.POST("/decks", v1.CreateDeck)
 			protected.GET("/decks", v1.GetDecks)
@@ -67,6 +95,7 @@ func main() {
 			protected.GET("/sync/download", v1.SyncDownload)
 			protected.GET("/sync/manifest", v1.SyncManifest)
 			protected.GET("/sync/reviews", v1.SyncReviews)
+			protected.GET("/sync/purged", v1.SyncPurged)
 			protected.POST("/sync/fetch", v1.SyncFetch)
 		}
 		{
@@ -83,7 +112,13 @@ func main() {
 		}
 	}
 	log.Printf("server listening on :%s", cfg.Port)
-	if err := router.Run(":" + cfg.Port); err != nil {
+	server := &http.Server{
+		Addr: ":" + cfg.Port, Handler: router,
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
+		WriteTimeout: 35 * time.Second, IdleTimeout: 60 * time.Second,
+		MaxHeaderBytes: 16 << 10,
+	}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

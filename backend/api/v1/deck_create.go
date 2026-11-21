@@ -2,6 +2,8 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
+	"backend/internal/repositories"
 	"net/http"
 	"strings"
 
@@ -10,7 +12,7 @@ import (
 )
 
 type CreateDeckRequest struct {
-	Title       string `json:"title"`
+	Title       string `json:"title" binding:"max=255"`
 	Description string `json:"description"`
 	IsPublic    bool   `json:"is_public"`
 }
@@ -25,7 +27,7 @@ func CreateDeck(c *gin.Context) {
 
 	var req CreateDeckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
@@ -39,7 +41,22 @@ func CreateDeck(c *gin.Context) {
 
 	id := uuid.New()
 
-	_, err = db.DB.Exec(`
+	ctx := c.Request.Context()
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID.String()); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	if err = repositories.LockContentIDs(ctx, tx, []string{"deck:" + id.String()}); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO decks (
 			id, user_id, title, description, is_public,
 			created_at, updated_at, version, is_deleted
@@ -47,10 +64,14 @@ func CreateDeck(c *gin.Context) {
 		VALUES ($1,$2,$3,$4,$5,NOW(),NOW(),1,false)
 	`, id, userID, req.Title, nullIfEmpty(req.Description), req.IsPublic)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
 	c.JSON(http.StatusCreated, gin.H{"id": id.String()})
 }
 

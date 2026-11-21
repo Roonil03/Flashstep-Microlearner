@@ -2,6 +2,8 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
+	"backend/internal/repositories"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -26,7 +28,7 @@ func CreateCard(c *gin.Context) {
 
 	var req CreateCardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
@@ -44,13 +46,22 @@ func CreateCard(c *gin.Context) {
 		return
 	}
 
+	id := uuid.New()
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID.String()); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
+	if err = repositories.LockContentIDs(ctx, tx, []string{"card:" + id.String(), "deck:" + deckID.String()}); err != nil {
+		httperror.Internal(c, err)
+		return
+	}
 	var lockedID uuid.UUID
 	err = tx.QueryRowContext(ctx, `SELECT id FROM decks WHERE id=$1 AND user_id=$2 AND is_deleted=false FOR UPDATE`, deckID, userID).Scan(&lockedID)
 	if err == sql.ErrNoRows {
@@ -58,7 +69,7 @@ func CreateCard(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
@@ -69,7 +80,7 @@ func CreateCard(c *gin.Context) {
 		WHERE deck_id=$1 AND is_deleted=false
 	`, deckID).Scan(&cardCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	if cardCount >= maxCardsPerDeck {
@@ -77,7 +88,6 @@ func CreateCard(c *gin.Context) {
 		return
 	}
 
-	id := uuid.New()
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO cards (
 			id, deck_id, front, back, state,
@@ -88,12 +98,12 @@ func CreateCard(c *gin.Context) {
 		VALUES ($1,$2,$3,$4,'new',0,2.5,0,NOW(),NULL,NOW(),NOW(),1,false)
 	`, id, deckID, req.Front, req.Back)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"id": id.String()})

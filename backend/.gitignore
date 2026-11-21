@@ -3,7 +3,7 @@
 *.dll
 *.so
 *.dylib
-/backend/bin/
+/bin/
 *.test
 *.out
 go.work

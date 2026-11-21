@@ -134,7 +134,7 @@ func (r *ProgressRepository) RecomputeDeckProgress(ctx context.Context, tx txRun
 		FROM review_logs rl
 		JOIN cards c ON c.id = rl.card_id
 		JOIN decks d ON d.id = c.deck_id
-		WHERE rl.user_id = $1 AND c.deck_id = $2 AND d.user_id = $1
+		WHERE rl.user_id = $1 AND d.id = $2 AND d.user_id = $1
 	`, userID, deckID).Scan(&total, &correct, &lastReviewDate)
 	if err != nil {
 		return err
@@ -145,7 +145,7 @@ func (r *ProgressRepository) RecomputeDeckProgress(ctx context.Context, tx txRun
 		FROM review_logs rl
 		JOIN cards c ON c.id = rl.card_id
 		JOIN decks d ON d.id = c.deck_id
-		WHERE rl.user_id = $1 AND c.deck_id = $2 AND d.user_id = $1
+		WHERE rl.user_id = $1 AND d.id = $2 AND d.user_id = $1
 		ORDER BY day ASC
 	`, userID, deckID)
 	if err != nil {

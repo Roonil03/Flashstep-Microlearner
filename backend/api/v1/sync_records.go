@@ -35,6 +35,10 @@ func readSyncDecks(ctx context.Context, q syncQuerier, filter string, args ...an
 }
 
 func readSyncCards(ctx context.Context, q syncQuerier, filter string, args ...any) ([]gin.H, error) {
+	return readSyncCardsIncludingPurged(ctx, q, true, filter, args...)
+}
+
+func readSyncCardsIncludingPurged(ctx context.Context, q syncQuerier, includePurged bool, filter string, args ...any) ([]gin.H, error) {
 	rows, err := q.QueryContext(ctx, `SELECT c.id,c.deck_id,c.front,c.back,c.state,c.interval,c.ease_factor,c.repetition_count,c.due_timestamp,c.last_reviewed_at,c.created_at,c.updated_at,c.version,c.is_deleted FROM cards c JOIN decks d ON d.id=c.deck_id `+filter, args...)
 	if err != nil {
 		return nil, err

@@ -17,6 +17,10 @@ fingerprint to the first manifest page. Deploy it before distributing the
 v1.2.0 frontend so review history and daily limits reconcile across devices.
 Earlier clients continue using their existing sync routes; no migration is needed.
 
+The v1.3.0 backend adds activity-triggered account maintenance and public bug reporting
+using the existing PostgreSQL schema. No migration from v1.2.0 is required.
+[Upgrade instructions](../../INSTALL.md)
+
 ### Health Check
 
 `GET /health` is outside `/api/v1` and does not require authentication.
@@ -26,7 +30,9 @@ Response `200 OK`:
 {"status": "ok"}
 ```
 
-This checks HTTP service availability; it does not execute a database health query.
+Startup verifies the required database schema before serving traffic. The health
+endpoint checks PostgreSQL connectivity with a short timeout and returns `503`
+if the database is unavailable.
 
 ## Auth Header
 Protected routes require:
@@ -76,8 +82,8 @@ Registration email rules:
 - An email remains reserved while its user row exists, including a soft-deleted
   account. Concurrent requests for the same normalized email cannot create
   multiple accounts.
-- `409 Conflict` with `{"error":"email already exists"}` indicates an email
-  already in use. Invalid input and other registration failures return `400`.
+- A duplicate email or username returns `409`. Invalid input returns `400`.
+  Storage failures return `500`.
 
 ### Login
 `POST /auth/login`
@@ -103,6 +109,10 @@ Response `200 OK`:
   "token": "jwt_token"
 }
 ```
+
+Login and authenticated reads leave deck and card tombstones available for sync.
+API activity schedules bounded account maintenance in the background. A health
+probe alone does not trigger this work.
 
 ### Get Current User
 `GET /me`
@@ -175,7 +185,7 @@ Response `200 OK`:
 Behavior notes:
 - this endpoint performs a **soft delete** of the authenticated user,
 - the account becomes unavailable for normal use immediately,
-- permanent cleanup is handled later by backend maintenance.
+- the account stays marked deleted for at least 24 hours. A later maintenance pass deletes the user row. The existing foreign keys cascade the deletion to the account's decks, cards, review logs, progress, collaboration links, and analytics. Other users' independent deck copies retain their own IDs and data.
 
 ---
 
@@ -470,11 +480,27 @@ Behavior notes:
 - delete is a **logical delete** (`is_deleted=true`),
 - only the targeted card is deleted,
 - deleted rows may still appear in sync payloads with `is_deleted=true`,
-- the client may provide a short undo window before permanently removing the card from the local database.
+- the app offers a 2-second Undo window before finalizing local deletion,
+- the server retains the card and its review history after Undo expires. Other devices receive its deletion flag through sync.
 
 ---
 
 ## SYNC APIs
+
+### Deletion reconciliation (v1.3.0)
+
+The manifest and fetch responses advertise `reconciliation_version: 1`. A completed
+manifest enumerates existing owned decks, including soft-deleted decks. A completed
+card fetch includes soft-deleted cards for its selected decks.
+
+Updated clients compare completed results with local records to find records
+removed from the server. Pending new creations, unsent reviews, and active Undo
+operations require protection. A missing record alone cannot establish whether
+an unacknowledged creation was previously accepted and later removed.
+
+`GET /sync/purged` remains a compatibility endpoint returning an empty `purged`
+array, a null `next_cursor`, and `reconciliation_version: 1`. It supplies no
+persistent deletion history.
 
 ### Deck Manifest (v1.1.0)
 
@@ -491,7 +517,8 @@ Response `200 OK`:
   "decks": [
     {
       "id": "11111111-1111-4111-8111-111111111111",
-      "fingerprint": "opaque revision digest"
+      "fingerprint": "opaque revision digest",
+      "is_purged": false
     }
   ],
   "next_cursor": null,
@@ -499,13 +526,14 @@ Response `200 OK`:
 }
 ```
 
-Only owned decks are returned, ordered by UUID, including deleted decks.
+Only owned decks are returned, ordered by UUID, including deleted decks. A
+The v1.3.0 manifest includes `reconciliation_version: 1`. Its entries represent existing rows. The legacy `include_purged` option is accepted for compatibility.
 Fingerprints include the deck revision/timestamp/deletion flag and ordered
 child-card IDs, parent IDs, revisions, timestamps, and deletion flags. Treat the
 fingerprint as an opaque equality token, not a timestamp or authentication value.
 No card bodies or review logs are returned. Empty results use `decks: []`.
 The first page (without `cursor`) also includes `reviews_fingerprint`, an
-opaque token that changes when immutable review history is appended. Later
+opaque token that changes when review history is appended or removed. Later
 manifest pages omit it. Earlier backend versions omit it on every page; clients
 should continue deck reconciliation without review-history download in that case.
 
@@ -551,9 +579,14 @@ fractional precision; nullable card dates and deck descriptions remain `null`.
 
 Errors:
 - `400 Bad Request`: malformed/oversized JSON, missing or invalid deck IDs,
-  more than 25 input IDs, any missing/unauthorized deck, invalid cursor or limit
+  more than 25 input IDs, any unauthorized deck, invalid cursor or limit
 - `401 Unauthorized`: missing or invalid JWT
 - `500 Internal Server Error`: database/read/transaction failure
+
+For v1.3.0, `missing_deck_ids` lists requested IDs absent from the database.
+This allows clients to reconcile a deck removed between manifest and fetch.
+An existing deck owned by another user still rejects the request.
+The response advertises `reconciliation_version: 1`.
 
 ### Fetch Review History (v1.2.0)
 
@@ -619,6 +652,20 @@ Only a manifest `404`/`405` selects the older-backend fallback: call
 errors fail the sync for retry. A device-clock checkpoint can miss late offline
 uploads, so the updated frontend does not use it to filter reconciliation.
 Account changes stop further work; only acknowledged queue operations are removed.
+
+For the v1.3.0 reconciliation contract, send `reconciliation_version: 1` at the
+top level of an upload and `allow_create: true` only for deck/card records
+whose original create operation remains unacknowledged. Missing records with
+creation disallowed are skipped. The successful upload response identifies
+`missing_deck_ids`, `missing_card_ids`, and `missing_review_log_ids`.
+A missing parent also appears in `missing_deck_ids`. Clients must process
+these lists before acknowledging their local queue. Failed new creations and
+reviews remain available locally with a sync warning.
+
+Legacy uploads that omit the contract version keep their existing upsert
+behavior. Consequently, an older client can recreate a previously removed UUID.
+A lost acknowledgement of a new creation has the same ambiguity. Permanent
+receipt storage would be needed to resolve those cases across server restarts.
 
 ### Upload Changes
 `POST /sync/upload`
@@ -699,10 +746,14 @@ Upload behavior:
   UUIDs. Active decks require a title; active cards require front and back.
   Reviews require a rating (`again`, `hard`, `good`, or `easy`) and may supply
   a nullable `device_id` UUID. Reuse the same review-log ID when retrying.
-- Supply valid RFC3339 timestamps with fractional precision as needed. Current
-  normalization substitutes server time for missing/malformed `created_at`,
-  `updated_at`, and review timestamps; malformed optional card dates become
-  `null`. Clients should preserve valid original timestamps for conflict resolution.
+- Supply RFC3339 timestamps with fractional precision as needed. The API rejects
+  malformed timestamps, invalid enum values and out-of-range numeric values.
+  Each upload accepts up to 1,000 deck, card and review records combined.
+- Older Flutter clients may send a card's `created_at` without a time zone
+  (`YYYY-MM-DDTHH:mm:ss` with optional fractional seconds). An existing card
+  keeps its original creation time. A new card uses `updated_at`, or the server
+  receipt time if that field is absent. Conflict and scheduling timestamps
+  still require RFC3339 offsets.
 - Each request is atomic: accepted deck/card changes, new review logs, affected
   progress, and relevant analytics commit together. Failed requests roll back;
   concurrent uploads for the same account are serialized. Separate HTTP batches
@@ -714,12 +765,19 @@ Upload behavior:
 - A repeated review-log ID for the same account/card is an idempotent no-op,
   not an update to its rating or history. New logs and accepted edits to reviewed
   cards recompute affected progress; duplicate logs skip expensive recomputation.
+- A retried card UUID identifies the same card. Matching front and back text on
+  different UUIDs does not merge their histories. For existing decks and cards,
+  a mutation without `updated_at` must carry a strictly higher version to change
+  server state. Missing timestamps on new records can still default to receipt time.
+  New decks and cards start at version 1 if the version is omitted or null.
+  An accepted timestamped edit without a version preserves an existing positive version.
 - Only an accepted authorized deck deletion cascades to active child cards.
   Whole-deck child tombstones can additionally send `from_deck_deletion: true`;
   these are ignored while their parent is active, protecting separately batched
   children after a rejected/undone deck deletion. Individual-card deletes omit
   the marker. It is not stored in the database or returned in downloads.
-- Restore a deleted deck through a newer `is_deleted=false` deck mutation.
+- While the deck's tombstone still exists, a newer `is_deleted=false` deck mutation can restore it.
+  Expiry of the app's Undo timer leaves the server tombstone available for sync.
   Restoring the deck does not automatically restore its cards: upload newer
   card mutations explicitly after the deck. An active card change against a
   deleted parent is ignored if stale relative to the parent, otherwise rejected.
@@ -870,11 +928,18 @@ Returns all-time performance per deck using persisted `user_progress` rows.
 - `analytics_rollups` stores the current 7 / 30 / 90 day dashboard rollups.
 
 ### Midnight UTC maintenance
-At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollups for active users.
+While the process is running, its midnight task recomputes daily rows and dashboard rollups for active users. After a cold start, analytics requests refresh the requesting account's values. Eligible account pruning runs on its own activity-driven schedule.
 
 ---
 
 ## Error Format
+
+Protected routes require an active account. Errors use a short message suitable
+for display. Clients should branch on the HTTP status rather than the wording.
+The overall request body limit is 4 MiB, with lower limits on individual routes.
+Expect `413` for an oversized request, `429` for throttling, and `503` when
+the server has reached its concurrency limit. Honor `Retry-After` when provided.
+Date-range analytics requests accept ordered ranges of up to 366 days.
 
 ```json
 {
@@ -887,3 +952,25 @@ At `00:00 UTC`, the backend recomputes analytics daily rows and dashboard rollup
 - On app launch, the splash flow first checks for a stored session and re-enters the app without prompting for credentials again.
 - The login screen should only reappear after an explicit logout or when `GET /me` returns an authentication failure such as `401 Unauthorized` / `403 Forbidden`.
 - Temporary connectivity failures must not be treated as logout events by the client.
+
+## Bug reports
+
+`POST /bug-reports` requires an active account. The app asks the user to confirm
+public posting before sending the following fields.
+
+```json
+{
+  "title": "Text clipped in Settings",
+  "description": "The last line of the setting label is cut off.",
+  "reproduction": "",
+  "expected": "The full label is visible.",
+  "actual": "The last line is partly hidden.",
+  "public_confirmed": true
+}
+```
+
+The maximum request size is 48 KiB. Reproduction steps are optional. A `202`
+response includes a `report_id` and a `message` confirming that GitHub accepted
+the posting request. An identical accepted submission returns the existing ID.
+Invalid fields or missing consent return `400`, a submission limit returns `429`,
+and unavailable delivery returns `503`. [Delivery setup](../../INSTALL.md#public-bug-reporting)

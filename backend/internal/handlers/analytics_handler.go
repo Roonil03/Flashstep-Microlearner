@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"backend/internal/httperror"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"backend/internal/services"
 )
@@ -31,6 +34,9 @@ func parseRange(c *gin.Context) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, err
 	}
 	to = to.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	if to.Before(from) || to.Sub(from) > 366*24*time.Hour {
+		return time.Time{}, time.Time{}, errors.New("date range must be ordered and at most 366 days")
+	}
 	return from.UTC(), to.UTC(), nil
 }
 
@@ -43,7 +49,7 @@ func (h *AnalyticsHandler) DailyReviewCount(c *gin.Context) {
 	}
 	out, err := h.service.DailyReviewCount(c.Request.Context(), userID, from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)
@@ -58,7 +64,7 @@ func (h *AnalyticsHandler) AverageSessionLength(c *gin.Context) {
 	}
 	out, err := h.service.AverageSessionLength(c.Request.Context(), userID, from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -75,7 +81,7 @@ func (h *AnalyticsHandler) AccuracyTrends(c *gin.Context) {
 	}
 	out, err := h.service.AccuracyTrends(c.Request.Context(), userID, from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)
@@ -84,13 +90,13 @@ func (h *AnalyticsHandler) AccuracyTrends(c *gin.Context) {
 func (h *AnalyticsHandler) DeckPerformance(c *gin.Context) {
 	userID := c.GetString("user_id")
 	deckID := c.Query("deck_id")
-	if deckID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deck_id is required"})
+	if _, err := uuid.Parse(deckID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "deck_id must be a valid UUID"})
 		return
 	}
 	out, err := h.service.DeckPerformance(c.Request.Context(), userID, deckID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)
@@ -109,7 +115,7 @@ func (h *AnalyticsHandler) Dashboard(c *gin.Context) {
 	}
 	out, err := h.service.Dashboard(c.Request.Context(), userID, rangeDays)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)

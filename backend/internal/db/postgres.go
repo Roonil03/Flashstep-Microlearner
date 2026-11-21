@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -29,7 +30,10 @@ func Connect(cfg *config.Config) (*sql.DB, error) {
 	for attempt := 1; attempt <= 10; attempt++ {
 		DB, err = sql.Open("postgres", dsn)
 		if err == nil {
-			if pingErr := DB.Ping(); pingErr == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			pingErr := DB.PingContext(ctx)
+			cancel()
+			if pingErr == nil {
 				DB.SetMaxOpenConns(10)
 				DB.SetMaxIdleConns(5)
 				DB.SetConnMaxLifetime(5 * time.Minute)

@@ -30,7 +30,8 @@ class LegalSettingsPage extends StatelessWidget {
         const ['Flashstep logo and image variants — Roonil03'],
         'Creator: Roonil03\n'
         'License: Creative Commons Attribution-ShareAlike 4.0 International\n'
-        'Source: https://github.com/Roonil03/Flashstep-Microlearner/tree/v1.2.0/frontend/assets\n'
+        'Source: https://github.com/Roonil03/Flashstep-Microlearner/tree/main/frontend/assets\n'
+        'Asset license: https://github.com/Roonil03/Flashstep-Microlearner/blob/main/frontend/assets/LICENSE\n'
         'License URL: https://creativecommons.org/licenses/by-sa/4.0/\n\n'
         '$artwork',
       );
@@ -88,6 +89,15 @@ class LegalSettingsPage extends StatelessWidget {
                   applicationVersion: AppVersion.name,
                 );
               },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Report a Bug'),
+              subtitle: const Text('Submit a public GitHub issue'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap:
+                  () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
             ),
           ],
         ),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import '../../../core/network/api_errors.dart';
 import '../../../core/storage/app_database.dart' as db;
 import '../../../core/storage/database_provider.dart';
 import '../../../core/storage/session_storage.dart';
@@ -44,7 +45,8 @@ class SyncResult {
 
 class _SyncSession {
   final String userId, token;
-  const _SyncSession(this.userId, this.token);
+  final int metadataRevision;
+  const _SyncSession(this.userId, this.token, this.metadataRevision);
 }
 
 class _PendingGroup {
@@ -53,6 +55,7 @@ class _PendingGroup {
   String chosen, deckId;
   DateTime updated;
   int version;
+  bool allowCreate = false;
   _PendingGroup(
     this.entity,
     this.id,
@@ -64,7 +67,10 @@ class _PendingGroup {
 }
 
 class _ProtectedChanges {
-  final Set<String> decks = {}, cards = {}, affectedDecks = {};
+  final Set<String> decks = {},
+      cards = {},
+      affectedDecks = {},
+      newCardDecks = {};
 }
 
 class DeckSyncService {
@@ -75,7 +81,9 @@ class DeckSyncService {
   final SyncMetadataStore _metadata;
   final String _baseUrl;
   final SyncStatusNotifier? _status;
-  final Map<String, Future<SyncResult>> _inFlight = {};
+  static final _databaseSyncs = Expando<Map<String, Future<SyncResult>>>();
+  Map<String, Future<SyncResult>> get _inFlight =>
+      _databaseSyncs[_database] ??= {};
   bool _disposed = false;
   DeckSyncService({
     required db.AppDatabase database,
@@ -105,10 +113,41 @@ class DeckSyncService {
         'You are not signed in, so sync was skipped.',
       );
     }
+    return _syncNow(_SyncSession(user, token, _metadata.revision(user)));
+  }
+
+  /// Include a completed local mutation even when an older sync has already
+  /// snapshotted its queue or skipped an operation held for Undo.
+  Future<SyncResult> syncAfterLocalChange() async {
+    final user = await _storage.readUserId();
+    final token = await _storage.readToken();
+    if (user == null || user.isEmpty || token == null || token.isEmpty) {
+      return const SyncResult.warning(
+        'You are not signed in, so sync was skipped.',
+      );
+    }
+    final session = _SyncSession(user, token, _metadata.revision(user));
+    try {
+      final older = _inFlight[user];
+      if (older != null) {
+        await older;
+        if (identical(_inFlight[user], older)) _inFlight.remove(user);
+      }
+      await _assertActive(session);
+      return _syncNow(session);
+    } catch (_) {
+      return const SyncResult.warning(
+        'Sync could not finish. Pending changes are retained; please retry.',
+      );
+    }
+  }
+
+  Future<SyncResult> _syncNow(_SyncSession session) async {
+    final user = session.userId;
     final existing = _inFlight[user];
     if (existing != null) return existing;
     _status?.start(user);
-    final work = _sync(_SyncSession(user, token));
+    final work = _sync(session);
     _inFlight[user] = work;
     try {
       final result = await work;
@@ -131,6 +170,10 @@ class DeckSyncService {
 
   Future<void> _assertActive(_SyncSession session) async {
     if (_disposed ||
+        (_database.databaseFileName != ':memory:' &&
+            _database.databaseFileName !=
+                db.AppDatabase.fileNameForUser(session.userId)) ||
+        _metadata.revision(session.userId) != session.metadataRevision ||
         await _storage.readUserId() != session.userId ||
         await _storage.readToken() != session.token) {
       throw StateError('The active account changed; sync was stopped.');
@@ -141,8 +184,10 @@ class DeckSyncService {
     _SyncSession session,
     String path, {
     Map<String, dynamic>? payload,
+    void Function()? beforeSend,
   }) async {
     await _assertActive(session);
+    beforeSend?.call();
     final headers = {
       'Authorization': 'Bearer ${session.token}',
       'Content-Type': 'application/json',
@@ -161,7 +206,8 @@ class DeckSyncService {
       throw _SyncHttpException(
         statusCode: response.statusCode,
         message:
-            '$action failed with status ${response.statusCode}. Your pending changes are retained.',
+            '$action could not finish. ${apiErrorMessage(response)} '
+            'Your pending changes are retained.',
       );
     }
   }
@@ -170,9 +216,20 @@ class DeckSyncService {
     try {
       await _assertActive(session);
       final fingerprints = await _metadata.read(session.userId);
-      await _uploadPendingChanges(session, fingerprints);
+      final rejected = await _uploadPendingChanges(session, fingerprints);
       await _reconcile(session, fingerprints);
       await _assertActive(session);
+      final pending =
+          await (_database.select(_database.syncQueueItems)
+            ..where((t) => t.synced.equals(false))).get();
+      if (rejected > 0 ||
+          pending.isNotEmpty ||
+          _database.heldDeckDeletions.isNotEmpty ||
+          _database.heldCardDeletions.isNotEmpty) {
+        return SyncResult.warning(
+          'Some changes remain on this device. Finish any Undo action and retry sync. Content or reviews whose parent no longer exists need attention.',
+        );
+      }
       await _storage.writeLastSyncAt(
         DateTime.now().toUtc(),
         userId: session.userId,
@@ -194,14 +251,16 @@ class DeckSyncService {
       );
     } on _SyncHttpException catch (e) {
       return SyncResult.warning(e.message, statusCode: e.statusCode);
-    } catch (e) {
-      return SyncResult.warning('Sync failed: $e');
+    } catch (_) {
+      return const SyncResult.warning(
+        'Sync could not finish. Pending changes are retained; please retry.',
+      );
     }
   }
 
   // Snapshot IDs first, then read payloads in bounded groups. Compact redundant
   // deck/card edits to the newest queued state; every distinct review is kept.
-  Future<void> _uploadPendingChanges(
+  Future<int> _uploadPendingChanges(
     _SyncSession session,
     Map<String, String> fingerprints,
   ) async {
@@ -212,6 +271,7 @@ class DeckSyncService {
             )
             .get();
     final groups = <String, _PendingGroup>{};
+    var rejected = 0;
     for (var offset = 0; offset < snapshot.length; offset += 200) {
       await _assertActive(session);
       final ids =
@@ -224,13 +284,12 @@ class DeckSyncService {
           await (_database.select(_database.syncQueueItems)
             ..where((t) => t.operationId.isIn(ids))).get();
       for (final item in items) {
-        final raw = jsonDecode(item.payload);
-        if (raw is! Map<String, dynamic> ||
+        final raw = _pendingPayload(item.payload);
+        if (raw == null ||
             !['deck', 'card', 'review_log'].contains(item.entity) ||
             raw['id'] is! String) {
-          throw const FormatException(
-            'Invalid pending sync operation; no operation was discarded.',
-          );
+          rejected++;
+          continue;
         }
         final id = raw['id'] as String;
         final key = '${item.entity}:$id';
@@ -239,7 +298,8 @@ class DeckSyncService {
               (raw['updated_at'] ?? raw['created_at'] ?? '').toString(),
             )?.toUtc() ??
             item.createdAt;
-        final version = (raw['version'] as num?)?.toInt() ?? 0;
+        final version =
+            raw['version'] is num ? (raw['version'] as num).toInt() : 0;
         final deckId =
             item.entity == 'deck' ? id : (raw['deck_id']?.toString() ?? '');
         final group = groups.putIfAbsent(
@@ -254,6 +314,7 @@ class DeckSyncService {
           ),
         );
         group.operations.add(item.operationId);
+        group.allowCreate |= item.type == 'create';
         if (updated.isAfter(group.updated) ||
             (updated.isAtSameMomentAs(group.updated) &&
                 version > group.version)) {
@@ -286,7 +347,13 @@ class DeckSyncService {
           if (row == null) continue; // Undo may have removed it.
           final size = utf8.encode(row.payload).length;
           if (batch.isNotEmpty && bytes + size > (1 << 20)) {
-            await _sendBatch(session, entity, batch, payloads, fingerprints);
+            rejected += await _sendBatch(
+              session,
+              entity,
+              batch,
+              payloads,
+              fingerprints,
+            );
             batch = [];
             payloads = [];
             bytes = 0;
@@ -295,13 +362,21 @@ class DeckSyncService {
           payloads.add(jsonDecode(row.payload) as Map<String, dynamic>);
           bytes += size;
         }
-        if (batch.isNotEmpty)
-          await _sendBatch(session, entity, batch, payloads, fingerprints);
+        if (batch.isNotEmpty) {
+          rejected += await _sendBatch(
+            session,
+            entity,
+            batch,
+            payloads,
+            fingerprints,
+          );
+        }
       }
     }
+    return rejected;
   }
 
-  Future<void> _sendBatch(
+  Future<int> _sendBatch(
     _SyncSession session,
     String entity,
     List<_PendingGroup> groups,
@@ -309,6 +384,71 @@ class DeckSyncService {
     Map<String, String> fingerprints,
   ) async {
     await _assertActive(session);
+    final operations = groups.expand((g) => g.operations).toList();
+    final liveRows = <db.SyncQueueItem>[];
+    for (var offset = 0; offset < operations.length; offset += 400) {
+      liveRows.addAll(
+        await (_database.select(_database.syncQueueItems)..where(
+          (t) => t.operationId.isIn(operations.skip(offset).take(400).toList()),
+        )).get(),
+      );
+    }
+    final liveOperations = liveRows.map((r) => r.operationId).toSet();
+    for (final group in groups) {
+      group.allowCreate = liveRows.any(
+        (r) => group.operations.contains(r.operationId) && r.type == 'create',
+      );
+    }
+    final holds = _deletionHolds();
+    final reviewParents = <String, String>{};
+    if (entity == 'review_log') {
+      final cards =
+          await (_database.select(_database.cards)..where(
+            (t) => t.id.isIn(
+              payloads.map((p) => p['card_id'].toString()).toList(),
+            ),
+          )).get();
+      reviewParents.addAll({for (final card in cards) card.id: card.deckId});
+    }
+    bool held(int index) {
+      final group = groups[index];
+      final cardId =
+          entity == 'review_log'
+              ? payloads[index]['card_id']?.toString()
+              : group.id;
+      final deckId =
+          entity == 'review_log' ? reviewParents[cardId] : group.deckId;
+      return holds.decks.contains(deckId) ||
+          _database.heldDeckDeletions.contains(deckId) ||
+          ((entity == 'card' || entity == 'review_log') &&
+              (holds.cards.contains(cardId) ||
+                  _database.heldCardDeletions.contains(cardId)));
+    }
+
+    void filterHeld() {
+      final keep = <int>[
+        for (var i = 0; i < groups.length; i++)
+          if (liveOperations.contains(groups[i].chosen) && !held(i)) i,
+      ];
+      payloads =
+          keep
+              .map(
+                (i) => <String, dynamic>{
+                  ...payloads[i],
+                  if (entity != 'review_log')
+                    'allow_create': groups[i].allowCreate,
+                },
+              )
+              .toList();
+      groups = keep.map((i) => groups[i]).toList();
+    }
+
+    filterHeld();
+    if (groups.isEmpty) return 0;
+    if (groups.length == 1 &&
+        utf8.encode(jsonEncode(payloads.single)).length > (4 << 20) - 128) {
+      return 1;
+    }
     final affected =
         groups.map((g) => g.deckId).where((id) => id.isNotEmpty).toSet();
     if (entity == 'review_log') {
@@ -323,22 +463,84 @@ class DeckSyncService {
     }
     // Persist invalidation before acknowledging queue rows, even if a later
     // batch fails or an unchanged server revision rejects a stale local edit.
-    await _metadata.write(session.userId, fingerprints);
+    await _metadata.write(
+      session.userId,
+      fingerprints,
+      expectedRevision: session.metadataRevision,
+    );
     final key =
         {
           'deck': 'decks',
           'card': 'cards',
           'review_log': 'review_logs',
         }[entity]!;
-    final response = await _request(
-      session,
-      'sync/upload',
-      payload: {'decks': [], 'cards': [], 'review_logs': [], key: payloads},
-    );
+    final upload = <String, dynamic>{
+      'reconciliation_version': 1,
+      'decks': [],
+      'cards': [],
+      'review_logs': [],
+      key: payloads,
+    };
+    late http.Response response;
+    try {
+      response = await _request(
+        session,
+        'sync/upload',
+        payload: upload,
+        beforeSend: () {
+          // A deletion can finish during account/storage awaits above.
+          // Check live Undo holds immediately before the HTTP call.
+          filterHeld();
+          if (groups.isEmpty) throw const _DeferredSyncChanges();
+          upload[key] = payloads;
+        },
+      );
+    } on _DeferredSyncChanges {
+      return 0;
+    }
+    // Validation is atomic server-side. Bisect only input/size failures so one
+    // historical or malformed operation cannot hold unrelated changes hostage.
+    if ([400, 413, 422].contains(response.statusCode)) {
+      if (groups.length == 1) return 1;
+      final middle = groups.length ~/ 2;
+      return await _sendBatch(
+            session,
+            entity,
+            groups.sublist(0, middle),
+            payloads.sublist(0, middle),
+            fingerprints,
+          ) +
+          await _sendBatch(
+            session,
+            entity,
+            groups.sublist(middle),
+            payloads.sublist(middle),
+            fingerprints,
+          );
+    }
     _requireSuccess(response, 'Upload');
+    final result = jsonDecode(response.body) as Map<String, dynamic>;
+    final missingDecks = _responseIds(result, 'missing_deck_ids');
+    final missingCards = _responseIds(result, 'missing_card_ids');
+    final missingReviews = _responseIds(result, 'missing_review_log_ids');
+    final retained = <String>{};
+    for (final group in groups) {
+      final missing =
+          entity == 'deck'
+              ? missingDecks.contains(group.id)
+              : entity == 'card'
+              ? missingCards.contains(group.id) ||
+                  missingDecks.contains(group.deckId)
+              : missingReviews.contains(group.id);
+      if (missing && (group.allowCreate || entity == 'review_log')) {
+        retained.add(group.id);
+      }
+    }
     await _database.transaction(() async {
       await _assertActive(session);
-      final ids = groups.expand((g) => g.operations).toList();
+      final acknowledged =
+          groups.where((g) => !retained.contains(g.id)).toList();
+      final ids = acknowledged.expand((g) => g.operations).toList();
       for (var i = 0; i < ids.length; i += 400) {
         await (_database.delete(_database.syncQueueItems)..where(
           (t) => t.operationId.isIn(ids.skip(i).take(400).toList()),
@@ -346,20 +548,52 @@ class DeckSyncService {
       }
       if (entity == 'review_log') {
         await (_database.update(_database.reviewLogs)..where(
-          (t) => t.id.isIn(groups.map((g) => g.id).toList()),
+          (t) => t.id.isIn(acknowledged.map((g) => g.id).toList()),
         )).write(const db.ReviewLogsCompanion(syncStatus: Value('synced')));
       }
+      await _markAbsent(session, deckIds: missingDecks, cardIds: missingCards);
       await _assertActive(session);
     });
+    return retained.length;
+  }
+
+  Set<String> _responseIds(Map<String, dynamic> value, String key) {
+    final ids = value[key];
+    if (ids == null) return {};
+    if (ids is! List || ids.any((id) => id is! String)) {
+      throw FormatException('Invalid missing record IDs');
+    }
+    return ids.cast<String>().toSet();
+  }
+
+  // Only a visible Undo action delays upload. Once finalized or restarted,
+  // the server starts its retention window when it accepts the tombstone.
+  _ProtectedChanges _deletionHolds() {
+    final holds = _ProtectedChanges();
+    holds.decks.addAll(_database.heldDeckDeletions);
+    holds.cards.addAll(_database.heldCardDeletions);
+    return holds;
+  }
+
+  Map<String, dynamic>? _pendingPayload(String payload) {
+    try {
+      final raw = jsonDecode(payload);
+      return raw is Map<String, dynamic> ? raw : null;
+    } on FormatException {
+      return null;
+    }
   }
 
   Future<_ProtectedChanges> _protectedChanges() async {
-    final result = _ProtectedChanges();
+    final result = _deletionHolds();
+    result.affectedDecks.addAll(result.decks);
+    final newCardIds = <String>{};
     final rows =
         await (_database.select(_database.syncQueueItems)
           ..where((t) => t.synced.equals(false))).get();
     for (final row in rows) {
-      final raw = jsonDecode(row.payload) as Map<String, dynamic>;
+      final raw = _pendingPayload(row.payload);
+      if (raw == null) continue;
       final id = raw['id'].toString();
       if (row.entity == 'deck') {
         result.decks.add(id);
@@ -368,9 +602,59 @@ class DeckSyncService {
       if (row.entity == 'card') {
         result.cards.add(id);
         result.affectedDecks.add(raw['deck_id'].toString());
+        if (row.type == 'create') newCardIds.add(id);
       }
     }
+    // Keep unacknowledged new content reachable when its existing parent was
+    // deleted elsewhere. A later local deletion must still hide that content.
+    final ids = newCardIds.toList();
+    for (var offset = 0; offset < ids.length; offset += 400) {
+      final cards =
+          await (_database.select(_database.cards)..where(
+            (t) =>
+                t.id.isIn(ids.skip(offset).take(400).toList()) &
+                t.isDeleted.equals(false),
+          )).get();
+      result.newCardDecks.addAll(cards.map((card) => card.deckId));
+    }
     return result;
+  }
+
+  Future<void> _markAbsent(
+    _SyncSession session, {
+    Set<String> deckIds = const {},
+    Set<String> cardIds = const {},
+  }) async {
+    final pending = await _protectedChanges();
+    final absentDecks = deckIds
+        .difference(pending.affectedDecks)
+        .difference(pending.decks);
+    final cards =
+        await (_database.select(_database.cards)..where(
+          (t) =>
+              t.id.isIn(cardIds.toList()) | t.deckId.isIn(absentDecks.toList()),
+        )).get();
+    final absentCards =
+        cards
+            .where(
+              (c) =>
+                  !pending.cards.contains(c.id) &&
+                  !pending.decks.contains(c.deckId),
+            )
+            .map((c) => c.id)
+            .toList();
+    await _assertActive(session);
+    for (var offset = 0; offset < absentCards.length; offset += 400) {
+      await (_database.update(_database.cards)..where(
+        (t) => t.id.isIn(absentCards.skip(offset).take(400).toList()),
+      )).write(const db.CardsCompanion(isDeleted: Value(true)));
+    }
+    for (final id in absentDecks) {
+      await (_database.update(_database.decks)..where(
+        (t) => t.id.equals(id) & t.userId.equals(session.userId),
+      )).write(const db.DecksCompanion(isDeleted: Value(true)));
+    }
+    await _assertActive(session);
   }
 
   Future<void> _reconcile(
@@ -379,8 +663,11 @@ class DeckSyncService {
   ) async {
     String? cursor;
     String? reviewsFingerprint;
+    var authoritative = true;
     final visited = <String>{};
     final seen = <String>{};
+    final disappeared = <String>{};
+    final absentCards = <String>{};
     do {
       final suffix =
           cursor == null ? '' : '&cursor=${Uri.encodeComponent(cursor)}';
@@ -395,6 +682,7 @@ class DeckSyncService {
       }
       _requireSuccess(response, 'Reconciliation');
       final page = jsonDecode(response.body) as Map<String, dynamic>;
+      authoritative &= page['reconciliation_version'] == 1;
       if (cursor == null) {
         reviewsFingerprint = page['reviews_fingerprint'] as String?;
       }
@@ -408,8 +696,9 @@ class DeckSyncService {
           entries
               .where(
                 (e) =>
-                    fingerprints[e['id']] != e['fingerprint'] ||
-                    !localIds.contains(e['id']),
+                    e['is_purged'] != true &&
+                    (fingerprints[e['id']] != e['fingerprint'] ||
+                        !localIds.contains(e['id'])),
               )
               .toList();
       seen.addAll(ids);
@@ -417,7 +706,10 @@ class DeckSyncService {
         final group = changed.skip(offset).take(25).toList();
         final deckIds = group.map((e) => e['id'] as String).toList();
         String? cardCursor;
+        var completeCards = authoritative;
         final cardVisited = <String>{};
+        final seenCards = <String>{};
+        final missingDecks = <String>{};
         do {
           final fetched = await _request(
             session,
@@ -430,37 +722,88 @@ class DeckSyncService {
           );
           _requireSuccess(fetched, 'Download');
           final value = jsonDecode(fetched.body) as Map<String, dynamic>;
+          completeCards &= value['reconciliation_version'] == 1;
           final returnedDecks =
               (value['decks'] as List).map((e) => (e as Map)['id']).toSet();
-          if (returnedDecks.length != deckIds.length ||
-              !returnedDecks.containsAll(deckIds))
+          final missing =
+              completeCards
+                  ? _responseIds(value, 'missing_deck_ids')
+                  : <String>{};
+          if (!returnedDecks.containsAll(
+                deckIds.where((id) => !missing.contains(id)),
+              ) ||
+              returnedDecks.any((id) => !deckIds.contains(id)) ||
+              missing.any((id) => !deckIds.contains(id))) {
             throw const FormatException('Incomplete deck fetch');
+          }
+          missingDecks.addAll(missing);
+          final fetchedCards = value['cards'];
+          if (fetchedCards is! List) {
+            throw const FormatException('Missing cards');
+          }
+          for (final card in fetchedCards) {
+            if (card is! Map ||
+                card['id'] is! String ||
+                !deckIds.contains(card['deck_id'])) {
+              throw const FormatException('Invalid card fetch');
+            }
+            final cardId = card['id'] as String;
+            seenCards.add(cardId);
+            // A card missing from an earlier group may have moved into this
+            // one. Its downloaded state must survive the final cleanup.
+            absentCards.remove(cardId);
+          }
           await _mergeDownloadedData(fetched.body, session);
           cardCursor = value['next_cursor'] as String?;
           if (cardCursor != null && !cardVisited.add(cardCursor)) {
             throw const FormatException('Repeated card cursor');
           }
         } while (cardCursor != null);
+        // A partial page cannot prove that an omitted local card is gone.
+        if (completeCards) {
+          final localCards =
+              await (_database.select(_database.cards)
+                ..where((t) => t.deckId.isIn(deckIds))).get();
+          absentCards.addAll(
+            localCards.map((c) => c.id).toSet().difference(seenCards),
+          );
+          disappeared.addAll(missingDecks);
+        }
         final pending = await _protectedChanges();
         for (final entry in group) {
           final id = entry['id'] as String;
-          if (pending.affectedDecks.contains(id)) {
+          if (!completeCards ||
+              pending.affectedDecks.contains(id) ||
+              missingDecks.contains(id)) {
             fingerprints.remove(id);
           } else {
             fingerprints[id] = entry['fingerprint'] as String;
           }
         }
-        await _assertActive(session);
-        await _metadata.write(session.userId, fingerprints);
       }
       cursor = page['next_cursor'] as String?;
       if (cursor != null && !visited.add(cursor)) {
         throw const FormatException('Repeated manifest cursor');
       }
     } while (cursor != null);
+    if (authoritative) {
+      final localDecks =
+          await (_database.select(_database.decks)
+            ..where((t) => t.userId.equals(session.userId))).get();
+      await _database.transaction(() async {
+        await _markAbsent(
+          session,
+          deckIds: {
+            ...localDecks.map((d) => d.id).toSet().difference(seen),
+            ...disappeared,
+          },
+          cardIds: absentCards,
+        );
+      });
+    }
     if (reviewsFingerprint != null &&
         fingerprints['__reviews'] != reviewsFingerprint) {
-      await _reconcileReviews(session);
+      await _reconcileReviews(session, authoritative: authoritative);
       final pendingReviews =
           await (_database.select(_database.syncQueueItems)
                 ..where(
@@ -468,22 +811,33 @@ class DeckSyncService {
                 )
                 ..limit(1))
               .get();
-      if (pendingReviews.isEmpty) {
+      if (authoritative && pendingReviews.isEmpty) {
         fingerprints['__reviews'] = reviewsFingerprint;
       } else {
         fingerprints.remove('__reviews');
       }
     }
+    // Capability must hold across every manifest page. Otherwise cleanup was
+    // deferred, and caching any page could prevent a later compatible refetch.
+    if (!authoritative) fingerprints.clear();
     fingerprints.removeWhere(
       (id, _) => id != '__reviews' && !seen.contains(id),
     );
     await _assertActive(session);
-    await _metadata.write(session.userId, fingerprints);
+    await _metadata.write(
+      session.userId,
+      fingerprints,
+      expectedRevision: session.metadataRevision,
+    );
   }
 
-  Future<void> _reconcileReviews(_SyncSession session) async {
+  Future<void> _reconcileReviews(
+    _SyncSession session, {
+    required bool authoritative,
+  }) async {
     String? cursor;
     final visited = <String>{};
+    final seen = <String>{};
     do {
       final suffix =
           cursor == null ? '' : '&cursor=${Uri.encodeComponent(cursor)}';
@@ -495,11 +849,40 @@ class DeckSyncService {
         throw const FormatException('Missing review history');
       }
       await _mergeDownloadedReviews(records, session);
+      seen.addAll(records.map((r) => (r as Map)['id'] as String));
       cursor = page['next_cursor'] as String?;
       if (cursor != null && !visited.add(cursor)) {
         throw const FormatException('Repeated review cursor');
       }
     } while (cursor != null);
+    if (authoritative) {
+      await _database.transaction(() async {
+        await _assertActive(session);
+        final pending =
+            await (_database.select(_database.syncQueueItems)..where(
+              (t) => t.entity.equals('review_log') & t.synced.equals(false),
+            )).get();
+        final protected =
+            pending.map((r) => _pendingPayload(r.payload)?['id']).toSet();
+        final local =
+            await (_database.select(_database.reviewLogs)..where(
+              (t) =>
+                  t.userId.equals(session.userId) &
+                  t.syncStatus.equals('synced'),
+            )).get();
+        final absent =
+            local
+                .where((r) => !seen.contains(r.id) && !protected.contains(r.id))
+                .map((r) => r.id)
+                .toList();
+        for (var offset = 0; offset < absent.length; offset += 400) {
+          await (_database.delete(_database.reviewLogs)..where(
+            (t) => t.id.isIn(absent.skip(offset).take(400).toList()),
+          )).go();
+        }
+        await _assertActive(session);
+      });
+    }
   }
 
   Future<void> _mergeDownloadedReviews(
@@ -566,11 +949,13 @@ class DeckSyncService {
   Future<void> _mergeDownloadedData(String body, _SyncSession session) async {
     final localUserId = session.userId;
     final decoded = jsonDecode(body);
-    if (decoded is! Map<String, dynamic>)
+    if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Invalid sync response');
+    }
 
-    if (decoded['decks'] is! List || decoded['cards'] is! List)
+    if (decoded['decks'] is! List || decoded['cards'] is! List) {
       throw const FormatException('Missing sync records');
+    }
     final remoteDecks = decoded['decks'] as List<dynamic>;
     final remoteCards = decoded['cards'] as List<dynamic>;
 
@@ -596,11 +981,13 @@ class DeckSyncService {
           card.id: card,
       };
       for (final rawDeck in remoteDecks) {
-        if (rawDeck is! Map<String, dynamic>)
+        if (rawDeck is! Map<String, dynamic>) {
           throw const FormatException('Invalid deck');
+        }
         final deckId = rawDeck['id']?.toString();
-        if (deckId == null || deckId.isEmpty)
+        if (deckId == null || deckId.isEmpty) {
           throw const FormatException('Missing deck id');
+        }
 
         final remoteUpdatedAt =
             DateTime.tryParse(
@@ -613,9 +1000,14 @@ class DeckSyncService {
             )?.toUtc() ??
             remoteUpdatedAt;
 
-        if (rawDeck['user_id']?.toString() != localUserId)
+        if (rawDeck['user_id']?.toString() != localUserId) {
           throw const FormatException('Invalid deck owner');
-        if (protected.decks.contains(deckId)) continue;
+        }
+        if (protected.decks.contains(deckId) ||
+            (rawDeck['is_deleted'] == true &&
+                protected.newCardDecks.contains(deckId))) {
+          continue;
+        }
         final localDeck = localDecks[deckId];
 
         deckWrites.add(
@@ -634,11 +1026,13 @@ class DeckSyncService {
       }
 
       for (final rawCard in remoteCards) {
-        if (rawCard is! Map<String, dynamic>)
+        if (rawCard is! Map<String, dynamic>) {
           throw const FormatException('Invalid card');
+        }
         final cardId = rawCard['id']?.toString();
-        if (cardId == null || cardId.isEmpty)
+        if (cardId == null || cardId.isEmpty) {
           throw const FormatException('Missing card id');
+        }
 
         final remoteUpdatedAt =
             DateTime.tryParse(
@@ -664,8 +1058,9 @@ class DeckSyncService {
                 : null;
 
         if (protected.cards.contains(cardId) ||
-            protected.decks.contains(rawCard['deck_id']?.toString()))
+            protected.decks.contains(rawCard['deck_id']?.toString())) {
           continue;
+        }
         final localCard = localCards[cardId];
 
         cardWrites.add(
@@ -706,4 +1101,8 @@ class _SyncHttpException implements Exception {
   const _SyncHttpException({required this.statusCode, required this.message});
   @override
   String toString() => message;
+}
+
+class _DeferredSyncChanges implements Exception {
+  const _DeferredSyncChanges();
 }

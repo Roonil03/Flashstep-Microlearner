@@ -229,7 +229,8 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                           (error, stack) => SliverFillRemaining(
                             hasScrollBody: false,
                             child: _ErrorState(
-                              message: 'Error loading dashboard: $error',
+                              message:
+                                  'Could not load your dashboard. Reopen the page and try again.',
                               onRetry: _refreshDashboard,
                             ),
                           ),

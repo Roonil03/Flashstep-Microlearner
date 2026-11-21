@@ -16,7 +16,7 @@ Accounts use a username, email address, and password. People can make decks publ
 
 ## 4. Availability and account deletion
 
-Connectivity and maintenance can interrupt the service. Account Settings offers an account deletion request. The app removes the local account database on the device used, while server cleanup is scheduled to remove deleted accounts later. Signing out leaves local study data on the device.
+Connectivity and maintenance can interrupt the service. Account Settings offers an account deletion request. The app removes the local account database on the device used, while server cleanup can remove deleted accounts after 24 hours when the backend handles requests. Signing out leaves local study data on the device.
 
 ## 5. Open decisions
 

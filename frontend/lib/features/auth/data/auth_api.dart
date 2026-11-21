@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../../core/network/api_errors.dart';
 
 class AuthApiException implements Exception {
   final String message;
@@ -12,8 +13,7 @@ class AuthApiException implements Exception {
   const AuthApiException(this.message, {this.statusCode});
 
   @override
-  String toString() =>
-      'AuthApiException(statusCode: $statusCode, message: $message)';
+  String toString() => message;
 }
 
 class AuthSession {
@@ -72,22 +72,10 @@ class AuthApi {
     http.Response response, {
     String fallback = 'Request failed',
   }) {
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        final error = decoded['error'];
-        if (error is String && error.trim().isNotEmpty) {
-          return error.trim();
-        }
-      }
-    } catch (_) {}
-
-    final body = response.body.trim();
-    if (body.isNotEmpty) {
-      return body;
+    if (response.statusCode == 401 && fallback == 'Login failed') {
+      return 'Email or password is incorrect.';
     }
-
-    return fallback;
+    return apiErrorMessage(response, fallback: fallback);
   }
 
   Future<AuthSession?> register({
@@ -103,7 +91,7 @@ class AuthApi {
         'username': username,
         'password': password,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
@@ -130,7 +118,7 @@ class AuthApi {
       _client.uri(ApiEndpoints.login),
       headers: _jsonHeaders(),
       body: jsonEncode({'email': email, 'password': password}),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
@@ -151,7 +139,7 @@ class AuthApi {
     final response = await http.get(
       _client.uri(ApiEndpoints.me),
       headers: {'Authorization': 'Bearer $token'},
-    );
+    ).timeout(const Duration(seconds: 30));
 
     return response.statusCode >= 200 && response.statusCode < 300;
   }
@@ -160,7 +148,7 @@ class AuthApi {
     final response = await http.get(
       _client.uri(ApiEndpoints.me),
       headers: {'Authorization': 'Bearer $token'},
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
@@ -189,7 +177,7 @@ class AuthApi {
         'old_password': oldPassword,
         'new_password': newPassword,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
@@ -207,7 +195,7 @@ class AuthApi {
       _client.uri(ApiEndpoints.changeUsername),
       headers: _jsonHeaders(token),
       body: jsonEncode({'username': username}),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
@@ -221,7 +209,7 @@ class AuthApi {
     final response = await http.delete(
       _client.uri(ApiEndpoints.deleteAccount),
       headers: _jsonHeaders(token),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(

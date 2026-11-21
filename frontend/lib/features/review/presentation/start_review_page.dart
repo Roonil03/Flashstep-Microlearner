@@ -51,7 +51,7 @@ class StartReviewPage extends ConsumerWidget {
           SafeArea(
             child: asyncDecks.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('Failed to load review decks: $error')),
+              error: (error, _) => const Center(child: Text('Could not load review decks. Reopen this page and try again.')),
               data: (decks) {
                 if (decks.isEmpty) {
                   return Center(

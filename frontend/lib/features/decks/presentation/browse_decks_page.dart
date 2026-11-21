@@ -1,3 +1,4 @@
+import '../../../core/network/api_errors.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,11 +27,6 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
 
   void _triggerBackgroundSync() {
     unawaited(ref.read(deckSyncServiceProvider).syncNow());
-  }
-
-  Future<void> _undoDeckDeletion(PendingDeckDeletion deletion) async {
-    await ref.read(deckRepositoryProvider).undoDeckDeletion(deletion);
-    _triggerBackgroundSync();
   }
 
   @override
@@ -131,7 +127,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update deck: $e'),
+          content: Text('Failed to update deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -166,39 +162,61 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
 
     try {
       final repo = ref.read(deckRepositoryProvider);
+      final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markDeckDeletedOffline(deck.id);
-      _triggerBackgroundSync();
-      if (!mounted) return;
+      if (!mounted) {
+        await repo.finalizeDeckDeletion(deletion);
+        unawaited(sync.syncAfterLocalChange());
+        return;
+      }
 
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       final controller = messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 10),
+          persist: MediaQuery.accessibleNavigationOf(context),
           behavior: SnackBarBehavior.floating,
           content: Text('Deck deleted: ${deck.title}'),
           action: SnackBarAction(
             label: 'UNDO',
             onPressed: () {
-              unawaited(_undoDeckDeletion(deletion).catchError((_) {}));
+              unawaited(
+                repo
+                    .undoDeckDeletion(deletion)
+                    .then((_) {
+                      unawaited(sync.syncAfterLocalChange());
+                    })
+                    .catchError((_) async {
+                      try {
+                        await repo.finalizeDeckDeletion(deletion);
+                        await sync.syncAfterLocalChange();
+                      } catch (_) {
+                        // An account switch may have closed this database.
+                      }
+                    }),
+              );
             },
           ),
         ),
       );
 
       unawaited(
-        controller.closed.then((reason) async {
-          if (reason == SnackBarClosedReason.action) {
-            return;
-          }
-          await repo.finalizeDeckDeletion(deletion);
-        }),
+        controller.closed
+            .then((reason) async {
+              if (reason == SnackBarClosedReason.action) {
+                return;
+              }
+              await repo.finalizeDeckDeletion(deletion);
+              await sync.syncAfterLocalChange();
+            })
+            .catchError((_) {}),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete deck: $e'),
+          content: Text('Failed to delete deck: ${networkErrorMessage(e)}'),
           behavior: SnackBarBehavior.floating,
         ),
       );

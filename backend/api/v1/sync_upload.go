@@ -2,6 +2,7 @@ package v1
 
 import (
 	"backend/internal/db"
+	"backend/internal/httperror"
 	"errors"
 	"net/http"
 	"sort"
@@ -16,23 +17,27 @@ import (
 const maxCardsPerDeck = 50
 
 type SyncUploadPayload struct {
-	Decks      []map[string]any `json:"decks"`
-	Cards      []map[string]any `json:"cards"`
-	ReviewLogs []map[string]any `json:"review_logs"`
+	ReconciliationVersion int              `json:"reconciliation_version"`
+	Decks                 []map[string]any `json:"decks"`
+	Cards                 []map[string]any `json:"cards"`
+	ReviewLogs            []map[string]any `json:"review_logs"`
 }
 
 type syncDeck struct {
-	ID          uuid.UUID
-	Title       string
-	Description *string
-	IsPublic    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Version     int
-	IsDeleted   bool
+	AllowCreate  bool
+	ID           uuid.UUID
+	Title        string
+	Description  *string
+	IsPublic     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	HasUpdatedAt bool
+	Version      int
+	IsDeleted    bool
 }
 
 type syncCard struct {
+	AllowCreate      bool
 	ID               uuid.UUID
 	DeckID           uuid.UUID
 	Front            string
@@ -45,6 +50,7 @@ type syncCard struct {
 	LastReviewedAt   *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	HasUpdatedAt     bool
 	Version          int
 	IsDeleted        bool
 	FromDeckDeletion bool
@@ -211,14 +217,16 @@ func normalizeDeck(raw map[string]interface{}) (syncDeck, error) {
 	}
 
 	return syncDeck{
-		ID:          id,
-		Title:       asString(raw["title"]),
-		Description: normalizeNullableString(raw["description"]),
-		IsPublic:    asBool(raw["is_public"]),
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
-		Version:     asInt(raw["version"]),
-		IsDeleted:   asBool(raw["is_deleted"]),
+		AllowCreate:  asBool(raw["allow_create"]),
+		ID:           id,
+		Title:        asString(raw["title"]),
+		Description:  normalizeNullableString(raw["description"]),
+		IsPublic:     asBool(raw["is_public"]),
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+		HasUpdatedAt: parseOptionalTime(raw["updated_at"]) != nil,
+		Version:      asInt(raw["version"]),
+		IsDeleted:    asBool(raw["is_deleted"]),
 	}, nil
 }
 
@@ -234,6 +242,11 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 
 	createdAt := parseTimeOrZero(raw["created_at"])
 	updatedAt := parseTimeOrZero(raw["updated_at"])
+	if _, err := parseLegacyCardCreatedAt(asString(raw["created_at"])); err == nil {
+		// Its original zone is unknown. For inserts use the operation's zoned
+		// timestamp (or receipt time); existing rows keep their stored creation.
+		createdAt = updatedAt
+	}
 	if createdAt.After(updatedAt) {
 		createdAt = updatedAt
 	}
@@ -249,6 +262,7 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 	}
 
 	return syncCard{
+		AllowCreate:      asBool(raw["allow_create"]),
 		ID:               id,
 		DeckID:           deckID,
 		Front:            asString(raw["front"]),
@@ -261,6 +275,7 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 		LastReviewedAt:   parseOptionalTime(raw["last_reviewed_at"]),
 		CreatedAt:        createdAt,
 		UpdatedAt:        updatedAt,
+		HasUpdatedAt:     parseOptionalTime(raw["updated_at"]) != nil,
 		Version:          asInt(raw["version"]),
 		IsDeleted:        asBool(raw["is_deleted"]),
 		FromDeckDeletion: asBool(raw["from_deck_deletion"]),
@@ -331,12 +346,28 @@ func SyncUpload(c *gin.Context) {
 
 	var payload SyncUploadPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperror.InvalidJSON(c, err)
 		return
 	}
 
+	if payload.ReconciliationVersion < 0 || payload.ReconciliationVersion > 1 {
+		c.JSON(400, gin.H{"error": "unsupported reconciliation_version"})
+		return
+	}
 	decks := make([]syncDeck, 0, len(payload.Decks))
+	if len(payload.Decks)+len(payload.Cards)+len(payload.ReviewLogs) > 1000 {
+		c.JSON(400, gin.H{"error": "upload at most 1000 records per request"})
+		return
+	}
 	for _, raw := range payload.Decks {
+		if err := validateSyncRecord(raw, "deck"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if owner := asString(raw["user_id"]); owner != "" && owner != userID.String() {
+			c.JSON(400, gin.H{"error": "invalid deck owner"})
+			return
+		}
 		deck, err := normalizeDeck(raw)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -351,6 +382,10 @@ func SyncUpload(c *gin.Context) {
 
 	cards := make([]syncCard, 0, len(payload.Cards))
 	for _, raw := range payload.Cards {
+		if err := validateSyncRecord(raw, "card"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		card, err := normalizeCard(raw)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -367,6 +402,10 @@ func SyncUpload(c *gin.Context) {
 
 	reviewLogs := make([]syncReviewLog, 0, len(payload.ReviewLogs))
 	for _, raw := range payload.ReviewLogs {
+		if err := validateSyncRecord(raw, "review_log"); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		reviewLog, err := normalizeReviewLog(raw, userID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -406,24 +445,33 @@ func SyncUpload(c *gin.Context) {
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 	defer tx.Rollback()
-	if err := applySyncChanges(ctx, tx, userID, decks, cards, reviewLogs); err != nil {
-		c.JSON(syncErrorStatus(err), gin.H{"error": err.Error()})
+	result := syncReconciliation{Version: payload.ReconciliationVersion, MissingDeckIDs: []string{}, MissingCardIDs: []string{}, MissingReviewLogIDs: []string{}}
+	if err := applySyncChanges(ctx, tx, userID, decks, cards, reviewLogs, &result); err != nil {
+		if syncErrorStatus(err) == 400 {
+			c.JSON(400, gin.H{"error": err.Error()})
+		} else {
+			httperror.Internal(c, err)
+		}
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		httperror.Internal(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":                "synced",
-		"decks_processed":       len(decks),
-		"cards_processed":       len(cards),
-		"review_logs_processed": len(reviewLogs),
-		"server_time":           time.Now().UTC().Format(time.RFC3339),
+		"status":                 "synced",
+		"reconciliation_version": 1,
+		"missing_deck_ids":       result.MissingDeckIDs,
+		"missing_card_ids":       result.MissingCardIDs,
+		"missing_review_log_ids": result.MissingReviewLogIDs,
+		"decks_processed":        len(decks),
+		"cards_processed":        len(cards),
+		"review_logs_processed":  len(reviewLogs),
+		"server_time":            time.Now().UTC().Format(time.RFC3339),
 	})
 }

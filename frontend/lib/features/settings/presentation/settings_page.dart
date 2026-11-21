@@ -1,3 +1,5 @@
+import '../../../core/network/api_errors.dart';
+import '../../auth/data/auth_api.dart';
 import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
@@ -144,6 +146,13 @@ class _MainSettings extends StatelessWidget {
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () => Navigator.of(context).pushNamed(AppRoutes.legal),
           ),
+          ListTile(
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Report a Bug'),
+            subtitle: const Text('Submit a public GitHub issue'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
+          ),
           const SizedBox(height: 24),
           Column(
             children: [
@@ -192,13 +201,7 @@ class _AccountSettings extends ConsumerStatefulWidget {
 }
 
 class _AccountSettingsState extends ConsumerState<_AccountSettings> {
-  String _messageFromError(Object error) {
-    final text = error.toString();
-    return text
-        .replaceFirst('Exception: ', '')
-        .replaceFirst('StateError: ', '')
-        .trim();
-  }
+  String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
 
   Future<void> _showChangePasswordDialog() async {
     final result = await showDialog<bool>(
@@ -439,6 +442,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               if (username.isEmpty) {
                 setStateDialog(() {
                   errorText = 'Username is required.';
+                });
+                return;
+              }
+
+              final usernameLength = username.toLowerCase().runes.length;
+              if (usernameLength < 3 || usernameLength > 50) {
+                setStateDialog(() {
+                  errorText = 'Use 3 to 50 characters.';
                 });
                 return;
               }
@@ -1151,13 +1162,7 @@ Widget _sectionCard(bool isDark, {required List<Widget> children}) {
   );
 }
 
-String _messageFromError(Object error) {
-  final text = error.toString();
-  return text
-      .replaceFirst('Exception: ', '')
-      .replaceFirst('StateError: ', '')
-      .trim();
-}
+String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
 
 String _fontSizeLabel(AppFontSize size) => switch (size) {
   AppFontSize.small => 'Small',
