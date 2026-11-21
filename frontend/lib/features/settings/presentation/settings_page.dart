@@ -446,6 +446,14 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                 return;
               }
 
+              final usernameLength = username.toLowerCase().runes.length;
+              if (usernameLength < 3 || usernameLength > 50) {
+                setStateDialog(() {
+                  errorText = 'Use 3 to 50 characters.';
+                });
+                return;
+              }
+
               setStateDialog(() {
                 isSubmitting = true;
                 errorText = null;

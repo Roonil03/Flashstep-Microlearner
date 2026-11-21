@@ -37,7 +37,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		case errors.Is(err, services.ErrEmailAlreadyExists), errors.Is(err, services.ErrUsernameAlreadyExists):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrInvalidRegistration):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Use a username up to 50 characters, a valid email up to 100 characters, and a password of 8 to 72 bytes."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Use a username of 3 to 50 characters, a valid email up to 100 characters, and a password of 8 to 72 bytes."})
 		default:
 			httperror.Internal(c, err)
 		}
@@ -105,7 +105,7 @@ func (h *AuthHandler) UpdateUsername(c *gin.Context) {
 		case errors.Is(err, services.ErrUsernameAlreadyExists):
 			c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
 		case errors.Is(err, services.ErrInvalidRegistration):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Use a username of 1 to 50 bytes."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Use a username of 3 to 50 characters."})
 		default:
 			httperror.Internal(c, err)
 		}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -61,7 +62,8 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthRe
 	if input.Username == "" || input.Email == "" || input.Password == "" {
 		return AuthResponse{}, ErrInvalidRegistration
 	}
-	if len(input.Password) > 72 || len(input.Username) > 50 || len(input.Email) > 100 {
+	usernameLength := utf8.RuneCountInString(input.Username)
+	if len(input.Password) > 72 || usernameLength < 3 || usernameLength > 50 || len(input.Email) > 100 {
 		return AuthResponse{}, ErrInvalidRegistration
 	}
 	if _, err := s.users.FindByEmail(ctx, input.Email); err == nil {
@@ -136,7 +138,8 @@ func (s *AuthService) Me(ctx context.Context, userID string) (models.UserPublic,
 
 func (s *AuthService) UpdateUsername(ctx context.Context, userID, username string) error {
 	username = strings.ToLower(strings.TrimSpace(username))
-	if username == "" || len(username) > 50 {
+	usernameLength := utf8.RuneCountInString(username)
+	if usernameLength < 3 || usernameLength > 50 {
 		return ErrInvalidRegistration
 	}
 	return s.users.UpdateUsername(ctx, userID, username)
