@@ -58,7 +58,11 @@ Cleanup is triggered by backend activity. Deleted accounts become eligible after
 
 Earlier drafts of this branch included two additional migration scripts. They have been removed. If those drafts were applied to a separate database, check that database's foreign keys and review behavior before using it with this release.
 
-Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 32 characters. If the old secret needs replacement, existing users will have to sign in again. Set `TRUSTED_PROXY_CIDRS` only to the known addresses of reverse proxies that sanitize forwarding headers. Direct deployments can leave it unset. Public bug reporting requires additional GitHub configuration. [Bug reporting setup](docs/bug_reporting.md)
+Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 32 characters. If the old secret needs replacement, existing users will have to sign in again. Set `TRUSTED_PROXY_CIDRS` only to the known addresses of reverse proxies that sanitize forwarding headers. Direct deployments can leave it unset.
+
+### Public bug reporting
+
+Enable Issues and Actions on the repository. GitHub can dispatch the bug report workflow after it is present on the default branch. Set `BUG_REPORT_GITHUB_TOKEN` in the backend host to a fine-grained token restricted to this repository with Actions write permission. The workflow uses its own token with Issues write permission to post a confirmed report. Keep the backend credential out of the app.
 
 ### Run the full app locally
 

@@ -965,4 +965,4 @@ The maximum request size is 48 KiB. Reproduction steps are optional. A `202`
 response includes a `report_id` and a `message` confirming that GitHub accepted
 the posting request. An identical accepted submission returns the existing ID.
 Invalid fields or missing consent return `400`, a submission limit returns `429`,
-and unavailable delivery returns `503`. [Field limits and delivery setup](../../docs/bug_reporting.md)
+and unavailable delivery returns `503`. [Delivery setup](../../INSTALL.md#public-bug-reporting)
