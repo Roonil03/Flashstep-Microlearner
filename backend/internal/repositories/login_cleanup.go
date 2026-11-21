@@ -2,42 +2,42 @@ package repositories
 
 import (
 	"context"
-	"time"
+	"database/sql"
+
+	"github.com/lib/pq"
 )
 
-// CleanupDeletedUsers is driven by API activity, including registration/login.
-// Main's foreign keys cascade all data belonging to a permanently removed user.
-func (r *UserRepository) CleanupDeletedUsers(ctx context.Context) error {
-	_, err := r.DB.ExecContext(ctx, `WITH candidates AS (
- SELECT id FROM users WHERE is_deleted AND updated_at<=clock_timestamp()-interval '24 hours'
- ORDER BY updated_at,id LIMIT 100 FOR UPDATE SKIP LOCKED
- ) DELETE FROM users u USING candidates c WHERE u.id=c.id`)
-	return err
-}
+const expiredDeletedUserPredicate = `u.is_deleted AND u.updated_at<=clock_timestamp()-interval '24 hours'`
 
-// CleanupDeletedContent shares the upload/Undo account lock. Parent deletion
-// keeps its children for the entire deck grace, even though cards have 2s grace.
-func (r *UserRepository) CleanupDeletedContent(ctx context.Context, userID string) error {
-	tx, err := r.DB.BeginTx(ctx, nil)
+// CleanupDeletedUsers removes explicitly deleted accounts after their 24-hour
+// grace period. The existing foreign keys cascade their owned data; ordinary
+// card/deck tombstones and accounts not marked deleted are unaffected.
+func (r *UserRepository) CleanupDeletedUsers(ctx context.Context) error {
+	// Hold selected account row locks through deletion, then recheck deletion
+	// status and grace eligibility in a fresh READ COMMITTED statement.
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, userID); err != nil {
+	// Claim the replica lock before the one bounded candidate query, including
+	// idle runs. Contention skips the scan; an empty result issues no DELETE.
+	var locked bool
+	if err := tx.QueryRowContext(ctx, `SELECT pg_try_advisory_xact_lock(130002,1)`).Scan(&locked); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM decks WHERE user_id=$1 AND
- ((is_deleted AND updated_at<=clock_timestamp()-interval '10 seconds') OR
- (NOT is_deleted AND EXISTS(SELECT 1 FROM cards c WHERE c.deck_id=decks.id AND c.is_deleted
- AND c.updated_at<=clock_timestamp()-interval '2 seconds')))
- ORDER BY id LIMIT 100 FOR UPDATE`, userID)
+	if !locked {
+		return nil
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT u.id FROM users u WHERE `+expiredDeletedUserPredicate+`
+ ORDER BY u.updated_at,u.id LIMIT 100 FOR UPDATE OF u SKIP LOCKED`)
 	if err != nil {
 		return err
 	}
-	ids := []string{}
+	ids := make([]string, 0, 100)
 	for rows.Next() {
 		var id string
-		if err = rows.Scan(&id); err != nil {
+		if err := rows.Scan(&id); err != nil {
 			rows.Close()
 			return err
 		}
@@ -48,29 +48,11 @@ func (r *UserRepository) CleanupDeletedContent(ctx context.Context, userID strin
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		var deleted bool
-		if err = tx.QueryRowContext(ctx, `SELECT is_deleted FROM decks WHERE id=$1`, id).Scan(&deleted); err != nil {
-			return err
-		}
-		if deleted {
-			if _, err = tx.ExecContext(ctx, `DELETE FROM decks WHERE id=$1 AND is_deleted AND updated_at<=clock_timestamp()-interval '10 seconds'`, id); err != nil {
-				return err
-			}
-		} else {
-			// Main cascades raw reviews and card progress with the card.
-			if _, err = tx.ExecContext(ctx, `DELETE FROM cards WHERE id IN(SELECT id FROM cards WHERE deck_id=$1 AND is_deleted AND updated_at<=clock_timestamp()-interval '2 seconds' ORDER BY id LIMIT 500)`, id); err != nil {
-				return err
-			}
-			if err = NewProgressRepository().RecomputeDeckProgress(ctx, tx, userID, id); err != nil {
-				return err
-			}
-		}
+	if len(ids) == 0 {
+		return nil
 	}
-	if len(ids) > 0 {
-		if err = NewAnalyticsRepository(r.DB).RefreshUserAnalyticsTx(ctx, tx, userID, time.Now().UTC()); err != nil {
-			return err
-		}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM users u WHERE u.id=ANY($1::uuid[]) AND `+expiredDeletedUserPredicate, pq.Array(ids)); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

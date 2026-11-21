@@ -120,9 +120,6 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthResponse
 	if err != nil {
 		return AuthResponse{}, err
 	}
-	if err := s.users.CleanupDeletedContent(ctx, user.ID); err != nil {
-		return AuthResponse{}, err
-	}
 	return AuthResponse{
 		User:  user.Public(),
 		Token: token,

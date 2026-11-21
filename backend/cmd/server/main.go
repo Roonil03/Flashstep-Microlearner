@@ -32,6 +32,9 @@ func main() {
 		log.Fatal(err)
 	}
 	maintenance.StartAnalyticsAggregation(conn)
+	maintenanceCtx, cancelMaintenance := context.WithCancel(context.Background())
+	defer cancelMaintenance()
+	accountCleanup := maintenance.StartDeletedAccountCleanup(maintenanceCtx, conn)
 	userRepo := repositories.NewUserRepository(conn)
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret, time.Duration(cfg.JWTExpiryMinute)*time.Minute)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -64,7 +67,7 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := router.Group("/api/v1")
-	api.Use(middleware.RateLimit(6000, time.Minute), middleware.CleanupDeletedAccounts(conn))
+	api.Use(middleware.RateLimit(6000, time.Minute), middleware.TrackMaintenanceActivity(accountCleanup))
 	{
 		authLimit := middleware.RateLimit(120, time.Minute)
 		api.POST("/auth/register", authLimit, authHandler.Register)

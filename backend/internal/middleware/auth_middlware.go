@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"backend/internal/httperror"
-	"backend/internal/repositories"
+	"backend/internal/maintenance"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -26,22 +26,14 @@ func RequireActiveUser(conn *sql.DB) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Your account is unavailable. Please sign in again."})
 			return
 		}
-		if err := repositories.NewUserRepository(conn).CleanupDeletedContent(c.Request.Context(), c.GetString("user_id")); err != nil {
-			httperror.Internal(c, err)
-			c.Abort()
-			return
-		}
 		c.Next()
 	}
 }
 
-func CleanupDeletedAccounts(conn *sql.DB) gin.HandlerFunc {
+// TrackMaintenanceActivity only records activity in memory. Cleanup runs outside requests.
+func TrackMaintenanceActivity(cleanup *maintenance.DeletedAccountCleanup) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := repositories.NewUserRepository(conn).CleanupDeletedUsers(c.Request.Context()); err != nil {
-			httperror.Internal(c, err)
-			c.Abort()
-			return
-		}
+		cleanup.NotifyActivity()
 		c.Next()
 	}
 }
