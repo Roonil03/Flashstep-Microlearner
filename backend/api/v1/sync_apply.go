@@ -225,11 +225,21 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		if exists && old.deleted && d.IsDeleted {
 			continue
 		}
-		if exists && !d.UpdatedAt.After(old.updated) && !(d.IsDeleted != old.deleted && d.Version > old.version) {
+		// Receipt-time defaults cannot order a retry against an existing row.
+		// Without an operation timestamp, only a newer revision proves an edit.
+		if exists && !d.HasUpdatedAt && d.Version <= old.version {
+			continue
+		}
+		if exists && d.HasUpdatedAt && !d.UpdatedAt.After(old.updated) && !(d.IsDeleted != old.deleted && d.Version > old.version) {
 			continue
 		}
 		if d.IsDeleted {
 			d.UpdatedAt = time.Now().UTC()
+		}
+		if d.Version == 0 {
+			// Missing versions cannot establish ordering, but persisted records
+			// must carry a valid revision that can be uploaded again.
+			d.Version = max(1, old.version)
 		}
 		deckState[d.ID] = deckRevision{d.Version, user, d.UpdatedAt, d.IsDeleted}
 		acceptedDecks[d.ID] = d
@@ -373,6 +383,9 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			// its separately batched child tombstones applied to an active deck.
 			continue
 		}
+		if exists && !c.HasUpdatedAt && c.Version <= old.version {
+			continue
+		}
 		if deck.deleted && !c.IsDeleted {
 			if !exists && result.Version == 1 {
 				// A new offline card still needs its parent even while the parent
@@ -386,7 +399,7 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 			}
 			return invalidSync("cannot apply active card changes to a deleted deck")
 		}
-		if exists && !c.UpdatedAt.After(old.updated) && !(c.IsDeleted != old.deleted && c.Version > old.version) {
+		if exists && c.HasUpdatedAt && !c.UpdatedAt.After(old.updated) && !(c.IsDeleted != old.deleted && c.Version > old.version) {
 			continue
 		}
 		if exists && !old.deleted {
@@ -400,6 +413,9 @@ func applySyncChanges(ctx context.Context, tx *sql.Tx, user uuid.UUID, decks []s
 		}
 		if c.IsDeleted {
 			c.UpdatedAt = time.Now().UTC()
+		}
+		if c.Version == 0 {
+			c.Version = max(1, old.version)
 		}
 		acceptedCards = append(acceptedCards, c)
 		cardState[c.ID] = cardRevision{c.Version, c.DeckID, user, c.UpdatedAt, c.IsDeleted, old.reviewed}

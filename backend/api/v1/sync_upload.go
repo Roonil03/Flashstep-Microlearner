@@ -24,15 +24,16 @@ type SyncUploadPayload struct {
 }
 
 type syncDeck struct {
-	AllowCreate bool
-	ID          uuid.UUID
-	Title       string
-	Description *string
-	IsPublic    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Version     int
-	IsDeleted   bool
+	AllowCreate  bool
+	ID           uuid.UUID
+	Title        string
+	Description  *string
+	IsPublic     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	HasUpdatedAt bool
+	Version      int
+	IsDeleted    bool
 }
 
 type syncCard struct {
@@ -49,6 +50,7 @@ type syncCard struct {
 	LastReviewedAt   *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	HasUpdatedAt     bool
 	Version          int
 	IsDeleted        bool
 	FromDeckDeletion bool
@@ -215,15 +217,16 @@ func normalizeDeck(raw map[string]interface{}) (syncDeck, error) {
 	}
 
 	return syncDeck{
-		AllowCreate: asBool(raw["allow_create"]),
-		ID:          id,
-		Title:       asString(raw["title"]),
-		Description: normalizeNullableString(raw["description"]),
-		IsPublic:    asBool(raw["is_public"]),
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
-		Version:     asInt(raw["version"]),
-		IsDeleted:   asBool(raw["is_deleted"]),
+		AllowCreate:  asBool(raw["allow_create"]),
+		ID:           id,
+		Title:        asString(raw["title"]),
+		Description:  normalizeNullableString(raw["description"]),
+		IsPublic:     asBool(raw["is_public"]),
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+		HasUpdatedAt: parseOptionalTime(raw["updated_at"]) != nil,
+		Version:      asInt(raw["version"]),
+		IsDeleted:    asBool(raw["is_deleted"]),
 	}, nil
 }
 
@@ -267,6 +270,7 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 		LastReviewedAt:   parseOptionalTime(raw["last_reviewed_at"]),
 		CreatedAt:        createdAt,
 		UpdatedAt:        updatedAt,
+		HasUpdatedAt:     parseOptionalTime(raw["updated_at"]) != nil,
 		Version:          asInt(raw["version"]),
 		IsDeleted:        asBool(raw["is_deleted"]),
 		FromDeckDeletion: asBool(raw["from_deck_deletion"]),
