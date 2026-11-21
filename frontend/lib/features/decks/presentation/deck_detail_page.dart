@@ -171,10 +171,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       final repo = ref.read(deckRepositoryProvider);
       final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markDeckDeletedOffline(deck.id);
-      unawaited(sync.syncNow());
       if (!mounted) {
         await repo.finalizeDeckDeletion(deletion);
-        unawaited(sync.syncNow());
+        unawaited(sync.syncAfterLocalChange());
         return;
       }
 
@@ -194,12 +193,12 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                 repo
                     .undoDeckDeletion(deletion)
                     .then((_) {
-                      unawaited(sync.syncNow());
+                      unawaited(sync.syncAfterLocalChange());
                     })
                     .catchError((_) async {
                       try {
                         await repo.finalizeDeckDeletion(deletion);
-                        await sync.syncNow();
+                        await sync.syncAfterLocalChange();
                       } catch (_) {
                         // An account switch may have closed this database.
                       }
@@ -221,7 +220,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                 return;
               }
               await repo.finalizeDeckDeletion(deletion);
-              await sync.syncNow();
+              await sync.syncAfterLocalChange();
             })
             .catchError((_) {}),
       );
@@ -311,10 +310,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
       final repo = ref.read(deckRepositoryProvider);
       final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markCardDeletedOffline(card.id);
-      unawaited(sync.syncNow());
       if (!mounted) {
         await repo.finalizeCardDeletion(deletion);
-        unawaited(sync.syncNow());
+        unawaited(sync.syncAfterLocalChange());
         return;
       }
 
@@ -333,12 +331,12 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                 repo
                     .undoCardDeletion(deletion)
                     .then((_) {
-                      unawaited(sync.syncNow());
+                      unawaited(sync.syncAfterLocalChange());
                     })
                     .catchError((_) async {
                       try {
                         await repo.finalizeCardDeletion(deletion);
-                        await sync.syncNow();
+                        await sync.syncAfterLocalChange();
                       } catch (_) {
                         // An account switch may have closed this database.
                       }
@@ -356,7 +354,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                 return;
               }
               await repo.finalizeCardDeletion(deletion);
-              await sync.syncNow();
+              await sync.syncAfterLocalChange();
             })
             .catchError((_) {}),
       );

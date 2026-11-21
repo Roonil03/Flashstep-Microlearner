@@ -164,10 +164,9 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
       final repo = ref.read(deckRepositoryProvider);
       final sync = ref.read(deckSyncServiceProvider);
       final deletion = await repo.markDeckDeletedOffline(deck.id);
-      unawaited(sync.syncNow());
       if (!mounted) {
         await repo.finalizeDeckDeletion(deletion);
-        unawaited(sync.syncNow());
+        unawaited(sync.syncAfterLocalChange());
         return;
       }
 
@@ -186,12 +185,12 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                 repo
                     .undoDeckDeletion(deletion)
                     .then((_) {
-                      unawaited(sync.syncNow());
+                      unawaited(sync.syncAfterLocalChange());
                     })
                     .catchError((_) async {
                       try {
                         await repo.finalizeDeckDeletion(deletion);
-                        await sync.syncNow();
+                        await sync.syncAfterLocalChange();
                       } catch (_) {
                         // An account switch may have closed this database.
                       }
@@ -209,7 +208,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                 return;
               }
               await repo.finalizeDeckDeletion(deletion);
-              await sync.syncNow();
+              await sync.syncAfterLocalChange();
             })
             .catchError((_) {}),
       );

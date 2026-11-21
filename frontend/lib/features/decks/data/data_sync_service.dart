@@ -113,10 +113,41 @@ class DeckSyncService {
         'You are not signed in, so sync was skipped.',
       );
     }
+    return _syncNow(_SyncSession(user, token, _metadata.revision(user)));
+  }
+
+  /// Include a completed local mutation even when an older sync has already
+  /// snapshotted its queue or skipped an operation held for Undo.
+  Future<SyncResult> syncAfterLocalChange() async {
+    final user = await _storage.readUserId();
+    final token = await _storage.readToken();
+    if (user == null || user.isEmpty || token == null || token.isEmpty) {
+      return const SyncResult.warning(
+        'You are not signed in, so sync was skipped.',
+      );
+    }
+    final session = _SyncSession(user, token, _metadata.revision(user));
+    try {
+      final older = _inFlight[user];
+      if (older != null) {
+        await older;
+        if (identical(_inFlight[user], older)) _inFlight.remove(user);
+      }
+      await _assertActive(session);
+      return _syncNow(session);
+    } catch (_) {
+      return const SyncResult.warning(
+        'Sync could not finish. Pending changes are retained; please retry.',
+      );
+    }
+  }
+
+  Future<SyncResult> _syncNow(_SyncSession session) async {
+    final user = session.userId;
     final existing = _inFlight[user];
     if (existing != null) return existing;
     _status?.start(user);
-    final work = _sync(_SyncSession(user, token, _metadata.revision(user)));
+    final work = _sync(session);
     _inFlight[user] = work;
     try {
       final result = await work;
