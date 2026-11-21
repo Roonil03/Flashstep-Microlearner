@@ -103,6 +103,8 @@ That runs:
 
 So the phone can talk to your local backend through USB.
 
+For device integration tests, set `FLASHSTEP_DEVICE_TEST=true` when building the debug APK. The test package is `com.example.frontend.uitest`. Before installing on a phone with Flashstep already installed, inspect the built APK with `aapt dump badging` and confirm its `package` line names `com.example.frontend.uitest`. When using `flutter drive`, pass that inspected file with `--use-application-binary`.
+
 ## Build APKs
 
 ### Debug APK

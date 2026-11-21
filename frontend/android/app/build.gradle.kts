@@ -33,7 +33,13 @@ android {
     buildTypes {
         // Opt-in package isolation for device tests; regular builds keep their ID.
         configureEach {
-            if (name != "release" && providers.gradleProperty("flashstepDeviceTest").orNull == "true") {
+            val target = providers.gradleProperty("target").orNull.orEmpty().replace('\\', '/')
+            val integrationTest = target.split('/').any {
+                it == "integration_test" || it.startsWith("flutter_test_listener.")
+            }
+            val deviceTest = providers.environmentVariable("FLASHSTEP_DEVICE_TEST")
+                .orElse(providers.gradleProperty("flashstepDeviceTest"))
+            if (name != "release" && (integrationTest || deviceTest.orNull == "true")) {
                 applicationIdSuffix = ".uitest"
             }
         }
