@@ -749,6 +749,11 @@ Upload behavior:
 - Supply RFC3339 timestamps with fractional precision as needed. The API rejects
   malformed timestamps, invalid enum values and out-of-range numeric values.
   Each upload accepts up to 1,000 deck, card and review records combined.
+- Older Flutter clients may send a card's `created_at` without a time zone
+  (`YYYY-MM-DDTHH:mm:ss` with optional fractional seconds). An existing card
+  keeps its original creation time. A new card uses `updated_at`, or the server
+  receipt time if that field is absent. Conflict and scheduling timestamps
+  still require RFC3339 offsets.
 - Each request is atomic: accepted deck/card changes, new review logs, affected
   progress, and relevant analytics commit together. Failed requests roll back;
   concurrent uploads for the same account are serialized. Separate HTTP batches

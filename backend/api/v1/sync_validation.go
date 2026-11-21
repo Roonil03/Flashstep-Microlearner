@@ -3,10 +3,22 @@ package v1
 import (
 	"errors"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
+
+var legacyCardCreatedAtPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?$`)
+
+// Older Flutter review queues serialized local card creation metadata without
+// an offset. Validate its shape and calendar without guessing a UTC instant.
+func parseLegacyCardCreatedAt(stamp string) (time.Time, error) {
+	if !legacyCardCreatedAtPattern.MatchString(stamp) {
+		return time.Time{}, errors.New("invalid legacy card creation timestamp")
+	}
+	return time.Parse("2006-01-02T15:04:05", stamp)
+}
 
 // Validate before the legacy normalization helpers, which otherwise silently
 // coerce malformed JSON to defaults and can poison every later sync batch.
@@ -47,10 +59,15 @@ func validateSyncRecord(raw map[string]any, entity string) error {
 				return bad
 			}
 			parsed, err := time.Parse(time.RFC3339Nano, stamp)
+			legacyCreation := false
+			if err != nil && entity == "card" && field == "created_at" {
+				parsed, err = parseLegacyCardCreatedAt(stamp)
+				legacyCreation = err == nil
+			}
 			if err != nil || parsed.Year() < 1 || parsed.Year() > 9998 {
 				return bad
 			}
-			if field != "due_timestamp" && parsed.After(time.Now().Add(10*time.Minute)) {
+			if !legacyCreation && field != "due_timestamp" && parsed.After(time.Now().Add(10*time.Minute)) {
 				return bad
 			}
 		}

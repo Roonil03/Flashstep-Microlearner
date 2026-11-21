@@ -340,7 +340,7 @@ class ReviewRepository {
                 'repetition_count': outcome.repetitionCount,
                 'due_timestamp': outcome.dueTimestamp.toIso8601String(),
                 'last_reviewed_at': now.toIso8601String(),
-                'created_at': card.createdAt.toIso8601String(),
+                'created_at': card.createdAt.toUtc().toIso8601String(),
                 'updated_at': now.toIso8601String(),
                 'version': card.version + 1,
                 'is_deleted': false,

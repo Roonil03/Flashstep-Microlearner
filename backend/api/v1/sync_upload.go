@@ -242,6 +242,11 @@ func normalizeCard(raw map[string]interface{}) (syncCard, error) {
 
 	createdAt := parseTimeOrZero(raw["created_at"])
 	updatedAt := parseTimeOrZero(raw["updated_at"])
+	if _, err := parseLegacyCardCreatedAt(asString(raw["created_at"])); err == nil {
+		// Its original zone is unknown. For inserts use the operation's zoned
+		// timestamp (or receipt time); existing rows keep their stored creation.
+		createdAt = updatedAt
+	}
 	if createdAt.After(updatedAt) {
 		createdAt = updatedAt
 	}
