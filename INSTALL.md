@@ -49,7 +49,7 @@ make frontend-codegen
 ```
 
 ## Local development flows
-
+> FOR PREVIOUS 1.2.0 USERS:
 ### Upgrade an existing PostgreSQL database to v1.3.0
 
 Version 1.3.0 uses the PostgreSQL schema already present in version 1.2.0. Deploying it over that schema requires no migration. A new, empty database uses `backend/migrations/01_init.sql` through Docker initialization or `make backend-migrate`.
@@ -66,6 +66,7 @@ Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 
 
 Enable Issues and Actions on the repository. GitHub can dispatch the bug report workflow after it is present on the default branch. Set `BUG_REPORT_GITHUB_TOKEN` in the backend host to a fine-grained token restricted to this repository with Actions write permission. The workflow uses its own token with Issues write permission to post a confirmed report. Keep the backend credential out of the app.
 
+> FOR NEW USERS
 ### Run the full app locally
 
 Start the backend stack:
