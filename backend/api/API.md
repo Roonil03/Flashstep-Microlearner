@@ -937,8 +937,16 @@ While the process is running, its midnight task recomputes daily rows and dashbo
 Protected routes require an active account. Errors use a short message suitable
 for display. Clients should branch on the HTTP status rather than the wording.
 The overall request body limit is 4 MiB, with lower limits on individual routes.
+JSON request bodies must contain a single UTF-8 object. Give each member a
+unique name within its object, including when using case variants of the same
+top-level request field. Card text can include Unicode, punctuation, and code.
 Expect `413` for an oversized request, `429` for throttling, and `503` when
 the server has reached its concurrency limit. Honor `Retry-After` when provided.
+Login and registration share an IP-based burst allowance of 60 requests that
+refills at two requests per second. Authenticated accounts can have up to eight
+requests in flight per server instance. A throttled client should wait at least
+the number of seconds in `Retry-After` before retrying and keep queued sync
+operations until the backend acknowledges them.
 Date-range analytics requests accept ordered ranges of up to 366 days.
 
 ```json
