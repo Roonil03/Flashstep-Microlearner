@@ -80,9 +80,11 @@ type rateLimiter struct {
 	burst    int
 }
 
-func (l *rateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
+func (l *rateLimiter) allow(key string, clock func() time.Time) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// Sample time in lock order so a delayed caller cannot rewind a bucket.
+	now := clock()
 	// Expiry order avoids scanning the full map on every denied request at
 	// capacity. Bound cleanup per request so an idle window cannot cause a pause.
 	for work := 0; work < maxRateExpiryWork && len(l.expiries) > 0 && !now.Before(l.expiries[0].reset); work++ {
@@ -145,12 +147,11 @@ func newRateLimit(limit int, window time.Duration, burst int) gin.HandlerFunc {
 	}
 	limiter := &rateLimiter{entries: make(map[string]*rateEntry), limit: limit, window: window, burst: burst}
 	return func(c *gin.Context) {
-		now := time.Now()
 		key := c.GetString("user_id")
 		if key == "" {
 			key = c.ClientIP()
 		}
-		if allowed, retry := limiter.allow(key, now); !allowed {
+		if allowed, retry := limiter.allow(key, time.Now); !allowed {
 			c.Header("Retry-After", strconv.FormatInt(max(1, int64(math.Ceil(retry.Seconds()))), 10))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests. Please wait and try again."})
 			return

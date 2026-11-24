@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -24,6 +25,10 @@ func GetPublicDecks(c *gin.Context) {
 	searchQuery := strings.TrimSpace(c.Query("search"))
 	if len(searchQuery) > 200 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "search must be at most 200 bytes"})
+		return
+	}
+	if !httpinput.ValidText(searchQuery) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "search must contain valid text"})
 		return
 	}
 
