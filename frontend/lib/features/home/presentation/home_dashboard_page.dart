@@ -513,7 +513,7 @@ class _TopGreetingCard extends StatelessWidget {
                 child: _StatTile(
                   icon: Icons.calendar_today,
                   label: 'Due Today',
-                  value: '$dueToday cards',
+                  value: dueToday == 1 ? '1 card' : '$dueToday cards',
                   isDark: isDark,
                 ),
               ),
@@ -739,7 +739,7 @@ class _DeckCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${deck.totalCards} cards • ${deck.dueCards} due',
+              '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} • ${deck.dueCards} due',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
               ),
