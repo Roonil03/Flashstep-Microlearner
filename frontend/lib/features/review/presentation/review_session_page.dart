@@ -33,6 +33,12 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   String? _feedback;
   Timer? _startupTimer;
   List<db.Card> _cards = const [];
+  final _scrollController = ScrollController(keepScrollOffset: false);
+  final _questionFocus = FocusNode(debugLabel: 'Review question');
+  final _answerFocus = FocusNode(debugLabel: 'Review answer');
+  final _completionFocus = FocusNode(debugLabel: 'Review completion');
+  final _answerHeadingKey = GlobalKey();
+  int _questionRevision = 0;
 
   @override
   void initState() {
@@ -43,6 +49,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   @override
   void dispose() {
     _startupTimer?.cancel();
+    _scrollController.dispose();
+    _questionFocus.dispose();
+    _answerFocus.dispose();
+    _completionFocus.dispose();
     super.dispose();
   }
 
@@ -81,6 +91,41 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   void _startNow() {
     _startupTimer?.cancel();
     setState(() => _countdown = 0);
+    _orientToQuestion();
+  }
+
+  void _orientToQuestion() {
+    final revision = _questionRevision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || revision != _questionRevision || _revealed) return;
+      // A new question starts at the top even when both cards are long.
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      if (_index >= _cards.length) {
+        _completionFocus.requestFocus();
+      } else {
+        _questionFocus.requestFocus();
+      }
+    });
+  }
+
+  void _revealAnswer() {
+    setState(() => _revealed = true);
+    final revision = _questionRevision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || revision != _questionRevision || !_revealed) return;
+      _answerFocus.requestFocus();
+      final headingContext = _answerHeadingKey.currentContext;
+      if (headingContext != null) {
+        Scrollable.ensureVisible(
+          headingContext,
+          alignment: 0,
+          duration:
+              MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+        );
+      }
+    });
   }
 
   Future<void> _rateCard(String rating) async {
@@ -99,8 +144,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       setState(() {
         _revealed = false;
         _index += 1;
+        _questionRevision += 1;
         _feedback = '${_ratingLabel(rating)} saved on your device.';
       });
+      _orientToQuestion();
       ref.invalidate(reviewDecksProvider);
     } catch (_) {
       if (!mounted) return;
@@ -116,9 +163,11 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       final remaining = _cards.sublist(_index)..shuffle();
       _cards.replaceRange(_index, _cards.length, remaining);
       _revealed = false;
+      _questionRevision += 1;
       _failedRating = null;
       _feedback = 'Remaining cards shuffled. Showing the question.';
     });
+    _orientToQuestion();
   }
 
   @override
@@ -185,12 +234,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    'Starting in $_countdown…',
-                    style: theme.textTheme.titleLarge,
-                  ),
+                Text(
+                  'Starting in $_countdown…',
+                  style: theme.textTheme.titleLarge,
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
@@ -221,6 +267,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Center(
             child: ConstrainedBox(
@@ -257,18 +304,37 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            'Question',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            card.front,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              height: 1.35,
+                          Focus(
+                            focusNode: _questionFocus,
+                            skipTraversal: true,
+                            includeSemantics: false,
+                            child: Semantics(
+                              key: ValueKey('question-$_questionRevision'),
+                              container: true,
+                              liveRegion: !_revealed,
+                              label:
+                                  'Card ${_index + 1} of ${_cards.length}. Question. ${card.front}',
+                              excludeSemantics: true,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    'Question',
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    card.front,
+                                    style: theme.textTheme.headlineSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           if (_revealed) ...[
@@ -276,20 +342,36 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                               padding: EdgeInsets.symmetric(vertical: 20),
                               child: Divider(height: 1),
                             ),
-                            Semantics(
-                              liveRegion: true,
-                              child: Text(
-                                'Answer',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: theme.colorScheme.primary,
+                            Focus(
+                              focusNode: _answerFocus,
+                              skipTraversal: true,
+                              includeSemantics: false,
+                              child: Semantics(
+                                container: true,
+                                liveRegion: true,
+                                label:
+                                    'Card ${_index + 1} of ${_cards.length}. Answer. ${card.back}',
+                                excludeSemantics: true,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      'Answer',
+                                      key: _answerHeadingKey,
+                                      style: theme.textTheme.labelLarge
+                                          ?.copyWith(
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      card.back,
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(height: 1.4),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              card.back,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                height: 1.4,
                               ),
                             ),
                           ] else ...[
@@ -308,7 +390,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(48, 52),
                       ),
-                      onPressed: () => setState(() => _revealed = true),
+                      onPressed: _revealAnswer,
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Show answer'),
                     )
@@ -362,10 +444,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                       semanticsLabel: 'Saving review',
                     ),
                     const SizedBox(height: 8),
-                    Semantics(
-                      liveRegion: true,
-                      child: const Text('Saving your review…'),
-                    ),
+                    const Text('Saving your review…'),
                   ],
                   if (_failedRating != null) ...[
                     const SizedBox(height: 16),
@@ -385,13 +464,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   ],
                   if (_feedback != null) ...[
                     const SizedBox(height: 16),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _feedback!,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                    Text(
+                      _feedback!,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -445,19 +521,32 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
-              Text(
-                empty ? 'No cards available' : 'Review complete',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+              Focus(
+                focusNode: _completionFocus,
+                skipTraversal: true,
+                includeSemantics: false,
+                child: Semantics(
+                  container: true,
+                  liveRegion: true,
+                  child: Column(
+                    children: [
+                      Text(
+                        empty ? 'No cards available' : 'Review complete',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        empty
+                            ? 'This deck has no cards available for this session.'
+                            : '$_index card${_index == 1 ? '' : 's'} reviewed. Your ratings are saved on your device.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                empty
-                    ? 'This deck has no cards available for this session.'
-                    : '$_index card${_index == 1 ? '' : 's'} reviewed. Your ratings are saved on your device.',
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               Wrap(
@@ -493,4 +582,3 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     );
   }
 }
-

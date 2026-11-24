@@ -20,6 +20,10 @@ class StartReviewPage extends ConsumerWidget {
     final colors = theme.colorScheme;
     final asyncDecks = ref.watch(reviewDecksProvider);
     void refresh() => ref.invalidate(reviewDecksProvider);
+    Future<void> openAndRefresh(String route) async {
+      await Navigator.of(context).pushNamed(route);
+      if (context.mounted) ref.invalidate(reviewDecksProvider);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -92,7 +96,7 @@ class StartReviewPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'You may be caught up or have reached your daily limit. You can manage your decks or check review settings.',
+                        'You may be caught up or have reached your daily limit. You can manage your decks or check settings.',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
@@ -103,19 +107,14 @@ class StartReviewPage extends ConsumerWidget {
                         children: [
                           FilledButton.icon(
                             onPressed:
-                                () => Navigator.of(
-                                  context,
-                                ).pushNamed(AppRoutes.browseDecks),
+                                () => openAndRefresh(AppRoutes.browseDecks),
                             icon: const Icon(Icons.style_outlined),
                             label: const Text('View decks'),
                           ),
                           OutlinedButton.icon(
-                            onPressed:
-                                () => Navigator.of(
-                                  context,
-                                ).pushNamed(AppRoutes.settings),
+                            onPressed: () => openAndRefresh(AppRoutes.settings),
                             icon: const Icon(Icons.settings_outlined),
-                            label: const Text('Review settings'),
+                            label: const Text('Settings'),
                           ),
                         ],
                       ),
@@ -145,7 +144,7 @@ class StartReviewPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '$available card${available == 1 ? '' : 's'} available across ${decks.length} deck${decks.length == 1 ? '' : 's'}. Study one card at a time.',
+                        '$available card${available == 1 ? '' : 's'} available across ${decks.length} deck${decks.length == 1 ? '' : 's'}.',
                       ),
                     ],
                   );
