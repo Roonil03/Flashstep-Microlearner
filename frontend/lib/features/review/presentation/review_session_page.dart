@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
@@ -34,10 +35,13 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   Timer? _startupTimer;
   List<db.Card> _cards = const [];
   final _scrollController = ScrollController(keepScrollOffset: false);
+  final _countdownFocus = FocusNode(debugLabel: 'Review countdown');
   final _questionFocus = FocusNode(debugLabel: 'Review question');
   final _answerFocus = FocusNode(debugLabel: 'Review answer');
   final _completionFocus = FocusNode(debugLabel: 'Review completion');
   final _answerHeadingKey = GlobalKey();
+  final _countdownHeadingKey = GlobalKey();
+  String? _countdownAccessibilityFocus = 'heading';
   int _questionRevision = 0;
 
   @override
@@ -50,6 +54,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   void dispose() {
     _startupTimer?.cancel();
     _scrollController.dispose();
+    _countdownFocus.dispose();
     _questionFocus.dispose();
     _answerFocus.dispose();
     _completionFocus.dispose();
@@ -71,10 +76,16 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         _loading = false;
       });
       if (_cards.isEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_canOrientFocus || _countdown == 0) return;
+        _countdownFocus.requestFocus();
+        _requestAccessibilityFocus(_countdownHeadingKey.currentContext);
+      });
       _startupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted || _countdown <= 1) {
+        if (!mounted) {
           timer.cancel();
-          if (mounted) setState(() => _countdown = 0);
+        } else if (_countdown <= 1) {
+          _finishCountdown();
         } else {
           setState(() => _countdown -= 1);
         }
@@ -89,34 +100,63 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   }
 
   void _startNow() {
-    _startupTimer?.cancel();
-    setState(() => _countdown = 0);
-    _orientToQuestion();
+    _finishCountdown(userInitiated: true);
   }
 
-  void _orientToQuestion() {
+  void _finishCountdown({bool userInitiated = false}) {
+    _startupTimer?.cancel();
+    // Only replace focus owned by the countdown. Back and the deck title stay
+    // available if the user deliberately navigates away while waiting.
+    final moveKeyboardFocus = userInitiated || _countdownFocus.hasFocus;
+    final moveAccessibilityFocus =
+        userInitiated || _countdownAccessibilityFocus != null;
+    setState(() => _countdown = 0);
+    _orientToQuestion(
+      moveKeyboardFocus: moveKeyboardFocus,
+      moveAccessibilityFocus: moveAccessibilityFocus,
+    );
+  }
+
+  // A popped route remains mounted throughout its exit animation.
+  bool get _canOrientFocus =>
+      mounted && (ModalRoute.of(context)?.isCurrent ?? true);
+
+  void _requestAccessibilityFocus(BuildContext? target) {
+    if (!_canOrientFocus) return;
+    // Keyboard focus and screen-reader focus are independent. The old content
+    // has been replaced, so hand accessibility focus to its rendered successor.
+    target?.findRenderObject()?.sendSemanticsEvent(const FocusSemanticEvent());
+  }
+
+  void _orientToQuestion({
+    bool moveKeyboardFocus = true,
+    bool moveAccessibilityFocus = true,
+  }) {
     final revision = _questionRevision;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || revision != _questionRevision || _revealed) return;
+      if (!_canOrientFocus || revision != _questionRevision || _revealed) {
+        return;
+      }
       // A new question starts at the top even when both cards are long.
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
-      if (_index >= _cards.length) {
-        _completionFocus.requestFocus();
-      } else {
-        _questionFocus.requestFocus();
-      }
+      final target =
+          _index >= _cards.length ? _completionFocus : _questionFocus;
+      if (moveKeyboardFocus) target.requestFocus();
+      if (moveAccessibilityFocus) _requestAccessibilityFocus(target.context);
     });
   }
 
   void _revealAnswer() {
     setState(() => _revealed = true);
     final revision = _questionRevision;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || revision != _questionRevision || !_revealed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!_canOrientFocus || revision != _questionRevision || !_revealed) {
+        return;
+      }
       _answerFocus.requestFocus();
       final headingContext = _answerHeadingKey.currentContext;
       if (headingContext != null) {
-        Scrollable.ensureVisible(
+        await Scrollable.ensureVisible(
           headingContext,
           alignment: 0,
           duration:
@@ -125,7 +165,31 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   : const Duration(milliseconds: 180),
         );
       }
+      if (!_canOrientFocus || revision != _questionRevision || !_revealed) {
+        return;
+      }
+      _requestAccessibilityFocus(_answerFocus.context);
     });
+  }
+
+  Widget _countdownSemantics({
+    Key? key,
+    required String target,
+    required Widget child,
+  }) {
+    return Semantics(
+      key: key,
+      container: true,
+      onDidGainAccessibilityFocus: () {
+        if (_countdown > 0) _countdownAccessibilityFocus = target;
+      },
+      onDidLoseAccessibilityFocus: () {
+        if (_countdown > 0 && _countdownAccessibilityFocus == target) {
+          _countdownAccessibilityFocus = null;
+        }
+      },
+      child: child,
+    );
   }
 
   Future<void> _rateCard(String rating) async {
@@ -223,27 +287,42 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.school_outlined, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  'Get ready to recall',
-                  style: theme.textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Starting in $_countdown…',
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _startNow,
-                  child: const Text('Start now'),
-                ),
-              ],
+            child: Focus(
+              focusNode: _countdownFocus,
+              skipTraversal: true,
+              includeSemantics: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.school_outlined, size: 48),
+                  const SizedBox(height: 16),
+                  _countdownSemantics(
+                    key: _countdownHeadingKey,
+                    target: 'heading',
+                    child: Text(
+                      'Get ready to recall',
+                      style: theme.textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _countdownSemantics(
+                    target: 'timer',
+                    child: Text(
+                      'Starting in $_countdown…',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _countdownSemantics(
+                    target: 'start',
+                    child: FilledButton(
+                      onPressed: _startNow,
+                      child: const Text('Start now'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
