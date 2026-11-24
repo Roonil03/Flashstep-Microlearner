@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"errors"
 	"net/http"
 	"sort"
@@ -345,7 +346,7 @@ func SyncUpload(c *gin.Context) {
 	}
 
 	var payload SyncUploadPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	if err := httpinput.BindJSON(c, &payload); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}

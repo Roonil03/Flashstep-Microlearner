@@ -10,7 +10,10 @@ import (
 
 func DeleteCard(c *gin.Context) {
 	userID := c.GetString("user_id")
-	id := c.Param("id")
+	id, ok := contentParam(c, "id", "card id")
+	if !ok {
+		return
+	}
 	ctx := c.Request.Context()
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {

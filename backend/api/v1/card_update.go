@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"net/http"
 	"strings"
 
@@ -12,21 +13,28 @@ import (
 type UpdateCardRequest struct {
 	Front   string `json:"front"`
 	Back    string `json:"back"`
-	Version int    `json:"version" binding:"required,min=1"`
+	Version int    `json:"version" binding:"required,min=1,max=2147483647"`
 }
 
 func UpdateCard(c *gin.Context) {
 	userID := c.GetString("user_id")
-	id := c.Param("id")
+	id, ok := contentParam(c, "id", "card id")
+	if !ok {
+		return
+	}
 
 	var req UpdateCardRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}
 
 	req.Front = strings.TrimSpace(req.Front)
 	req.Back = strings.TrimSpace(req.Back)
+	if !httpinput.ValidText(req.Front, req.Back) {
+		httperror.InvalidJSON(c, nil)
+		return
+	}
 	if req.Front == "" || req.Back == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "front and back are required"})
 		return

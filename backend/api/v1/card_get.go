@@ -11,7 +11,10 @@ import (
 
 func GetDeckCards(c *gin.Context) {
 	userID := c.GetString("user_id")
-	deckID := c.Param("deck_id")
+	deckID, ok := contentParam(c, "deck_id", "deck id")
+	if !ok {
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.deck_id, c.front, c.back, c.state,
 		       c.due_timestamp, c.updated_at, c.version, c.is_deleted

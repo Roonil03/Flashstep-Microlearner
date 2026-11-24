@@ -10,7 +10,10 @@ import (
 
 func DeleteDeck(c *gin.Context) {
 	userID := c.GetString("user_id")
-	id := c.Param("id")
+	id, ok := contentParam(c, "id", "deck id")
+	if !ok {
+		return
+	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {

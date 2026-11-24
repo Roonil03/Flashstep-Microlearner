@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"backend/internal/repositories"
 	"net/http"
 	"strings"
@@ -26,7 +27,7 @@ func CreateDeck(c *gin.Context) {
 	}
 
 	var req CreateDeckRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}
@@ -34,6 +35,10 @@ func CreateDeck(c *gin.Context) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Description = strings.TrimSpace(req.Description)
 
+	if !httpinput.ValidText(req.Title, req.Description) {
+		httperror.InvalidJSON(c, nil)
+		return
+	}
 	if req.Title == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return

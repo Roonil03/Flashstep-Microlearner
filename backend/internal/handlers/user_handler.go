@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ type ChangePasswordRequest struct {
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	userID := c.GetString("user_id")
 	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}

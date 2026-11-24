@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"backend/internal/repositories"
 	"database/sql"
 	"net/http"
@@ -27,7 +28,7 @@ func CreateCard(c *gin.Context) {
 	}
 
 	var req CreateCardRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}
@@ -41,6 +42,10 @@ func CreateCard(c *gin.Context) {
 	req.Front = strings.TrimSpace(req.Front)
 	req.Back = strings.TrimSpace(req.Back)
 
+	if !httpinput.ValidText(req.Front, req.Back) {
+		httperror.InvalidJSON(c, nil)
+		return
+	}
 	if req.Front == "" || req.Back == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "front and back are required"})
 		return

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"backend/internal/httpinput"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -81,15 +82,12 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report. Check field lengths and public posting consent."})
 		return
 	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
 	var report bugReportRequest
-	if err := decoder.Decode(&report); err != nil {
+	if err := httpinput.DecodeObject(body, &report, true); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report. Check field lengths and public posting consent."})
 		return
 	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF || !report.normalizeAndValidate() {
+	if !report.normalizeAndValidate() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report. Check field lengths and public posting consent."})
 		return
 	}

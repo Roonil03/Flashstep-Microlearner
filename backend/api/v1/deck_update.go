@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"net/http"
 	"strings"
 
@@ -13,21 +14,28 @@ type UpdateDeckRequest struct {
 	Title       string `json:"title" binding:"max=255"`
 	Description string `json:"description"`
 	IsPublic    bool   `json:"is_public"`
-	Version     int    `json:"version" binding:"required,min=1"`
+	Version     int    `json:"version" binding:"required,min=1,max=2147483647"`
 }
 
 func UpdateDeck(c *gin.Context) {
 	userID := c.GetString("user_id")
-	id := c.Param("id")
+	id, ok := contentParam(c, "id", "deck id")
+	if !ok {
+		return
+	}
 
 	var req UpdateDeckRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}
 
 	req.Title = strings.TrimSpace(req.Title)
 	req.Description = strings.TrimSpace(req.Description)
+	if !httpinput.ValidText(req.Title, req.Description) {
+		httperror.InvalidJSON(c, nil)
+		return
+	}
 	if req.Title == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return

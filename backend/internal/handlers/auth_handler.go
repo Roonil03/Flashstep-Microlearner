@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"backend/internal/repositories"
 	"errors"
 	"net/http"
@@ -23,8 +24,12 @@ func NewAuthHandler(service *services.AuthService) *AuthHandler {
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
+		return
+	}
+	if !httpinput.ValidText(req.Username, req.Email) {
+		httperror.InvalidJSON(c, nil)
 		return
 	}
 	resp, err := h.service.Register(c.Request.Context(), services.RegisterInput{
@@ -48,7 +53,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
 		return
 	}
@@ -95,8 +100,12 @@ func (h *AuthHandler) UpdateUsername(c *gin.Context) {
 	}
 
 	var req models.UpdateUsernameRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := httpinput.BindJSON(c, &req); err != nil {
 		httperror.InvalidJSON(c, err)
+		return
+	}
+	if !httpinput.ValidText(req.Username) {
+		httperror.InvalidJSON(c, nil)
 		return
 	}
 
