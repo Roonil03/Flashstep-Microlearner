@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
@@ -35,13 +34,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   Timer? _startupTimer;
   List<db.Card> _cards = const [];
   final _scrollController = ScrollController(keepScrollOffset: false);
-  final _countdownFocus = FocusNode(debugLabel: 'Review countdown');
-  final _questionFocus = FocusNode(debugLabel: 'Review question');
-  final _answerFocus = FocusNode(debugLabel: 'Review answer');
-  final _completionFocus = FocusNode(debugLabel: 'Review completion');
   final _answerHeadingKey = GlobalKey();
-  final _countdownHeadingKey = GlobalKey();
-  String? _countdownAccessibilityFocus = 'heading';
   int _questionRevision = 0;
 
   @override
@@ -54,10 +47,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   void dispose() {
     _startupTimer?.cancel();
     _scrollController.dispose();
-    _countdownFocus.dispose();
-    _questionFocus.dispose();
-    _answerFocus.dispose();
-    _completionFocus.dispose();
     super.dispose();
   }
 
@@ -76,11 +65,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         _loading = false;
       });
       if (_cards.isEmpty) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_canOrientFocus || _countdown == 0) return;
-        _countdownFocus.requestFocus();
-        _requestAccessibilityFocus(_countdownHeadingKey.currentContext);
-      });
       _startupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
           timer.cancel();
@@ -99,50 +83,24 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     }
   }
 
-  void _startNow() {
-    _finishCountdown(userInitiated: true);
-  }
-
-  void _finishCountdown({bool userInitiated = false}) {
+  void _finishCountdown() {
     _startupTimer?.cancel();
-    // Only replace focus owned by the countdown. Back and the deck title stay
-    // available if the user deliberately navigates away while waiting.
-    final moveKeyboardFocus = userInitiated || _countdownFocus.hasFocus;
-    final moveAccessibilityFocus =
-        userInitiated || _countdownAccessibilityFocus != null;
     setState(() => _countdown = 0);
-    _orientToQuestion(
-      moveKeyboardFocus: moveKeyboardFocus,
-      moveAccessibilityFocus: moveAccessibilityFocus,
-    );
+    _scrollToQuestion();
   }
 
   // A popped route remains mounted throughout its exit animation.
-  bool get _canOrientFocus =>
+  bool get _isCurrentRoute =>
       mounted && (ModalRoute.of(context)?.isCurrent ?? true);
 
-  void _requestAccessibilityFocus(BuildContext? target) {
-    if (!_canOrientFocus) return;
-    // Keyboard focus and screen-reader focus are independent. The old content
-    // has been replaced, so hand accessibility focus to its rendered successor.
-    target?.findRenderObject()?.sendSemanticsEvent(const FocusSemanticEvent());
-  }
-
-  void _orientToQuestion({
-    bool moveKeyboardFocus = true,
-    bool moveAccessibilityFocus = true,
-  }) {
+  void _scrollToQuestion() {
     final revision = _questionRevision;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_canOrientFocus || revision != _questionRevision || _revealed) {
+      if (!_isCurrentRoute || revision != _questionRevision || _revealed) {
         return;
       }
       // A new question starts at the top even when both cards are long.
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
-      final target =
-          _index >= _cards.length ? _completionFocus : _questionFocus;
-      if (moveKeyboardFocus) target.requestFocus();
-      if (moveAccessibilityFocus) _requestAccessibilityFocus(target.context);
     });
   }
 
@@ -150,10 +108,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     setState(() => _revealed = true);
     final revision = _questionRevision;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!_canOrientFocus || revision != _questionRevision || !_revealed) {
+      if (!_isCurrentRoute || revision != _questionRevision || !_revealed) {
         return;
       }
-      _answerFocus.requestFocus();
       final headingContext = _answerHeadingKey.currentContext;
       if (headingContext != null) {
         await Scrollable.ensureVisible(
@@ -165,149 +122,28 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   : const Duration(milliseconds: 180),
         );
       }
-      if (!_canOrientFocus || revision != _questionRevision || !_revealed) {
-        return;
-      }
-      _requestAccessibilityFocus(_answerFocus.context);
     });
-  }
-
-  Widget _countdownSemantics({
-    Key? key,
-    required String target,
-    required Widget child,
-  }) {
-    return Semantics(
-      key: key,
-      container: true,
-      onDidGainAccessibilityFocus: () {
-        if (_countdown > 0) _countdownAccessibilityFocus = target;
-      },
-      onDidLoseAccessibilityFocus: () {
-        if (_countdown > 0 && _countdownAccessibilityFocus == target) {
-          _countdownAccessibilityFocus = null;
-        }
-      },
-      child: child,
-    );
   }
 
   Widget _reviewContent({
     required String heading,
     required String text,
-    required FocusNode focusNode,
     required TextStyle? textStyle,
-    required bool liveRegion,
     Key? headingKey,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final headingWidget = Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
           heading,
           key: headingKey,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: Theme.of(context).colorScheme.primary,
           ),
-        );
-        final label = 'Card ${_index + 1} of ${_cards.length}. $heading.';
-        final painter = TextPainter(
-          text: TextSpan(
-            text: text,
-            style: DefaultTextStyle.of(context).style.merge(textStyle),
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-          locale: Localizations.maybeLocaleOf(context),
-        )..layout(maxWidth: constraints.maxWidth);
-        final viewportHeight =
-            MediaQuery.sizeOf(context).height -
-            MediaQuery.paddingOf(context).vertical -
-            kToolbarHeight;
-        final chunkHeight = viewportHeight > 0 ? viewportHeight / 2 : 1.0;
-        final spans = <TextSpan>[];
-        // An oversized semantic node can trap TalkBack's next-item scrolling.
-        // Split only long text, using rendered line boundaries to preserve all
-        // characters and keep each semantic rectangle inside the viewport.
-        if (painter.height > chunkHeight) {
-          var start = 0;
-          var height = 0.0;
-          for (final line in painter.computeLineMetrics()) {
-            if (height > 0 && height + line.height > chunkHeight) {
-              final end =
-                  painter
-                      .getLineBoundary(
-                        painter.getPositionForOffset(
-                          Offset(
-                            constraints.maxWidth / 2,
-                            line.baseline - line.ascent / 2,
-                          ),
-                        ),
-                      )
-                      .start;
-              if (end > start) {
-                spans.add(
-                  TextSpan(
-                    text: text.substring(start, end),
-                    semanticsIdentifier:
-                        'review-$heading-$_questionRevision-${spans.length}',
-                  ),
-                );
-                start = end;
-                height = 0;
-              }
-            }
-            height += line.height;
-          }
-          spans.add(
-            TextSpan(
-              text: text.substring(start),
-              semanticsIdentifier:
-                  'review-$heading-$_questionRevision-${spans.length}',
-            ),
-          );
-        }
-        painter.dispose();
-
-        Widget focusTarget(Widget child, String semanticsLabel) => Focus(
-          focusNode: focusNode,
-          skipTraversal: true,
-          includeSemantics: false,
-          child: Semantics(
-            key: ValueKey('$heading-$_questionRevision'),
-            container: true,
-            liveRegion: liveRegion,
-            label: semanticsLabel,
-            excludeSemantics: true,
-            child: child,
-          ),
-        );
-
-        if (spans.isEmpty) {
-          return focusTarget(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                headingWidget,
-                const SizedBox(height: 12),
-                Text(text, style: textStyle),
-              ],
-            ),
-            '$label $text',
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            focusTarget(headingWidget, label),
-            const SizedBox(height: 12),
-            Text.rich(
-              TextSpan(children: spans),
-              key: ValueKey('$heading-text-$_questionRevision'),
-              style: textStyle,
-            ),
-          ],
-        );
-      },
+        ),
+        const SizedBox(height: 12),
+        Text(text, style: textStyle),
+      ],
     );
   }
 
@@ -330,7 +166,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         _questionRevision += 1;
         _feedback = '${_ratingLabel(rating)} saved on your device.';
       });
-      _orientToQuestion();
+      _scrollToQuestion();
       ref.invalidate(reviewDecksProvider);
     } catch (_) {
       if (!mounted) return;
@@ -350,7 +186,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       _failedRating = null;
       _feedback = 'Remaining cards shuffled. Showing the question.';
     });
-    _orientToQuestion();
+    _scrollToQuestion();
   }
 
   @override
@@ -406,42 +242,27 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Focus(
-              focusNode: _countdownFocus,
-              skipTraversal: true,
-              includeSemantics: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.school_outlined, size: 48),
-                  const SizedBox(height: 16),
-                  _countdownSemantics(
-                    key: _countdownHeadingKey,
-                    target: 'heading',
-                    child: Text(
-                      'Get ready to recall',
-                      style: theme.textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _countdownSemantics(
-                    target: 'timer',
-                    child: Text(
-                      'Starting in $_countdown…',
-                      style: theme.textTheme.titleLarge,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _countdownSemantics(
-                    target: 'start',
-                    child: FilledButton(
-                      onPressed: _startNow,
-                      child: const Text('Start now'),
-                    ),
-                  ),
-                ],
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.school_outlined, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Get ready to recall',
+                  style: theme.textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Starting in $_countdown…',
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: _finishCountdown,
+                  child: const Text('Start now'),
+                ),
+              ],
             ),
           ),
         ),
@@ -505,8 +326,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                           _reviewContent(
                             heading: 'Question',
                             text: card.front,
-                            focusNode: _questionFocus,
-                            liveRegion: !_revealed,
                             textStyle: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               height: 1.35,
@@ -520,9 +339,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                             _reviewContent(
                               heading: 'Answer',
                               text: card.back,
-                              focusNode: _answerFocus,
                               headingKey: _answerHeadingKey,
-                              liveRegion: true,
                               textStyle: theme.textTheme.titleLarge?.copyWith(
                                 height: 1.4,
                               ),
@@ -601,12 +418,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   ],
                   if (_failedRating != null) ...[
                     const SizedBox(height: 16),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        'Could not save this review. Your answer is still here. Try again or choose a rating.',
-                        style: TextStyle(color: theme.colorScheme.error),
-                      ),
+                    Text(
+                      'Could not save this review. Your answer is still here. Try again or choose a rating.',
+                      style: TextStyle(color: theme.colorScheme.error),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
@@ -674,32 +488,19 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
-              Focus(
-                focusNode: _completionFocus,
-                skipTraversal: true,
-                includeSemantics: false,
-                child: Semantics(
-                  container: true,
-                  liveRegion: true,
-                  child: Column(
-                    children: [
-                      Text(
-                        empty ? 'No cards available' : 'Review complete',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        empty
-                            ? 'This deck has no cards available for this session.'
-                            : '$_index card${_index == 1 ? '' : 's'} reviewed. Your ratings are saved on your device.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
+              Text(
+                empty ? 'No cards available' : 'Review complete',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                empty
+                    ? 'This deck has no cards available for this session.'
+                    : '$_index card${_index == 1 ? '' : 's'} reviewed. Your ratings are saved on your device.',
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               Wrap(
