@@ -192,6 +192,125 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     );
   }
 
+  Widget _reviewContent({
+    required String heading,
+    required String text,
+    required FocusNode focusNode,
+    required TextStyle? textStyle,
+    required bool liveRegion,
+    Key? headingKey,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final headingWidget = Text(
+          heading,
+          key: headingKey,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        );
+        final label = 'Card ${_index + 1} of ${_cards.length}. $heading.';
+        final painter = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: DefaultTextStyle.of(context).style.merge(textStyle),
+          ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final viewportHeight =
+            MediaQuery.sizeOf(context).height -
+            MediaQuery.paddingOf(context).vertical -
+            kToolbarHeight;
+        final chunkHeight = viewportHeight > 0 ? viewportHeight / 2 : 1.0;
+        final spans = <TextSpan>[];
+        // An oversized semantic node can trap TalkBack's next-item scrolling.
+        // Split only long text, using rendered line boundaries to preserve all
+        // characters and keep each semantic rectangle inside the viewport.
+        if (painter.height > chunkHeight) {
+          var start = 0;
+          var height = 0.0;
+          for (final line in painter.computeLineMetrics()) {
+            if (height > 0 && height + line.height > chunkHeight) {
+              final end =
+                  painter
+                      .getLineBoundary(
+                        painter.getPositionForOffset(
+                          Offset(
+                            constraints.maxWidth / 2,
+                            line.baseline - line.ascent / 2,
+                          ),
+                        ),
+                      )
+                      .start;
+              if (end > start) {
+                spans.add(
+                  TextSpan(
+                    text: text.substring(start, end),
+                    semanticsIdentifier:
+                        'review-$heading-$_questionRevision-${spans.length}',
+                  ),
+                );
+                start = end;
+                height = 0;
+              }
+            }
+            height += line.height;
+          }
+          spans.add(
+            TextSpan(
+              text: text.substring(start),
+              semanticsIdentifier:
+                  'review-$heading-$_questionRevision-${spans.length}',
+            ),
+          );
+        }
+        painter.dispose();
+
+        Widget focusTarget(Widget child, String semanticsLabel) => Focus(
+          focusNode: focusNode,
+          skipTraversal: true,
+          includeSemantics: false,
+          child: Semantics(
+            key: ValueKey('$heading-$_questionRevision'),
+            container: true,
+            liveRegion: liveRegion,
+            label: semanticsLabel,
+            excludeSemantics: true,
+            child: child,
+          ),
+        );
+
+        if (spans.isEmpty) {
+          return focusTarget(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                headingWidget,
+                const SizedBox(height: 12),
+                Text(text, style: textStyle),
+              ],
+            ),
+            '$label $text',
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            focusTarget(headingWidget, label),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(children: spans),
+              key: ValueKey('$heading-text-$_questionRevision'),
+              style: textStyle,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _rateCard(String rating) async {
     if (_saving || !_revealed || _index >= _cards.length) return;
     setState(() {
@@ -383,37 +502,14 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Focus(
+                          _reviewContent(
+                            heading: 'Question',
+                            text: card.front,
                             focusNode: _questionFocus,
-                            skipTraversal: true,
-                            includeSemantics: false,
-                            child: Semantics(
-                              key: ValueKey('question-$_questionRevision'),
-                              container: true,
-                              liveRegion: !_revealed,
-                              label:
-                                  'Card ${_index + 1} of ${_cards.length}. Question. ${card.front}',
-                              excludeSemantics: true,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Question',
-                                    style: theme.textTheme.labelLarge?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    card.front,
-                                    style: theme.textTheme.headlineSmall
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.35,
-                                        ),
-                                  ),
-                                ],
-                              ),
+                            liveRegion: !_revealed,
+                            textStyle: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              height: 1.35,
                             ),
                           ),
                           if (_revealed) ...[
@@ -421,36 +517,14 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                               padding: EdgeInsets.symmetric(vertical: 20),
                               child: Divider(height: 1),
                             ),
-                            Focus(
+                            _reviewContent(
+                              heading: 'Answer',
+                              text: card.back,
                               focusNode: _answerFocus,
-                              skipTraversal: true,
-                              includeSemantics: false,
-                              child: Semantics(
-                                container: true,
-                                liveRegion: true,
-                                label:
-                                    'Card ${_index + 1} of ${_cards.length}. Answer. ${card.back}',
-                                excludeSemantics: true,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Text(
-                                      'Answer',
-                                      key: _answerHeadingKey,
-                                      style: theme.textTheme.labelLarge
-                                          ?.copyWith(
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      card.back,
-                                      style: theme.textTheme.titleLarge
-                                          ?.copyWith(height: 1.4),
-                                    ),
-                                  ],
-                                ),
+                              headingKey: _answerHeadingKey,
+                              liveRegion: true,
+                              textStyle: theme.textTheme.titleLarge?.copyWith(
+                                height: 1.4,
                               ),
                             ),
                           ] else ...[
