@@ -544,7 +544,7 @@ class _TopGreetingCard extends StatelessWidget {
                 child: _StatTile(
                   icon: Icons.local_fire_department,
                   label: 'Streak',
-                  value: '$streak days',
+                  value: streak == 1 ? '1 day' : '$streak days',
                   isDark: isDark,
                 ),
               ),
