@@ -182,6 +182,22 @@ class HomeRepository {
     return _sessionStorage.readUsername();
   }
 
+  Stream<int> watchPendingSyncCount(String userId) {
+    // Each account has its own database. Do not expose the previous account's
+    // queue if session storage changes before its database is replaced.
+    if (_database.databaseFileName != ':memory:' &&
+        _database.databaseFileName != AppDatabase.fileNameForUser(userId)) {
+      return Stream.value(0);
+    }
+    final pendingCount = _database.syncQueueItems.operationId.count();
+    return (_database.selectOnly(_database.syncQueueItems)
+          ..addColumns([pendingCount])
+          ..where(_database.syncQueueItems.synced.equals(false)))
+        .watchSingle()
+        .map((row) => row.read(pendingCount) ?? 0)
+        .distinct();
+  }
+
   Future<List<DeckSummary>> getDecks() async {
     final currentUserId = await _sessionStorage.readUserId();
     if (currentUserId == null || currentUserId.isEmpty) return [];
