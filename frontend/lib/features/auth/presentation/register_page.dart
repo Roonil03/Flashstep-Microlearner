@@ -143,14 +143,18 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               child: Text(
                 'Create an account',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.headlineMedium,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Use your account to study across devices.',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
             ),
             const SizedBox(height: 24),
             _inputField("Username", usernameController),
