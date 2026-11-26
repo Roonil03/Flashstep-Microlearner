@@ -4,6 +4,8 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 
 ## Finding your way
 
+- DM Sans brings consistent typography to study screens, forms, settings and navigation. The font is bundled for offline use, and its license is available under **Settings → Legal → Open-source licenses → DM Sans**.
+
 - Home leads with a deck title and its due status. Tap the title to open that deck, or use **Start review** to choose a deck for a session. **Total Decks** counts your whole library, including the featured deck.
 - Inside a study session, cobalt identifies the question and green identifies the answer. Deck management, progress and account screens also pair color with text labels.
 - Sign-in and registration display the Flashstep logo above centered forms on a coral background. Registration uses the opposite light or dark theme, so it is easy to tell which form is open. The forms scroll above the keyboard.
