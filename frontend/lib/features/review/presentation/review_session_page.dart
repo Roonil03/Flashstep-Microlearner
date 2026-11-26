@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
 import '../../../app/router.dart';
+import '../../../app/theme/study_colors.dart';
+import 'notebook_card.dart';
 import '../../../core/widgets/ln_study_cards_illustration.dart';
 import 'start_review_page.dart';
 import '../data/review_repository.dart';
@@ -22,6 +24,74 @@ class ReviewSessionPage extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ReviewSessionPage> createState() => _ReviewSessionPageState();
+}
+
+/// A single finite water ring follows an explicit reveal, without moving content.
+class _AnswerReveal extends StatefulWidget {
+  const _AnswerReveal({super.key, required this.child});
+  final Widget child;
+  @override
+  State<_AnswerReveal> createState() => _AnswerRevealState();
+}
+
+class _AnswerRevealState extends State<_AnswerReveal>
+    with SingleTickerProviderStateMixin {
+  late final _ripple = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ripple.stop();
+      _ripple.value = 1;
+    } else if (!_started) {
+      _started = true;
+      _ripple.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ripple.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(16),
+    child: CustomPaint(
+      foregroundPainter: _WaterRingPainter(
+        _ripple,
+        context.studyTone(StudyArea.study).accent,
+      ),
+      child: widget.child,
+    ),
+  );
+}
+
+class _WaterRingPainter extends CustomPainter {
+  _WaterRingPainter(this.progress, this.color) : super(repaint: progress);
+  final Animation<double> progress;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = progress.value;
+    if (t <= 0 || t >= 1) return;
+    final paint =
+        Paint()
+          ..color = color.withValues(alpha: (1 - t) * .24)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+    canvas.drawCircle(Offset(size.width / 2, 0), size.longestSide * t, paint);
+  }
+
+  @override
+  bool shouldRepaint(_WaterRingPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.progress != progress;
 }
 
 class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
@@ -109,28 +179,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     setState(() => _revealed = true);
   }
 
-  Widget _reviewContent({
-    required String heading,
-    required String text,
-    required TextStyle? textStyle,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          heading,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(text, style: textStyle),
-      ],
-    );
-  }
-
   Future<void> _rateCard(String rating) async {
     if (_saving || !_revealed || _index >= _cards.length) return;
     setState(() {
@@ -176,6 +224,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tone = context.studyTone(StudyArea.study);
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.deckTitle)),
@@ -213,6 +262,15 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Try again'),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed:
+                      () => Navigator.of(
+                        context,
+                      ).pushNamed(AppRoutes.browseDecks),
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('View decks'),
+                ),
               ],
             ),
           ),
@@ -229,7 +287,18 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.school_outlined, size: 48),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: tone.fill,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Icon(
+                    Icons.auto_stories_rounded,
+                    size: 64,
+                    color: tone.ink,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Get ready to recall',
@@ -240,6 +309,11 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                 Text(
                   'Starting in $_countdown…',
                   style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'One question at a time. You set the pace.',
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
@@ -274,10 +348,19 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: const BoxConstraints(maxWidth: 640),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Text(
+                    'RECALL / CHECK / REFLECT',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: tone.accent,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Wrap(
                     alignment: WrapAlignment.spaceBetween,
                     spacing: 12,
@@ -294,7 +377,9 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   ),
                   const SizedBox(height: 12),
                   LinearProgressIndicator(
-                    minHeight: 3,
+                    minHeight: 8,
+                    color: tone.accent,
+                    backgroundColor: tone.fill,
                     borderRadius: BorderRadius.circular(2),
                     value: _index / _cards.length,
                     semanticsLabel: 'Session progress',
@@ -302,56 +387,44 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                         '$_index of ${_cards.length} cards reviewed',
                   ),
                   const SizedBox(height: 24),
-                  Card.outlined(
-                    margin: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: theme.colorScheme.outlineVariant),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                  NotebookCard(heading: 'Question', text: card.front),
+                  const SizedBox(height: 16),
+                  if (_revealed)
+                    _AnswerReveal(
+                      key: ValueKey(_index),
+                      child: NotebookCard(
+                        heading: 'Answer',
+                        text: card.back,
+                        answer: true,
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: tone.fill,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _reviewContent(
-                            heading: 'Question',
-                            text: card.front,
-                            textStyle: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                              height: 1.35,
+                          Icon(Icons.psychology_outlined, color: tone.ink),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Recall the answer before revealing it.',
+                              style: TextStyle(color: tone.ink),
                             ),
                           ),
-                          if (_revealed) ...[
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 20),
-                              child: Divider(height: 1),
-                            ),
-                            _reviewContent(
-                              heading: 'Answer',
-                              text: card.back,
-                              textStyle: theme.textTheme.titleLarge?.copyWith(
-                                height: 1.5,
-                              ),
-                            ),
-                          ] else ...[
-                            const SizedBox(height: 24),
-                            const Text(
-                              'Recall the answer before revealing it.',
-                            ),
-                          ],
                         ],
                       ),
                     ),
-                  ),
                   const SizedBox(height: 24),
                   if (!_revealed)
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(48, 56),
-                        splashFactory:
-                            MediaQuery.disableAnimationsOf(context)
-                                ? NoSplash.splashFactory
-                                : InkRipple.splashFactory,
+                        splashFactory: NoSplash.splashFactory,
                         animationDuration: Duration.zero,
                       ),
                       onPressed: _revealAnswer,
@@ -462,6 +535,26 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                     : '$_index card${_index == 1 ? '' : 's'} reviewed. Your ratings are saved on your device.',
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 20),
+              if (!empty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 22,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.studyTone(StudyArea.library).fill,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '$_index / ${_cards.length} complete · Every recall counts.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: context.studyTone(StudyArea.library).ink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 24),
               Wrap(
                 alignment: WrapAlignment.center,
