@@ -48,7 +48,7 @@ flutter:
     - assets/legal/artwork_license.txt
     - assets/legal/backend_licenses.json
     - assets/LogoWithText_WithoutBG.png
-    - assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png
+    - assets/LogoWithoutText_WithoutBGLarge_Square.png
 
 flutter_launcher_icons:
   android: true

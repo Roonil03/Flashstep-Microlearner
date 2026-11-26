@@ -87,7 +87,7 @@ class AccountMark extends StatelessWidget {
     final tone = context.studyTone(StudyArea.account);
     return Column(
       children: [
-        FlashstepLogo(size: 64, color: tone.accent),
+        const FlashstepLogo(size: 64),
         const SizedBox(height: 12),
         Text(
           'Flashstep Microlearner',

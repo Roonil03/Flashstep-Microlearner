@@ -248,13 +248,29 @@ class _MainSettings extends StatelessWidget {
                 const SizedBox(height: 20),
                 Column(
                   children: [
-                    TextButton.icon(
+                    FilledButton.icon(
                       onPressed: onLogout,
+                      style: FilledButton.styleFrom(
+                        backgroundColor:
+                            theme.brightness == Brightness.dark
+                                ? const Color(0xFFC62828)
+                                : const Color(0xFFB3261E),
+                        foregroundColor: Colors.white,
+                        overlayColor: Colors.white,
+                        minimumSize: const Size(160, 52),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        textStyle: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       icon: const Icon(Icons.logout),
                       label: const Text('Sign Out'),
                     ),
                     const SizedBox(height: 24),
-                    FlashstepLogo(size: 72, color: colors.onSurfaceVariant),
+                    const FlashstepLogo(size: 72),
                     const SizedBox(height: 8),
                     Text(
                       'Version ${AppVersion.name}',

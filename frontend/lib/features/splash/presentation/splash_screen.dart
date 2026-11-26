@@ -69,7 +69,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                       ),
                     ],
                   ),
-                  child: FlashstepLogo(size: 136, color: tone.ink),
+                  child: const FlashstepLogo(size: 136),
                 ),
                 const SizedBox(height: 24),
                 Text(
