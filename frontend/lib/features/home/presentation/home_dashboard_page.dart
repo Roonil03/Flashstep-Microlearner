@@ -109,8 +109,9 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted)
+      if (mounted) {
         launchNavigationTour(context, ref.read(sessionStorageProvider));
+      }
     });
   }
 
@@ -260,55 +261,34 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             syncStatus.lastSuccessfulAt ?? data.lastSyncedAt;
                         return SliverList(
                           delegate: SliverChildListDelegate([
-                            _TopGreetingCard(
-                              displayName: data.displayName,
-                              syncStatus: syncStatus,
-                              pendingSyncCount: pendingSyncCount,
-                              lastSyncedAt: lastSuccessfulAt,
-                              dueToday: data.dueToday,
-                              decksCount: data.decksCount,
-                              reviewedToday: data.reviewedToday,
-                              streak: data.streak,
+                            _StudyOverview(
+                              data: data,
+                              onReview: () => _openReview(),
+                              onOpenDeck:
+                                  data.deckOfTheDay == null
+                                      ? null
+                                      : () => _openDeckDetail(
+                                        data.deckOfTheDay!.id,
+                                      ),
+                              timeLabel:
+                                  data.deckOfTheDay == null
+                                      ? null
+                                      : _timeLabel(
+                                        data.deckOfTheDay!.nextDueAt,
+                                        dueCards: data.deckOfTheDay!.dueCards,
+                                      ),
                             ),
-                            const SizedBox(height: 16),
-                            if (data.deckOfTheDay != null)
-                              Column(
-                                children: [
-                                  _DeckOfTheDayCard(
-                                    deck: data.deckOfTheDay!,
-                                    timeLabel: _timeLabel(
-                                      data.deckOfTheDay!.nextDueAt,
-                                      dueCards: data.deckOfTheDay!.dueCards,
-                                    ),
-                                    onStartReview:
-                                        () =>
-                                            _openReview(data.deckOfTheDay!.id),
-                                    onOpenDeck:
-                                        () => _openDeckDetail(
-                                          data.deckOfTheDay!.id,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                ],
-                              ),
-                            _QuickActionsGrid(
+                            const SizedBox(height: 20),
+                            _LibraryActions(
                               onCreateDeck: _openCreateDeck,
-                              onStartReview: () => _openReview(),
                               onBrowseDecks: _openBrowseDecks,
-                              onAnalytics:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.analytics),
-                            ),
-                            const SizedBox(height: 16),
-                            _MiniStatsRow(
-                              dueToday: data.dueToday,
-                              reviewedToday: data.reviewedToday,
-                              retentionRate: data.retentionRate,
                             ),
                             const SizedBox(height: 18),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 16,
+                              runSpacing: 8,
                               children: [
                                 Text(
                                   'Your decks',
@@ -377,342 +357,107 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   }
 }
 
-class _TopGreetingCard extends StatelessWidget {
-  final String displayName;
-  final SyncStatus syncStatus;
-  final int? pendingSyncCount;
-  final DateTime? lastSyncedAt;
-  final int dueToday;
-  final int decksCount;
-  final int reviewedToday;
-  final int streak;
-
-  const _TopGreetingCard({
-    required this.displayName,
-    required this.syncStatus,
-    required this.pendingSyncCount,
-    required this.lastSyncedAt,
-    required this.dueToday,
-    required this.decksCount,
-    required this.reviewedToday,
-    required this.streak,
-  });
-
-  String _syncText() {
-    if (syncStatus.phase == SyncPhase.offline) return 'Offline';
-    if (syncStatus.phase == SyncPhase.syncing) return 'Syncing now';
-    if (syncStatus.phase == SyncPhase.failed) return 'Sync failed';
-    if (pendingSyncCount == null) return 'Sync status unknown';
-    if (pendingSyncCount! > 0) return 'Changes pending';
-    if (syncStatus.phase == SyncPhase.success) return 'All synced';
-    if (lastSyncedAt == null) return 'Not synced yet';
-    return 'Last sync available';
-  }
-
-  String _lastSyncTime() {
-    if (lastSyncedAt == null) return 'No sync time';
-    final localSyncTime = lastSyncedAt!.toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(localSyncTime);
-    if (diff.inSeconds < 0) return 'just now';
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
-    if (diff.inDays < 1) {
-      return '${diff.inHours} h ${diff.inMinutes.remainder(60)} min ago';
-    }
-    if (diff.inDays == 1) return 'Yesterday';
-    return '${localSyncTime.day.toString().padLeft(2, '0')}/'
-        '${localSyncTime.month.toString().padLeft(2, '0')}/'
-        '${localSyncTime.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors:
-              isDark
-                  ? [const Color(0xFF132238), const Color(0xFF1C2F4A)]
-                  : [const Color(0xFFEAF6FF), const Color(0xFFF4ECFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome back,',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(
-                          0.7,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      displayName,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color:
-                        isDark
-                            ? const Color(0xFF1A3A52)
-                            : const Color(0xFFD5EEFF),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        syncStatus.phase == SyncPhase.syncing
-                            ? Icons.sync
-                            : syncStatus.phase == SyncPhase.offline ||
-                                syncStatus.phase == SyncPhase.failed
-                            ? Icons.sync_problem_outlined
-                            : Icons.check_circle,
-                        size: 14,
-                        color:
-                            syncStatus.phase == SyncPhase.offline ||
-                                    syncStatus.phase == SyncPhase.failed
-                                ? Colors.orange
-                                : syncStatus.phase == SyncPhase.syncing
-                                ? Colors.blue
-                                : Colors.green,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          _syncText(),
-                          style: theme.textTheme.labelSmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _lastSyncTime(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.calendar_today,
-                  label: 'Due Today',
-                  value: dueToday == 1 ? '1 card' : '$dueToday cards',
-                  isDark: isDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.layers,
-                  label: 'Your Decks',
-                  value: '$decksCount total',
-                  isDark: isDark,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.done_all,
-                  label: 'Reviewed',
-                  value: '$reviewedToday today',
-                  isDark: isDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.local_fire_department,
-                  label: 'Streak',
-                  value: streak == 1 ? '1 day' : '$streak days',
-                  isDark: isDark,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool isDark;
-
-  const _StatTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: isDark ? const Color(0xFF1F3D54) : Colors.white.withOpacity(0.6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: Colors.blue),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.labelSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeckOfTheDayCard extends StatelessWidget {
-  final DeckSummary deck;
-  final String timeLabel;
-  final VoidCallback onStartReview;
-  final VoidCallback onOpenDeck;
-
-  const _DeckOfTheDayCard({
-    required this.deck,
-    required this.timeLabel,
-    required this.onStartReview,
+class _StudyOverview extends StatelessWidget {
+  final HomeDashboardData data;
+  final VoidCallback onReview;
+  final VoidCallback? onOpenDeck;
+  final String? timeLabel;
+  const _StudyOverview({
+    required this.data,
+    required this.onReview,
     required this.onOpenDeck,
+    required this.timeLabel,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: isDark ? const Color(0xFF1C2E3F) : const Color(0xFFEFF8FF),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2A4060) : const Color(0xFFB8E0FF),
+    final colors = theme.colorScheme;
+    final deck = data.deckOfTheDay;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Welcome back, ${data.displayName}',
+          style: theme.textTheme.titleMedium,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Deck of the day',
-                  style: theme.textTheme.labelLarge,
-                ),
-              ),
-              const Icon(Icons.star, size: 18, color: Colors.amber),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            deck.title,
-            style: theme.textTheme.titleMedium?.copyWith(
+        const SizedBox(height: 8),
+        Semantics(
+          header: true,
+          child: Text(
+            'Today',
+            style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
-          Text(
-            deck.description,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.primaryContainer,
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(height: 12),
-          Text(
-            '${deck.dueCards} due — $timeLabel',
-            style: theme.textTheme.labelSmall,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: onStartReview,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(40),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: colors.onPrimaryContainer),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${data.dueToday} ${data.dueToday == 1 ? 'card' : 'cards'} available',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: colors.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: const Text('Start review'),
                 ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton(onPressed: onOpenDeck, child: const Text('Open')),
-            ],
+                if (deck == null || data.dueToday == 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    deck == null
+                        ? 'Create a deck or browse public decks to begin.'
+                        : 'You are caught up. Check your decks or review settings.',
+                  ),
+                ],
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onReview,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Start review'),
+                ),
+                if (deck != null) ...[
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: onOpenDeck,
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.onPrimaryContainer,
+                    ),
+                    child: Column(
+                      children: [
+                        Text(deck.title, textAlign: TextAlign.center),
+                        Text(
+                          '${deck.dueCards} due — $timeLabel',
+                          style: TextStyle(color: colors.onPrimaryContainer),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 20,
+          runSpacing: 8,
+          children: [
+            Text('${data.reviewedToday} reviewed today'),
+            Text('${data.streak} ${data.streak == 1 ? 'day' : 'days'} streak'),
+            Text('${data.retentionRate.toStringAsFixed(1)}% retention'),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -720,183 +465,67 @@ class _DeckOfTheDayCard extends StatelessWidget {
 class _DeckCard extends StatelessWidget {
   final DeckSummary deck;
   final VoidCallback onTap;
-
   const _DeckCard({required this.deck, required this.onTap});
-
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
-          border: Border.all(
-            color: isDark ? const Color(0xFF2E4556) : const Color(0xFFE0E0E0),
-          ),
+  Widget build(BuildContext context) => Column(
+    children: [
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        leading: Icon(
+          deck.isPublic ? Icons.public_outlined : Icons.style_outlined,
+          color: Theme.of(context).colorScheme.primary,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    deck.title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (deck.isPublic)
-                  const Icon(Icons.public, size: 16, color: Colors.blue),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} • ${deck.dueCards} due',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: deck.progress.clamp(0.0, 1.0),
-                minHeight: 6,
-              ),
-            ),
-          ],
+        title: Text(deck.title),
+        subtitle: Text(
+          '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} · ${deck.dueCards} due',
         ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
       ),
-    );
-  }
+      const Divider(height: 1),
+    ],
+  );
 }
 
-class _QuickActionsGrid extends StatelessWidget {
+class _LibraryActions extends StatelessWidget {
   final VoidCallback onCreateDeck;
-  final VoidCallback onStartReview;
   final VoidCallback onBrowseDecks;
-  final VoidCallback onAnalytics;
-
-  const _QuickActionsGrid({
+  const _LibraryActions({
     required this.onCreateDeck,
-    required this.onStartReview,
     required this.onBrowseDecks,
-    required this.onAnalytics,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns =
-            constraints.maxWidth < 340 ||
-                    MediaQuery.textScalerOf(context).scale(1) > 1.4
-                ? 1
-                : 2;
-        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            SizedBox(
-              width: width,
-              child: LearningAction(
-                icon: Icons.add_circle_outline,
-                label: 'Create deck',
-                onPressed: onCreateDeck,
-              ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final oneColumn =
+          constraints.maxWidth < 340 ||
+          MediaQuery.textScalerOf(context).scale(1) > 1.4;
+      final width =
+          oneColumn ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          SizedBox(
+            width: width,
+            child: LearningAction(
+              icon: Icons.add,
+              label: 'Create deck',
+              onPressed: onCreateDeck,
             ),
-            SizedBox(
-              width: width,
-              child: LearningAction(
-                icon: Icons.play_circle_outline,
-                label: 'Start review',
-                onPressed: onStartReview,
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: LearningAction(
-                icon: Icons.explore_outlined,
-                label: 'Browse decks',
-                onPressed: onBrowseDecks,
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: LearningAction(
-                icon: Icons.bar_chart_outlined,
-                label: 'Analytics',
-                onPressed: onAnalytics,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MiniStatsRow extends StatelessWidget {
-  final int dueToday;
-  final int reviewedToday;
-  final double retentionRate;
-
-  const _MiniStatsRow({
-    required this.dueToday,
-    required this.reviewedToday,
-    required this.retentionRate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    Widget tile(String label, String value) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
           ),
-          child: Column(
-            children: [
-              Text(label, style: theme.textTheme.labelSmall),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          SizedBox(
+            width: width,
+            child: LearningAction(
+              icon: Icons.style_outlined,
+              label: 'Browse decks',
+              onPressed: onBrowseDecks,
+            ),
           ),
-        ),
+        ],
       );
-    }
-
-    return Row(
-      children: [
-        tile('Due Today', '$dueToday'),
-        const SizedBox(width: 12),
-        tile('Reviewed', '$reviewedToday'),
-        const SizedBox(width: 12),
-        tile('Retention', '${retentionRate.toStringAsFixed(1)}%'),
-      ],
-    );
-  }
+    },
+  );
 }
 
 class _SyncFooterCard extends StatelessWidget {
@@ -915,8 +544,6 @@ class _SyncFooterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     final localSyncTime = lastSyncedAt?.toLocal();
     final hour = localSyncTime?.hour.toString().padLeft(2, '0') ?? '00';
     final minute = localSyncTime?.minute.toString().padLeft(2, '0') ?? '00';
@@ -934,7 +561,7 @@ class _SyncFooterCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+        color: theme.colorScheme.surfaceContainerLow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
