@@ -1271,7 +1271,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           Text('Font size', style: theme.textTheme.titleMedium),
                           const SizedBox(height: 4),
                           Text(
-                            'Adjusts text throughout the app relative to your device setting.',
+                            'Device default uses 115% of your device text size. All four choices follow your device setting.',
                             style: theme.textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),

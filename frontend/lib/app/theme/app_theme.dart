@@ -47,11 +47,13 @@ class FontSizeNotifier extends StateNotifier<AppFontSize> {
 }
 
 extension AppFontSizeFactor on AppFontSize {
+  // Keep each preset's relative size while using the former Large preset as
+  // the app baseline. AppTextScaler still applies the device's own text curve.
   double get factor => switch (this) {
-    AppFontSize.small => 0.9,
-    AppFontSize.device => 1.0,
-    AppFontSize.large => 1.15,
-    AppFontSize.extraLarge => 1.3,
+    AppFontSize.small => 1.035,
+    AppFontSize.device => 1.15,
+    AppFontSize.large => 1.3225,
+    AppFontSize.extraLarge => 1.495,
   };
 }
 
