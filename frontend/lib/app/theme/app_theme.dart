@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/storage/theme_storage.dart';
+import 'study_colors.dart';
 
 final themeStorageProvider = Provider<ThemeStorage>(
   (ref) => const ThemeStorage(),
@@ -104,26 +105,36 @@ class AppTheme {
 
   static ThemeData _studyTheme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
-    final paper = dark ? const Color(0xFF10242F) : const Color(0xFFF5F8F8);
-    final ink = dark ? const Color(0xFFEDF5F4) : const Color(0xFF102F47);
-    final accent = dark ? const Color(0xFF8BDACB) : const Color(0xFF006D66);
+    final paper = dark ? const Color(0xFF121924) : const Color(0xFFF9FAFC);
+    final ink = dark ? const Color(0xFFF3F4FA) : const Color(0xFF182339);
+    final study = StudyTone.forBrightness(StudyArea.study, brightness);
+    final library = StudyTone.forBrightness(StudyArea.library, brightness);
+    final progress = StudyTone.forBrightness(StudyArea.progress, brightness);
+    final accent = study.accent;
     final colors = ColorScheme.fromSeed(
       seedColor: accent,
       brightness: brightness,
     ).copyWith(
       primary: accent,
       onPrimary: dark ? paper : Colors.white,
-      primaryContainer:
-          dark ? const Color(0xFF1A3642) : const Color(0xFFE4F1EE),
-      onPrimaryContainer: ink,
+      primaryContainer: study.fill,
+      onPrimaryContainer: study.ink,
+      secondary: library.accent,
+      onSecondary: dark ? paper : Colors.white,
+      secondaryContainer: library.fill,
+      onSecondaryContainer: library.ink,
+      tertiary: progress.accent,
+      onTertiary: dark ? paper : Colors.white,
+      tertiaryContainer: progress.fill,
+      onTertiaryContainer: progress.ink,
       surface: paper,
       onSurface: ink,
       onSurfaceVariant:
-          dark ? const Color(0xFFB5C8CC) : const Color(0xFF486270),
-      outlineVariant: dark ? const Color(0xFF425E68) : const Color(0xFFCBD8D9),
+          dark ? const Color(0xFFBFC9DA) : const Color(0xFF4C5A70),
+      outlineVariant: dark ? const Color(0xFF49536A) : const Color(0xFFCCD3DF),
     );
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
     );
     final border = OutlineInputBorder(borderRadius: BorderRadius.circular(8));
     return ThemeData(
@@ -161,7 +172,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: dark ? colors.primaryContainer : Colors.white,
+        fillColor: dark ? const Color(0xFF1D2738) : Colors.white,
         border: border,
         enabledBorder: border.copyWith(
           borderSide: BorderSide(color: colors.outline),
