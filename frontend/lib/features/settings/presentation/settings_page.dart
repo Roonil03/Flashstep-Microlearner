@@ -4,6 +4,7 @@ import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import '../../../core/widgets/image_decode_size.dart';
+import '../../../core/widgets/flashstep_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -244,19 +245,20 @@ class _MainSettings extends StatelessWidget {
                   () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
                 ),
                 const Divider(height: 1),
-                const SizedBox(height: 16),
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 12,
+                const SizedBox(height: 20),
+                Column(
                   children: [
                     TextButton.icon(
                       onPressed: onLogout,
                       icon: const Icon(Icons.logout),
                       label: const Text('Sign Out'),
                     ),
+                    const SizedBox(height: 24),
+                    FlashstepLogo(size: 72, color: colors.onSurfaceVariant),
+                    const SizedBox(height: 8),
                     Text(
                       'Version ${AppVersion.name}',
+                      textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
