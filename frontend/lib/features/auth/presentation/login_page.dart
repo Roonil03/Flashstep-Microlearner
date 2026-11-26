@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import '../../../core/network/providers.dart';
 import '../../../core/network/api_errors.dart';
 import '../data/auth_api.dart';
 import '../data/auth_repository.dart';
+import '../../decks/data/data_sync_service.dart';
 
 class LoginCubit extends Cubit<bool> {
   final AuthRepository _authRepository;
@@ -17,12 +20,14 @@ class LoginCubit extends Cubit<bool> {
   Future<String> login({
     required String email,
     required String password,
+    String? expectedUserId,
   }) async {
     emit(true);
     try {
       final session = await _authRepository.login(
         email: email,
         password: password,
+        expectedUserId: expectedUserId,
       );
       if (!isClosed) emit(false);
       return session.username.isNotEmpty ? session.username : email;
@@ -45,6 +50,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscure = true;
+
+  String? _expectedUserId(BuildContext context) {
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    return arguments is Map && arguments['expectedUserId'] is String
+        ? arguments['expectedUserId'] as String
+        : null;
+  }
+
+  Future<void> _resumeSync() async {
+    try {
+      await ref.read(deckSyncServiceProvider).syncNow();
+    } catch (_) {
+      // A later automatic or manual sync can retry; saved changes remain local.
+    }
+  }
 
   @override
   void dispose() {
@@ -70,13 +90,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
     try {
+      final expectedUserId = _expectedUserId(context);
       final username = await context.read<LoginCubit>().login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        expectedUserId: expectedUserId,
       );
       if (!context.mounted) {
         return;
       }
+      if (expectedUserId != null) unawaited(_resumeSync());
       _showTopSnackBar(context, username);
       Navigator.of(
         context,
@@ -103,6 +126,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final renewingSession = _expectedUserId(context) != null;
     return BlocProvider(
       create: (_) => LoginCubit(ref.read(authRepositoryProvider)),
       child: AccountFrame(
@@ -121,7 +145,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   Semantics(
                     header: true,
                     child: Text(
-                      'Welcome back',
+                      renewingSession
+                          ? 'Sign in to sync your saved account'
+                          : 'Welcome back',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineMedium,
                     ),
@@ -191,16 +217,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               : const Text('Log in'),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.center,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pushNamed(AppRoutes.register);
-                      },
-                      child: const Text('Create an account'),
+                  if (!renewingSession) const SizedBox(height: 16),
+                  if (!renewingSession)
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(AppRoutes.register);
+                        },
+                        child: const Text('Create an account'),
+                      ),
                     ),
-                  ),
                 ],
               );
             },

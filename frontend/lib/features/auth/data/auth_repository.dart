@@ -43,6 +43,7 @@ class AuthRepository {
   Future<AuthSession> login({
     required String email,
     required String password,
+    String? expectedUserId,
   }) async {
     final session = await api.login(email: email, password: password);
 
@@ -90,16 +91,34 @@ class AuthRepository {
     if (resolvedUserId.isEmpty) {
       throw StateError('Login succeeded but user id could not be resolved.');
     }
+    if (expectedUserId != null && resolvedUserId != expectedUserId) {
+      throw const AuthApiException(
+        'Sign in to the same account to sync your saved decks and changes.',
+      );
+    }
 
     // Never expose a new token together with the previous account's ID or DB.
     await _mutateSession(() async {
-      await storage.clearAll();
-      await databaseManager.switchToUser(resolvedUserId);
-      await storage.writeUserId(resolvedUserId);
-      if (resolvedUsername.isNotEmpty) {
-        await storage.writeUsername(resolvedUsername);
+      if (expectedUserId != null &&
+          await storage.readUserId() != expectedUserId) {
+        throw const AuthApiException(
+          'Your account changed. Return to your saved decks and try again.',
+        );
       }
-      await storage.saveToken(session.token);
+      try {
+        await storage.clearAll();
+        // Database listeners must see the new account ID when they rebuild.
+        await storage.writeUserId(resolvedUserId);
+        await databaseManager.switchToUser(resolvedUserId);
+        if (resolvedUsername.isNotEmpty) {
+          await storage.writeUsername(resolvedUsername);
+        }
+        await storage.saveToken(session.token);
+      } catch (_) {
+        await storage.clearAll();
+        await databaseManager.switchToAnonymous();
+        rethrow;
+      }
     });
 
     return AuthSession(
@@ -130,15 +149,22 @@ class AuthRepository {
     if (token == null || token.isEmpty) return false;
 
     final claims = _decodeJwtClaims(token);
-    if (_isExpired(claims)) {
+    final savedUserId = (await storage.readUserId())?.trim();
+    final claimedUserId =
+        _claimAsString(claims, 'user_id') ?? _claimAsString(claims, 'sub');
+    if (savedUserId != null &&
+        savedUserId.isNotEmpty &&
+        claimedUserId != null &&
+        claimedUserId != savedUserId) {
+      // A token must never select a different account's local database.
       await _resetSessionOnly(expectedToken: token);
       return false;
     }
 
     String? resolvedUserId =
-        _claimAsString(claims, 'user_id') ??
-        _claimAsString(claims, 'sub') ??
-        await storage.readUserId();
+        savedUserId != null && savedUserId.isNotEmpty
+            ? savedUserId
+            : claimedUserId;
 
     if (resolvedUserId == null || resolvedUserId.trim().isEmpty) {
       try {
@@ -169,13 +195,25 @@ class AuthRepository {
     });
     if (!restored) return false;
 
+    // Access-token expiry prevents online sync, not access to this account's
+    // saved decks. No password login or network response is needed to restore
+    // the local account; refresh failures leave it available offline.
     unawaited(_refreshSessionProfile(token, resolvedUserId.trim()));
     return true;
   }
 
-  Future<void> logout() async {
-    await _resetSessionOnly();
-  }
+  Future<void> logout({
+    String? expectedUserId,
+    String? expectedToken,
+  }) => _mutateSession(() async {
+    if ((expectedUserId != null &&
+            await storage.readUserId() != expectedUserId) ||
+        (expectedToken != null && await storage.readToken() != expectedToken)) {
+      throw StateError('Your account changed. Please try signing out again.');
+    }
+    await storage.clearAll();
+    await databaseManager.switchToAnonymous();
+  });
 
   Future<void> changePassword({
     required String oldPassword,
@@ -241,6 +279,10 @@ class AuthRepository {
   Future<void> _refreshSessionProfile(String token, String userId) async {
     try {
       final me = await api.getMe(token).timeout(const Duration(seconds: 3));
+      if (me.userId.isNotEmpty && me.userId != userId) {
+        await _resetSessionOnly(expectedToken: token);
+        return;
+      }
       await _mutateSession(() async {
         if (me.userId == userId &&
             me.username.isNotEmpty &&
@@ -250,10 +292,16 @@ class AuthRepository {
         }
       });
     } on AuthApiException catch (e) {
+      final expiredAccessToken =
+          e.statusCode == 401 && _isExpired(_decodeJwtClaims(token));
       if ((e.statusCode == 401 || e.statusCode == 403) &&
+          !expiredAccessToken &&
           await storage.readToken() == token) {
         await _resetSessionOnly(expectedToken: token);
       }
+      // An expired token is expected to receive 401. Preserve its local account
+      // and pending changes; online sync will request a new sign-in. Explicit
+      // forbidden responses or rejection of a current token still end access.
     } on TimeoutException {
       // Keep the locally restored session.
     } catch (_) {
@@ -279,7 +327,7 @@ class AuthRepository {
       epochSeconds * 1000,
       isUtc: true,
     );
-    return expiry.isBefore(DateTime.now().toUtc());
+    return !expiry.isAfter(DateTime.now().toUtc());
   }
 
   String? _claimAsString(Map<String, dynamic>? claims, String key) {
