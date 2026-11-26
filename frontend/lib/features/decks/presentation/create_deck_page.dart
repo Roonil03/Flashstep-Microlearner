@@ -73,11 +73,10 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
 
-    final borderColor = isDark ? Colors.white12 : const Color(0xFFE3E3E3);
-    final buttonColor =
-        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
+    final borderColor = colors.outlineVariant;
+    final buttonColor = colors.primary;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Create deck')),
@@ -89,16 +88,15 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color:
-                    isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                color: colors.surface,
                 border: Border.all(color: borderColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'New deck',
+                    'Deck details',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -147,12 +145,11 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                   const SizedBox(height: 20),
                   SizedBox(
                     height: 52,
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _loading ? null : _saveDeck,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: buttonColor,
-                        foregroundColor:
-                            isDark ? const Color(0xFF003153) : Colors.white,
+                        foregroundColor: colors.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
