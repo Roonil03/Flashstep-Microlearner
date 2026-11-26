@@ -328,10 +328,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 Semantics(
                                   header: true,
                                   child: Text(
-                                    data.deckOfTheDay != null &&
-                                            data.decksCount > 1
-                                        ? 'Other decks · ${data.decksCount - 1}'
-                                        : 'Manage decks',
+                                    'Total Decks · ${data.decksCount}',
                                     style: theme.textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w700,
                                     ),
