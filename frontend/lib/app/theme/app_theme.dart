@@ -141,6 +141,7 @@ class AppTheme {
     final border = OutlineInputBorder(borderRadius: BorderRadius.circular(8));
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'DM Sans',
       brightness: brightness,
       colorScheme: colors,
       // Set the base sizes before Flutter applies the device and app text scales.
@@ -167,6 +168,7 @@ class AppTheme {
         foregroundColor: ink,
         centerTitle: false,
         titleTextStyle: TextStyle(
+          fontFamily: 'DM Sans',
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: ink,

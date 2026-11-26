@@ -17,6 +17,14 @@ class LegalSettingsPage extends StatelessWidget {
     if (_licensesRegistered) return;
     _licensesRegistered = true;
     LicenseRegistry.addLicense(() async* {
+      final fontLicense = await rootBundle.loadString(
+        'assets/legal/dm_sans_license.txt',
+      );
+      yield LicenseEntryWithLineBreaks(
+        const ['DM Sans'],
+        fontLicense,
+      );
+
       final project = await rootBundle.loadString(
         'assets/legal/project_license.txt',
       );
