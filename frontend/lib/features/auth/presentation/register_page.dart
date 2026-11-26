@@ -24,6 +24,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
   bool _obscureConfirmation = true;
+  bool _confirmationTouched = false;
   bool isLoading = false;
 
   String? passwordErrorText;
@@ -57,6 +58,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   Future<void> register() async {
+    if (!_confirmationTouched) {
+      setState(() => _confirmationTouched = true);
+    }
     if (isLoading || !(_formKey.currentState?.validate() ?? false)) return;
     final email = emailController.text.trim();
     final username = usernameController.text.trim();
@@ -222,9 +226,13 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               ? TextInputAction.done
               : TextInputAction.next,
       onFieldSubmitted: label == 'Confirm Password' ? (_) => register() : null,
+      onTap: label == 'Confirm Password'
+          ? () => setState(() => _confirmationTouched = true)
+          : null,
       validator: (value) {
         final text = (value ?? '').trim();
         if (label == 'Confirm Password') {
+          if (!_confirmationTouched) return null;
           if (text.isEmpty) return 'Confirm your password';
           return text == passwordController.text.trim()
               ? null
