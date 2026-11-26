@@ -21,7 +21,7 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 - In System Settings, **Device default** now matches the previous **Large** size. All four presets follow your device's text-size setting.
 - Analytics groups activity, retention and card workload with the selected date range and snapshot time. Activity and retention charts sit alongside each other on wider layouts and stack on phones.
 - Expand a chart’s daily values to read the review count or retention for a particular date. Each date is also available individually to assistive technology.
-- In Settings, tap your name to open **Account Settings**, or **System Settings** to change your theme, font size and review limits. **Report a Bug** is under **Help & information**. **Legal** contains the policies and open-source licenses. The Settings footer shows the Flashstep logo and installed version below **Sign Out**.
+- In Settings, tap your name to open **Account Settings**, or **System Settings** to change your theme, font size and review limits. **Report a Bug** is under **Help & information**. **Legal** contains the policies and open-source licenses. The centered red **Sign Out** button sits above the full-color Flashstep logo and installed version.
 - Moving between Settings sections keeps your name and review preferences in place. Back returns to your current dashboard, and saved changes update the relevant information on Home.
 - On small screens with enlarged text, deck and card save buttons grow to fit their labels. The deck creation action remains reachable while the keyboard is open.
 
