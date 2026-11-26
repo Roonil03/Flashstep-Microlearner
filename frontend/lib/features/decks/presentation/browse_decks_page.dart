@@ -240,7 +240,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                     hintText: 'Search decks...',
                     border: InputBorder.none,
                   ),
-                  style: const TextStyle(fontSize: 18),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 )
                 : const Text('Your decks'),
         actions: [
@@ -322,8 +322,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                         ? 'No decks match "${_searchController.text.trim()}".'
                         : 'No decks yet. Create a deck from Home, or browse public decks.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -141,6 +141,22 @@ class AppTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: colors,
+      // Set the base sizes before Flutter applies the device and app text scales.
+      // Leave caption and small label sizes at their Material defaults.
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(fontSize: 46),
+        displayMedium: TextStyle(fontSize: 37),
+        displaySmall: TextStyle(fontSize: 30),
+        headlineLarge: TextStyle(fontSize: 26),
+        headlineMedium: TextStyle(fontSize: 23),
+        headlineSmall: TextStyle(fontSize: 20),
+        titleLarge: TextStyle(fontSize: 18),
+        titleMedium: TextStyle(fontSize: 14),
+        titleSmall: TextStyle(fontSize: 13),
+        bodyLarge: TextStyle(fontSize: 14),
+        bodyMedium: TextStyle(fontSize: 13),
+        labelLarge: TextStyle(fontSize: 13),
+      ),
       scaffoldBackgroundColor: paper,
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -149,7 +165,7 @@ class AppTheme {
         foregroundColor: ink,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          fontSize: 23,
+          fontSize: 20,
           fontWeight: FontWeight.w700,
           color: ink,
         ),

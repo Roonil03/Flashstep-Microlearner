@@ -271,10 +271,8 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                               ? 'No public decks match "$_loadedQuery".'
                               : 'No public decks available right now.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         if (_loadedQuery.isNotEmpty) ...[
                           const SizedBox(height: 8),
