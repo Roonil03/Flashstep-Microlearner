@@ -102,27 +102,11 @@ class StartReviewPage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            'YOUR STUDY NOTEBOOK',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: tone.ink,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'A little practice.\nA stronger memory.',
+                            '$count card${count == 1 ? '' : 's'} ready',
                             style: theme.textTheme.headlineMedium?.copyWith(
                               color: tone.ink,
                               fontWeight: FontWeight.w800,
                               height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            '$count card${count == 1 ? '' : 's'} ready for your next session.',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: tone.ink,
                             ),
                           ),
                         ],
@@ -179,7 +163,6 @@ class StartReviewPage extends ConsumerWidget {
                     ) ...[
                       _DeckSheet(
                         deck: availableDecks[index],
-                        number: index + 1,
                         onPressed: () async {
                           final deck = availableDecks[index];
                           await Navigator.of(context).push(
@@ -208,74 +191,77 @@ class StartReviewPage extends ConsumerWidget {
 }
 
 class _DeckSheet extends StatelessWidget {
-  const _DeckSheet({
-    required this.deck,
-    required this.number,
-    required this.onPressed,
-  });
+  const _DeckSheet({required this.deck, required this.onPressed});
   final ReviewDeckSummary deck;
-  final int number;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final tone = context.studyTone(StudyArea.study);
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: tone.accent),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: tone.fill,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(15),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Text(
-              'NOTEBOOK ${number.toString().padLeft(2, '0')}  /  ${deck.dueCount} ready',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: tone.ink,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  deck.title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: tone.accent),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: tone.fill,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(15),
                 ),
-                const SizedBox(height: 18),
-                Semantics(
-                  label: 'Start review for ${deck.title}',
-                  excludeSemantics: true,
-                  button: true,
-                  onTap: onPressed,
-                  child: FilledButton.icon(
-                    onPressed: onPressed,
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Start review'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(48, 56),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Text(
+                '${deck.dueCount} card${deck.dueCount == 1 ? '' : 's'} ready',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: tone.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      deck.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  Semantics(
+                    container: true,
+                    label: 'Start review for ${deck.title}',
+                    excludeSemantics: true,
+                    button: true,
+                    onTap: onPressed,
+                    child: FilledButton.icon(
+                      onPressed: onPressed,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: const Text('Start review'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(48, 56),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

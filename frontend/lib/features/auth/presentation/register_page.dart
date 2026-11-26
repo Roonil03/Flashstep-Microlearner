@@ -148,14 +148,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Use your account to study across devices.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
             const SizedBox(height: 24),
             _inputField("Username", usernameController),
             const SizedBox(height: 15),

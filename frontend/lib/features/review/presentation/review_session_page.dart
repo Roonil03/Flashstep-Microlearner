@@ -310,11 +310,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   'Starting in $_countdown…',
                   style: theme.textTheme.titleLarge,
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'One question at a time. You set the pace.',
-                  textAlign: TextAlign.center,
-                ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _finishCountdown,
@@ -352,15 +347,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'RECALL / CHECK / REFLECT',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: tone.accent,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
                   Wrap(
                     alignment: WrapAlignment.spaceBetween,
                     spacing: 12,
@@ -547,7 +533,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '$_index / ${_cards.length} complete · Every recall counts.',
+                    '$_index / ${_cards.length} complete',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: context.studyTone(StudyArea.library).ink,

@@ -126,12 +126,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: theme.textTheme.headlineMedium,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to keep your decks and reviews in sync.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge,
-                  ),
                   const SizedBox(height: 32),
                   TextFormField(
                     controller: _emailController,
