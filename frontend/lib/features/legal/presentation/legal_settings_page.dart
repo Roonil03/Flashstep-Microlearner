@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/app_version.dart';
 import '../../../app/router.dart';
+import '../../settings/presentation/account_sections.dart';
 
 class LegalSettingsPage extends StatelessWidget {
   const LegalSettingsPage({super.key});
@@ -61,32 +62,34 @@ class LegalSettingsPage extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                ListTile(
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Privacy Policy'),
-                  subtitle: const Text('Current information placeholder'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                const AccountSectionHeader(
+                  title: 'Policies & licenses',
+                  icon: Icons.description_outlined,
+                ),
+                const SizedBox(height: 20),
+                AccountSettingsRow(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy Policy',
+                  subtitle: 'Current information placeholder',
                   onTap:
                       () => Navigator.of(
                         context,
                       ).pushNamed(AppRoutes.privacyPolicy),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('Terms of Service'),
-                  subtitle: const Text('Current information placeholder'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                AccountSettingsRow(
+                  icon: Icons.description_outlined,
+                  title: 'Terms of Service',
+                  subtitle: 'Current information placeholder',
                   onTap:
                       () => Navigator.of(
                         context,
                       ).pushNamed(AppRoutes.termsOfService),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.code_outlined),
-                  title: const Text('Open-source licenses'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                AccountSettingsRow(
+                  icon: Icons.code_outlined,
+                  title: 'Open-source licenses',
                   onTap: () {
                     _registerProjectLicenses();
                     showLicensePage(
@@ -97,11 +100,10 @@ class LegalSettingsPage extends StatelessWidget {
                   },
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.bug_report_outlined),
-                  title: const Text('Report a Bug'),
-                  subtitle: const Text('Submit a public GitHub issue'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                AccountSettingsRow(
+                  icon: Icons.bug_report_outlined,
+                  title: 'Report a Bug',
+                  subtitle: 'Submit a public GitHub issue',
                   onTap:
                       () =>
                           Navigator.of(context).pushNamed(AppRoutes.bugReport),

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/network/providers.dart';
+import '../../settings/presentation/account_sections.dart';
 
 class BugReportPage extends ConsumerStatefulWidget {
   const BugReportPage({super.key});
@@ -226,6 +227,19 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
     );
   }
 
+  Widget _reportHeading(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Semantics(
+      header: true,
+      child: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -244,20 +258,19 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          'Before you post',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
+                      const AccountSectionHeader(
+                        title: 'Before you post',
+                        icon: Icons.bug_report_outlined,
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         'Reports are posted publicly to GitHub. Include only information you want everyone to see. No personal or diagnostic data is attached automatically.',
                       ),
                       const SizedBox(height: 20),
+                      _reportHeading('The issue'),
                       _field('Title (required)', _title, 5, 120, lines: 1),
                       _field('Description (required)', _description, 20, 4000),
+                      _reportHeading('What happened'),
                       _field(
                         'Steps to reproduce (optional)',
                         _reproduction,

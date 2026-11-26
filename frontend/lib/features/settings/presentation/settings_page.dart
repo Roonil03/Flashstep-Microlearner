@@ -10,6 +10,8 @@ import 'package:flutter/cupertino.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/study_colors.dart';
+import 'account_sections.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/storage/session_storage.dart';
 import '../../../core/storage/theme_storage.dart';
@@ -88,7 +90,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _MainSettings extends StatelessWidget {
+class _MainSettings extends ConsumerWidget {
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
@@ -102,102 +104,97 @@ class _MainSettings extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
+        child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
               children: [
+                FutureBuilder<String?>(
+                  future: ref.read(sessionStorageProvider).readUsername(),
+                  builder:
+                      (context, snapshot) => AccountSectionHeader(
+                        title:
+                            snapshot.data?.isNotEmpty == true
+                                ? snapshot.data!
+                                : 'Your account',
+                        icon: Icons.person_outline_rounded,
+                      ),
+                ),
+                const SizedBox(height: 20),
                 _sectionCard(
-                  theme.colorScheme,
+                  context,
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.person_outline),
-                      title: const Text('Account Settings'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    AccountSettingsRow(
+                      title: 'Account Settings',
+                      subtitle: 'Username, password and account access',
+                      icon: Icons.person_outline,
                       onTap: onAccountTap,
                     ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.settings_suggest_outlined),
-                      title: const Text('System Settings'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _settingsHeading(context, 'Preferences'),
+                _sectionCard(
+                  context,
+                  children: [
+                    AccountSettingsRow(
+                      title: 'System Settings',
+                      subtitle: 'Appearance and daily review preferences',
+                      icon: Icons.tune_rounded,
                       onTap: onSystemTap,
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.route_outlined),
-                  title: const Text('Relearn app navigation'),
-                  subtitle: const Text(
-                    'Replay the nine-step guide with safe examples.',
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: onReplayTour,
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.gavel_outlined),
-                  title: const Text('Legal'),
-                  subtitle: const Text(
-                    'Privacy, terms, and open-source licenses',
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.legal),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.bug_report_outlined),
-                  title: const Text('Report a Bug'),
-                  subtitle: const Text('Submit a public GitHub issue'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap:
-                      () =>
-                          Navigator.of(context).pushNamed(AppRoutes.bugReport),
-                ),
-                const SizedBox(height: 24),
-                Column(
+                const SizedBox(height: 20),
+                _settingsHeading(context, 'Help & information'),
+                _sectionCard(
+                  context,
                   children: [
-                    Image.asset(
-                      'assets/LogoWithText_WithoutBG.png',
-                      height: 80,
-                      excludeFromSemantics: true,
-                      cacheHeight: imageDecodeSize(
-                        logicalSize: 80,
-                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
-                          context,
-                        ),
-                        sourceSize: 576,
-                      ),
+                    AccountSettingsRow(
+                      title: 'Legal',
+                      subtitle: 'Privacy, terms, and open-source licenses',
+                      icon: Icons.gavel_outlined,
+                      onTap:
+                          () =>
+                              Navigator.of(context).pushNamed(AppRoutes.legal),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Flashstep Microlearner',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    const Divider(height: 1, indent: 70, endIndent: 16),
+                    AccountSettingsRow(
+                      title: 'Report a Bug',
+                      subtitle: 'Submit a public GitHub issue',
+                      icon: Icons.bug_report_outlined,
+                      onTap:
+                          () => Navigator.of(
+                            context,
+                          ).pushNamed(AppRoutes.bugReport),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Version ${AppVersion.name}',
-                      style: theme.textTheme.bodySmall,
+                    const Divider(height: 1, indent: 70, endIndent: 16),
+                    AccountSettingsRow(
+                      title: 'Relearn app navigation',
+                      subtitle:
+                          'Replay the nine-step guide with safe examples.',
+                      icon: Icons.route_outlined,
+                      onTap: onReplayTour,
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  child: OutlinedButton.icon(
-                    onPressed: onLogout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign Out'),
-                  ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Version ${AppVersion.name}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
@@ -572,6 +569,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
     if (!mounted) return;
 
     if (result == true) {
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username updated successfully')),
       );
@@ -719,8 +717,6 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -731,6 +727,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
         title: const Text('Account Settings'),
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Positioned.fill(
             child: IgnorePointer(
@@ -763,49 +760,50 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
-                child: _sectionCard(
-                  theme.colorScheme,
+                child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Text(
-                        'Account',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    FutureBuilder<String?>(
+                      future: ref.read(sessionStorageProvider).readUsername(),
+                      builder:
+                          (context, snapshot) => AccountSectionHeader(
+                            title:
+                                snapshot.data?.isNotEmpty == true
+                                    ? snapshot.data!
+                                    : 'Your account',
+                            icon: Icons.person_outline_rounded,
+                          ),
                     ),
-                    ListTile(
-                      leading: const Icon(Icons.person_outline),
-                      title: Text(
-                        'Change Username',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    _sectionCard(
+                      context,
+                      children: [
+                        AccountSettingsRow(
+                          title: 'Change Username',
+                          subtitle: 'Update the name on your account',
+                          icon: Icons.person_outline,
+                          onTap: _showChangeUsernameDialog,
                         ),
-                      ),
-                      onTap: _showChangeUsernameDialog,
+                        const Divider(height: 1, indent: 70, endIndent: 16),
+                        AccountSettingsRow(
+                          title: 'Change Password',
+                          subtitle: 'Choose a new sign-in password',
+                          icon: Icons.lock_outline,
+                          onTap: _showChangePasswordDialog,
+                        ),
+                      ],
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.lock_outline),
-                      title: Text(
-                        'Change Password',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    _sectionCard(
+                      context,
+                      children: [
+                        AccountSettingsRow(
+                          title: 'Delete Account',
+                          subtitle: 'Permanently remove your account',
+                          icon: Icons.delete_outline,
+                          destructive: true,
+                          onTap: _showDeleteAccountDialog,
                         ),
-                      ),
-                      onTap: _showChangePasswordDialog,
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.delete_outline),
-                      title: Text(
-                        'Delete Account',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      onTap: _showDeleteAccountDialog,
+                      ],
                     ),
                   ],
                 ),
@@ -1012,14 +1010,20 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Align(
-          alignment: Alignment.topLeft,
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const AccountSectionHeader(
+                  title: 'Study preferences',
+                  subtitle: 'Appearance and review preferences',
+                  icon: Icons.tune_rounded,
+                ),
+                const SizedBox(height: 20),
                 _sectionCard(
-                  theme.colorScheme,
+                  context,
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -1115,7 +1119,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                 ),
                 const SizedBox(height: 16),
                 _sectionCard(
-                  theme.colorScheme,
+                  context,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -1193,12 +1197,14 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 }
 
-Widget _sectionCard(ColorScheme colors, {required List<Widget> children}) {
+Widget _sectionCard(BuildContext context, {required List<Widget> children}) {
+  final colors = Theme.of(context).colorScheme;
+  final tone = context.studyTone(StudyArea.account);
   return Container(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(20),
       color: colors.surfaceContainerLowest,
-      border: Border.all(color: colors.outlineVariant),
+      border: Border.all(color: tone.accent.withValues(alpha: .28)),
     ),
     child: Column(children: children),
   );
@@ -1214,3 +1220,16 @@ String _fontSizeLabel(AppFontSize size) => switch (size) {
   AppFontSize.large => 'Large',
   AppFontSize.extraLarge => 'Extra large',
 };
+
+Widget _settingsHeading(BuildContext context, String title) => Padding(
+  padding: const EdgeInsets.only(left: 4, bottom: 10),
+  child: Semantics(
+    header: true,
+    child: Text(
+      title,
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+    ),
+  ),
+);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/theme/study_colors.dart';
+
 class LegalDocumentPage extends StatefulWidget {
   const LegalDocumentPage.privacy({super.key})
     : title = 'Privacy Policy',
@@ -29,6 +31,7 @@ class _LegalDocumentPageState extends State<LegalDocumentPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tone = context.studyTone(StudyArea.account);
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
@@ -71,14 +74,23 @@ class _LegalDocumentPageState extends State<LegalDocumentPage> {
                               ? block.substring(3)
                               : null;
                       if (heading != null) {
-                        return Semantics(
-                          header: true,
-                          child: SelectableText(
-                            heading,
-                            style:
-                                block.startsWith('# ')
-                                    ? theme.textTheme.headlineMedium
-                                    : theme.textTheme.titleLarge,
+                        return Container(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          decoration: BoxDecoration(
+                            color: tone.fill,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Semantics(
+                            header: true,
+                            child: SelectableText(
+                              heading,
+                              style:
+                                  block.startsWith('# ')
+                                      ? theme.textTheme.headlineMedium
+                                      : theme.textTheme.titleLarge?.copyWith(
+                                        color: tone.ink,
+                                      ),
+                            ),
                           ),
                         );
                       }
