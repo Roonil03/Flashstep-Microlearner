@@ -23,6 +23,8 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 - Expand a chart’s daily values to read the review count or retention for a particular date. Each date is also available individually to assistive technology.
 - In Settings, tap your name to open **Account Settings**, or **System Settings** to change your theme, font size and review limits. **Report a Bug** is under **Help & information**. **Legal** contains the policies and open-source licenses. The centered red **Sign Out** button sits above the full-color Flashstep logo and installed version.
 - Moving between Settings sections keeps your name and review preferences in place. Back returns to your current dashboard, and saved changes update the relevant information on Home.
+- The bug report form asks where the problem happened, what you saw, and what you expected. You can expand an optional field for steps to reproduce it. Before posting, the app asks you to confirm that your report can be public.
+- If the reporting bot cannot send your report, the form keeps your text and offers a link to a new GitHub issue. You can copy your report across and publish it from your own GitHub account.
 - On small screens with enlarged text, deck and card save buttons grow to fit their labels. The deck creation action remains reachable while the keyboard is open.
 
 ## Compatibility

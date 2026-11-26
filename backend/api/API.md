@@ -981,4 +981,11 @@ The maximum request size is 48 KiB. Reproduction steps are optional. A `202`
 response includes a `report_id` and a `message` confirming that GitHub accepted
 the posting request. An identical accepted submission returns the existing ID.
 Invalid fields or missing consent return `400`, a submission limit returns `429`,
-and unavailable delivery returns `503`. [Delivery setup](../../INSTALL.md#public-bug-reporting)
+and unavailable delivery returns `503`. A `503` response with `"code": "bot_unavailable"`
+means the backend lacks its dispatch credential or GitHub explicitly rejected its access,
+with no earlier uncertain or accepted attempt known for that report ID in this process.
+The app can then offer manual filing and prompt the user to check existing Issues first.
+For other `503` responses or a timeout, wait one minute and retry the same report.
+Delivery history expires after 30 days or when the server process restarts. The workflow
+checks existing bot posts for its report ID. Manual posts have no such marker.
+[Delivery setup](../../INSTALL.md#public-bug-reporting)
