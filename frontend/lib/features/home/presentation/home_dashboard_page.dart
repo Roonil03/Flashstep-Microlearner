@@ -380,6 +380,10 @@ class _StudyOverview extends StatelessWidget {
     final theme = Theme.of(context);
     final tone = context.studyTone(StudyArea.study);
     final deck = data.deckOfTheDay;
+    final rawDueCards = data.decks.fold<int>(
+      0,
+      (total, deck) => total + deck.dueCards,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -435,6 +439,8 @@ class _StudyOverview extends StatelessWidget {
                 Text(
                   deck == null
                       ? 'Create a deck or browse public decks to begin.'
+                      : rawDueCards > 0
+                      ? 'Daily review limit reached. $rawDueCards ${rawDueCards == 1 ? 'card is' : 'cards are'} still due. Check review settings to continue.'
                       : 'You are caught up. Check your decks or review settings.',
                   style: TextStyle(color: tone.ink),
                 ),

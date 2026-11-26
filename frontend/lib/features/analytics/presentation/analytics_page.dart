@@ -294,7 +294,7 @@ class _AnalyticsHeroCard extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             data.hasCards
-                ? '${data.totalCards} active cards · ${data.totalDecks} decks · ${data.currentStreak} ${data.currentStreak == 1 ? 'day' : 'days'} streak'
+                ? '${data.totalCards} active ${data.totalCards == 1 ? 'card' : 'cards'} · ${data.totalDecks} ${data.totalDecks == 1 ? 'deck' : 'decks'} · ${data.currentStreak} ${data.currentStreak == 1 ? 'day' : 'days'} streak'
                 : 'Create a deck and review some cards to start building your analytics dashboard.',
             style: theme.textTheme.bodyLarge?.copyWith(color: tone.ink),
           ),
@@ -507,8 +507,20 @@ class _ReviewBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dailyValues = _DailyChartValues(
+      title: 'View daily review counts',
+      values: [
+        for (final point in points)
+          '${_shortDate(point.date)}, ${point.date.year}: ${point.count} ${point.count == 1 ? 'review' : 'reviews'}',
+      ],
+    );
     if (points.isEmpty || points.every((point) => point.count == 0)) {
-      return const _ChartEmptyState(label: 'No review activity yet');
+      return Column(
+        children: [
+          const _ChartEmptyState(label: 'No review activity yet'),
+          if (points.isNotEmpty) dailyValues,
+        ],
+      );
     }
 
     final peak = points.fold<int>(
@@ -543,6 +555,8 @@ class _ReviewBarChart extends StatelessWidget {
             Text(_shortDate(points.last.date)),
           ],
         ),
+        const SizedBox(height: 8),
+        dailyValues,
       ],
     );
   }
@@ -556,8 +570,20 @@ class _AccuracyLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dailyValues = _DailyChartValues(
+      title: 'View daily retention values',
+      values: [
+        for (final point in points)
+          '${_shortDate(point.date)}, ${point.date.year}: ${point.reviewed == 0 ? 'No graded reviews' : '${(point.accuracy * 100).toStringAsFixed(1)}% retention; ${point.correct} of ${point.reviewed} reviews recalled successfully'}',
+      ],
+    );
     if (points.isEmpty || points.every((point) => point.reviewed == 0)) {
-      return const _ChartEmptyState(label: 'No graded reviews yet');
+      return Column(
+        children: [
+          const _ChartEmptyState(label: 'No graded reviews yet'),
+          if (points.isNotEmpty) dailyValues,
+        ],
+      );
     }
 
     final highest = points.fold<double>(
@@ -592,9 +618,36 @@ class _AccuracyLineChart extends StatelessWidget {
             Text(_shortDate(points.last.date)),
           ],
         ),
+        const SizedBox(height: 8),
+        dailyValues,
       ],
     );
   }
+}
+
+class _DailyChartValues extends StatelessWidget {
+  final String title;
+  final List<String> values;
+
+  const _DailyChartValues({required this.title, required this.values});
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    tilePadding: EdgeInsets.zero,
+    childrenPadding: const EdgeInsets.only(bottom: 8),
+    title: Text(title, style: Theme.of(context).textTheme.titleSmall),
+    subtitle: const Text('Dates use UTC.'),
+    children: [
+      for (final value in values)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Semantics(container: true, child: Text(value)),
+          ),
+        ),
+    ],
+  );
 }
 
 class _StateDistributionBar extends StatelessWidget {
