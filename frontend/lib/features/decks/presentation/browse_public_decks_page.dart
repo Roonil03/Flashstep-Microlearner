@@ -1,3 +1,4 @@
+import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,8 +20,6 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
   List<PublicDeckSummary> _decks = const [];
   final Set<String> _downloadingDeckIds = <String>{};
   final TextEditingController _searchController = TextEditingController();
-  int _searchRevision = 0;
-  String _loadedQuery = '';
 
   @override
   void initState() {
@@ -37,9 +36,6 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
   }
 
   Future<void> _loadPublicDecks() async {
-    if (!mounted) return;
-    final revision = ++_searchRevision;
-    final query = _searchController.text.trim();
     setState(() {
       _loading = true;
       _error = null;
@@ -48,25 +44,19 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
     try {
       final decks = await ref
           .read(deckRepositoryProvider)
-          .fetchPublicDecks(query);
-      if (!mounted || revision != _searchRevision) return;
+          .fetchPublicDecks(_searchController.text);
+      if (!mounted) return;
       setState(() {
         _decks = decks;
         _loading = false;
-        _loadedQuery = query;
       });
     } catch (e) {
-      if (!mounted || revision != _searchRevision) return;
+      if (!mounted) return;
       setState(() {
         _error = networkErrorMessage(e);
         _loading = false;
       });
     }
-  }
-
-  void _clearSearch() {
-    _searchController.clear();
-    _loadPublicDecks();
   }
 
   Future<void> _downloadDeck(PublicDeckSummary deck) async {
@@ -180,7 +170,10 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                 suffixIcon: IconButton(
                   tooltip: 'Clear public deck search',
                   icon: const Icon(Icons.clear),
-                  onPressed: _clearSearch,
+                  onPressed: () {
+                    _searchController.clear();
+                    _loadPublicDecks();
+                  },
                 ),
               ),
               onSubmitted: (_) => _loadPublicDecks(),
@@ -260,35 +253,18 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(24),
-                      children: [
-                        const SizedBox(height: 120),
-                        const Icon(Icons.public_off_outlined, size: 52),
-                        const SizedBox(height: 16),
+                      children: const [
+                        SizedBox(height: 120),
+                        Icon(Icons.public_off_outlined, size: 52),
+                        SizedBox(height: 16),
                         Text(
-                          _loadedQuery.isNotEmpty
-                              ? 'No public decks match "$_loadedQuery".'
-                              : 'No public decks available right now.',
+                          'No public decks available right now.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (_loadedQuery.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Try another search or clear it to browse all public decks.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          Center(
-                            child: OutlinedButton.icon(
-                              onPressed: _clearSearch,
-                              icon: const Icon(Icons.clear),
-                              label: const Text('Clear search'),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   );
@@ -299,17 +275,13 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                     itemCount: _decks.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final deck = _decks[index];
                       final downloading = _downloadingDeckIds.contains(deck.id);
-                      return Material(
-                        color: Colors.transparent,
+                      return Card(
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 16,
-                          ),
+                          contentPadding: const EdgeInsets.all(16),
                           title: Text(
                             deck.title,
                             style: const TextStyle(fontWeight: FontWeight.w700),
@@ -339,13 +311,11 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                                               ),
                                             ),
                                           )
-                                          : FilledButton.icon(
+                                          : LearningAction(
                                             onPressed:
                                                 () => _downloadDeck(deck),
-                                            icon: const Icon(Icons.add),
-                                            label: const Text(
-                                              'Add to my decks',
-                                            ),
+                                            icon: Icons.download_rounded,
+                                            label: 'Add to my decks',
                                           ),
                                 ),
                               ],

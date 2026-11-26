@@ -21,6 +21,7 @@ dependencies:
   http: ^1.6.0
   flutter_secure_storage: ^9.2.4
   uuid: ^4.5.1
+  cupertino_icons: ^1.0.8
 
   file_picker: ^11.0.2
   csv: ^8.0.0
@@ -47,7 +48,12 @@ flutter:
     - assets/legal/project_license.txt
     - assets/legal/artwork_license.txt
     - assets/legal/backend_licenses.json
+    - assets/LogoWIthoutText_WithoutBG.png
+    - assets/LogoWithoutText_WhiteBackground.png
+    - assets/LogoWithText.png
+    - assets/LogoWithoutText_WithoutBGLarge.png
     - assets/LogoWithText_WithoutBG.png
+    - assets/LogoWithoutText_WithoutBGLarge_Square.png
     - assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png
 
 flutter_launcher_icons:

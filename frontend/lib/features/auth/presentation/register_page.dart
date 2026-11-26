@@ -126,130 +126,130 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness != Brightness.dark;
-    final theme = isDark ? AppTheme.dark() : AppTheme.light();
     return Theme(
-      data: theme,
+      data: isDark ? AppTheme.dark() : AppTheme.light(),
       child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: isDark ? Colors.black : Colors.white,
         body: SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 468),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Flashstep Microlearner',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: Column(
+                    children: [
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
                         ),
-                        const Divider(height: 32),
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            'Create an account',
-                            style: theme.textTheme.headlineMedium,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Use your account to study across devices.',
-                          style: theme.textTheme.bodyLarge,
-                        ),
-                        const SizedBox(height: 24),
-                        _inputField("Username", usernameController),
-                        const SizedBox(height: 15),
-                        _inputField("Email", emailController),
-                        const SizedBox(height: 15),
-                        _inputField(
-                          "Password",
-                          passwordController,
-                          obscure: true,
-                          hidden: _obscurePassword,
-                          onToggleVisibility:
-                              () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                          errorText: passwordErrorText,
-                        ),
-                        const SizedBox(height: 15),
-                        _inputField(
-                          "Confirm Password",
-                          confirmPasswordController,
-                          obscure: true,
-                          hidden: _obscureConfirmation,
-                          onToggleVisibility:
-                              () => setState(
-                                () =>
-                                    _obscureConfirmation =
-                                        !_obscureConfirmation,
-                              ),
-                        ),
-                        const SizedBox(height: 25),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: isLoading ? null : register,
-                            child:
-                                isLoading
-                                    ? const SizedBox.square(
-                                      dimension: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                    : const Text("Create account"),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'These pages are information placeholders. Account creation does not accept future terms or data practices.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Wrap(
-                          alignment: WrapAlignment.start,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.termsOfService),
-                              child: const Text('Terms of Service'),
+                      ),
+                      const SizedBox(height: 30),
+                      _inputField("Email", emailController, isDark),
+                      const SizedBox(height: 15),
+                      _inputField("Username", usernameController, isDark),
+                      const SizedBox(height: 15),
+                      _inputField(
+                        "Password",
+                        passwordController,
+                        isDark,
+                        obscure: true,
+                        hidden: _obscurePassword,
+                        onToggleVisibility:
+                            () => setState(
+                              () => _obscurePassword = !_obscurePassword,
                             ),
-                            TextButton(
-                              onPressed:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.privacyPolicy),
-                              child: const Text('Privacy Policy'),
+                        errorText: passwordErrorText,
+                      ),
+                      const SizedBox(height: 15),
+                      _inputField(
+                        "Confirm Password",
+                        confirmPasswordController,
+                        isDark,
+                        obscure: true,
+                        hidden: _obscureConfirmation,
+                        onToggleVisibility:
+                            () => setState(
+                              () =>
+                                  _obscureConfirmation = !_obscureConfirmation,
                             ),
-                          ],
+                      ),
+                      const SizedBox(height: 25),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isLoading ? null : register,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                isDark
+                                    ? Colors.lightBlue
+                                    : const Color(0xFF003153),
+                            foregroundColor:
+                                isDark ? Colors.black : Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child:
+                              isLoading
+                                  ? const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  )
+                                  : const Text("Register"),
                         ),
-                        const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () {
-                            if (Navigator.canPop(context)) {
-                              Navigator.pop(context);
-                            } else {
-                              Navigator.pushReplacementNamed(
-                                context,
-                                AppRoutes.login,
-                              );
-                            }
-                          },
-                          child: const Text("Back to login"),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            'Read the current ',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(
+                                  context,
+                                ).pushNamed(AppRoutes.termsOfService),
+                            child: const Text('Terms of Service'),
+                          ),
+                          Text(
+                            ' and ',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(
+                                  context,
+                                ).pushNamed(AppRoutes.privacyPolicy),
+                            child: const Text('Privacy Policy'),
+                          ),
+                          Text(
+                            '. These pages are information placeholders. Account creation does not accept future terms or data practices.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(
+                            context,
+                            AppRoutes.login,
+                          );
+                        },
+                        child: const Text(
+                          "Already have an account? Login here",
+                          style: TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -262,7 +262,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   Widget _inputField(
     String label,
-    TextEditingController controller, {
+    TextEditingController controller,
+    bool isDark, {
     bool obscure = false,
     bool hidden = true,
     VoidCallback? onToggleVisibility,
@@ -283,9 +284,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         final text = (value ?? '').trim();
         if (text.isEmpty) return 'Enter ${label.toLowerCase()}';
         if (label == 'Email' &&
-            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text)) {
+            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text))
           return 'Enter a valid email address';
-        }
         if (label == 'Username') {
           final usernameLength = text.toLowerCase().runes.length;
           if (usernameLength < 3 || usernameLength > 50) {
@@ -294,12 +294,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         }
         if (obscure && text.length < 8) return 'Use at least 8 characters';
         if (label == 'Confirm Password' &&
-            text != passwordController.text.trim()) {
+            text != passwordController.text.trim())
           return 'Passwords do not match';
-        }
         return null;
       },
-
+      style: TextStyle(color: isDark ? Colors.white : Colors.black),
       decoration: InputDecoration(
         labelText: label,
         suffixIcon:
@@ -314,7 +313,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                 )
                 : null,
-
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         errorText: errorText,
       ),
     );

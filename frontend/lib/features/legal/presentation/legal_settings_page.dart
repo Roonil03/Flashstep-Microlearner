@@ -54,61 +54,52 @@ class LegalSettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Legal')),
       body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Privacy Policy'),
-                  subtitle: const Text('Current information placeholder'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pushNamed(AppRoutes.privacyPolicy),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('Terms of Service'),
-                  subtitle: const Text('Current information placeholder'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pushNamed(AppRoutes.termsOfService),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.code_outlined),
-                  title: const Text('Open-source licenses'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    _registerProjectLicenses();
-                    showLicensePage(
-                      context: context,
-                      applicationName: 'Flashstep Microlearner',
-                      applicationVersion: AppVersion.name,
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.bug_report_outlined),
-                  title: const Text('Report a Bug'),
-                  subtitle: const Text('Submit a public GitHub issue'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap:
-                      () =>
-                          Navigator.of(context).pushNamed(AppRoutes.bugReport),
-                ),
-              ],
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy Policy'),
+              subtitle: const Text('Current information placeholder'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap:
+                  () =>
+                      Navigator.of(context).pushNamed(AppRoutes.privacyPolicy),
             ),
-          ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('Terms of Service'),
+              subtitle: const Text('Current information placeholder'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap:
+                  () =>
+                      Navigator.of(context).pushNamed(AppRoutes.termsOfService),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.code_outlined),
+              title: const Text('Open-source licenses'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                _registerProjectLicenses();
+                showLicensePage(
+                  context: context,
+                  applicationName: 'Flashstep Microlearner',
+                  applicationVersion: AppVersion.name,
+                );
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Report a Bug'),
+              subtitle: const Text('Submit a public GitHub issue'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap:
+                  () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
+            ),
+          ],
         ),
       ),
     );

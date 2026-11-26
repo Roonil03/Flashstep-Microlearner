@@ -3,7 +3,6 @@ import '../../auth/data/auth_api.dart';
 import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
-import '../../../core/widgets/image_decode_size.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -104,105 +103,89 @@ class _MainSettings extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _sectionCard(
-                  theme.colorScheme,
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.person_outline),
-                      title: const Text('Account Settings'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: onAccountTap,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.settings_suggest_outlined),
-                      title: const Text('System Settings'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: onSystemTap,
-                    ),
-                  ],
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _sectionCard(
+            isDark,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Account Settings'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: onAccountTap,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.settings_suggest_outlined),
+                title: const Text('System Settings'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: onSystemTap,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.route_outlined),
+            title: const Text('Relearn app navigation'),
+            subtitle: const Text(
+              'Replay the nine-step guide with safe examples.',
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: onReplayTour,
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text('Legal'),
+            subtitle: const Text('Privacy, terms, and open-source licenses'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.legal),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Report a Bug'),
+            subtitle: const Text('Submit a public GitHub issue'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
+          ),
+          const SizedBox(height: 24),
+          Column(
+            children: [
+              Image.asset('assets/LogoWithText_WithoutBG.png', height: 80),
+              const SizedBox(height: 8),
+              Text(
+                'Flashstep Microlearner',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.route_outlined),
-                  title: const Text('Relearn app navigation'),
-                  subtitle: const Text(
-                    'Replay the nine-step guide with safe examples.',
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: onReplayTour,
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.gavel_outlined),
-                  title: const Text('Legal'),
-                  subtitle: const Text(
-                    'Privacy, terms, and open-source licenses',
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.legal),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.bug_report_outlined),
-                  title: const Text('Report a Bug'),
-                  subtitle: const Text('Submit a public GitHub issue'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap:
-                      () =>
-                          Navigator.of(context).pushNamed(AppRoutes.bugReport),
-                ),
-                const SizedBox(height: 24),
-                Column(
-                  children: [
-                    Image.asset(
-                      'assets/LogoWithText_WithoutBG.png',
-                      height: 80,
-                      excludeFromSemantics: true,
-                      cacheHeight: imageDecodeSize(
-                        logicalSize: 80,
-                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
-                          context,
-                        ),
-                        sourceSize: 576,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Flashstep Microlearner',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Version ${AppVersion.name}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  child: OutlinedButton.icon(
-                    onPressed: onLogout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign Out'),
-                  ),
-                ),
-              ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Version ${AppVersion.name}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign Out'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    isDark ? Colors.red.shade400 : Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -218,11 +201,7 @@ class _AccountSettings extends ConsumerStatefulWidget {
 }
 
 class _AccountSettingsState extends ConsumerState<_AccountSettings> {
-  String _messageFromError(Object error) {
-    return error is AuthApiException
-        ? error.message
-        : networkErrorMessage(error);
-  }
+  String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
 
   Future<void> _showChangePasswordDialog() async {
     final result = await showDialog<bool>(
@@ -309,20 +288,15 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
+                            color: Colors.red.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Theme.of(context).colorScheme.error,
+                              color: Colors.red.withOpacity(0.2),
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: TextStyle(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
-                            ),
+                            style: const TextStyle(color: Colors.red),
                           ),
                         ),
                       ],
@@ -515,20 +489,15 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
+                            color: Colors.red.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Theme.of(context).colorScheme.error,
+                              color: Colors.red.withOpacity(0.2),
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: TextStyle(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
-                            ),
+                            style: const TextStyle(color: Colors.red),
                           ),
                         ),
                       ],
@@ -641,20 +610,15 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
+                            color: Colors.red.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Theme.of(context).colorScheme.error,
+                              color: Colors.red.withOpacity(0.2),
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: TextStyle(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
-                            ),
+                            style: const TextStyle(color: Colors.red),
                           ),
                         ),
                       ],
@@ -678,8 +642,8 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                      foregroundColor: Theme.of(context).colorScheme.onError,
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
                     ),
                     onPressed: isDeleting ? null : submit,
                     child:
@@ -720,6 +684,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -743,13 +708,6 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     child: Image.asset(
                       'assets/LogoWithText_WithoutBG.png',
                       width: 320,
-                      cacheWidth: imageDecodeSize(
-                        logicalSize: 320,
-                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
-                          context,
-                        ),
-                        sourceSize: 1056,
-                      ),
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -764,7 +722,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
                 child: _sectionCard(
-                  theme.colorScheme,
+                  isDark,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -997,6 +955,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final themeMode = ref.watch(appThemeModeProvider);
     final fontSize = ref.watch(appFontSizeProvider);
 
@@ -1019,7 +978,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionCard(
-                  theme.colorScheme,
+                  isDark,
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -1115,7 +1074,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                 ),
                 const SizedBox(height: 16),
                 _sectionCard(
-                  theme.colorScheme,
+                  isDark,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -1193,20 +1152,17 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 }
 
-Widget _sectionCard(ColorScheme colors, {required List<Widget> children}) {
+Widget _sectionCard(bool isDark, {required List<Widget> children}) {
   return Container(
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(12),
-      color: colors.surfaceContainerLowest,
-      border: Border.all(color: colors.outlineVariant),
+      color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
     ),
     child: Column(children: children),
   );
 }
 
-String _messageFromError(Object error) {
-  return error is AuthApiException ? error.message : networkErrorMessage(error);
-}
+String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
 
 String _fontSizeLabel(AppFontSize size) => switch (size) {
   AppFontSize.small => 'Small',

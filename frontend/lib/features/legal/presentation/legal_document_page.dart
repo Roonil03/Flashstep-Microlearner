@@ -32,66 +32,60 @@ class _LegalDocumentPageState extends State<LegalDocumentPage> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 660),
-            child: FutureBuilder<String>(
-              future: _document,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'The ${widget.title} could not be loaded. Please try again.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final blocks = snapshot.data!.trim().split(
-                  RegExp(r'\r?\n\s*\r?\n'),
-                );
-                return Scrollbar(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                    itemCount: blocks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final block = blocks[index].trim();
-                      final heading =
-                          block.startsWith('# ')
-                              ? block.substring(2)
-                              : block.startsWith('## ')
-                              ? block.substring(3)
-                              : null;
-                      if (heading != null) {
-                        return Semantics(
-                          header: true,
-                          child: SelectableText(
-                            heading,
-                            style:
-                                block.startsWith('# ')
-                                    ? theme.textTheme.headlineMedium
-                                    : theme.textTheme.titleLarge,
-                          ),
-                        );
-                      }
-                      return SelectableText(
-                        block,
-                        style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-                      );
-                    },
+        child: FutureBuilder<String>(
+          future: _document,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'The ${widget.title} could not be loaded. Please try again.',
+                    textAlign: TextAlign.center,
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final blocks = snapshot.data!.trim().split(
+              RegExp(r'\r?\n\s*\r?\n'),
+            );
+            return Scrollbar(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                itemCount: blocks.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final block = blocks[index].trim();
+                  final heading =
+                      block.startsWith('# ')
+                          ? block.substring(2)
+                          : block.startsWith('## ')
+                          ? block.substring(3)
+                          : null;
+                  if (heading != null) {
+                    return Semantics(
+                      header: true,
+                      child: SelectableText(
+                        heading,
+                        style:
+                            block.startsWith('# ')
+                                ? theme.textTheme.headlineMedium
+                                : theme.textTheme.titleLarge,
+                      ),
+                    );
+                  }
+                  return SelectableText(
+                    block,
+                    style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                  );
+                },
+              ),
+            );
+          },
         ),
       ),
     );
