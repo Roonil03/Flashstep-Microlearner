@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/study_colors.dart';
+import '../../../core/widgets/flashstep_logo.dart';
 
 /// A centered account form that can grow and scroll with the keyboard or text.
 class AccountFrame extends StatelessWidget {
@@ -77,7 +78,7 @@ class AccountFrame extends StatelessWidget {
   }
 }
 
-/// Flashcards echo the product's purpose without adding instructional copy.
+/// Identifies Flashstep on both account forms.
 class AccountMark extends StatelessWidget {
   const AccountMark({super.key});
 
@@ -86,45 +87,7 @@ class AccountMark extends StatelessWidget {
     final tone = context.studyTone(StudyArea.account);
     return Column(
       children: [
-        ExcludeSemantics(
-          child: SizedBox(
-            width: 96,
-            height: 76,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Transform.rotate(
-                  angle: -.16,
-                  child: Container(
-                    width: 70,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: tone.fill,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: tone.accent, width: 2),
-                    ),
-                  ),
-                ),
-                Transform.rotate(
-                  angle: .10,
-                  child: Container(
-                    width: 70,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: tone.accent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.bolt_rounded,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      size: 36,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        FlashstepLogo(size: 64, color: tone.accent),
         const SizedBox(height: 12),
         Text(
           'Flashstep Microlearner',

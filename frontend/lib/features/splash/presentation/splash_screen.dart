@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/study_colors.dart';
 import '../../../core/network/providers.dart';
-import '../../../core/widgets/image_decode_size.dart';
+import '../../../core/widgets/flashstep_logo.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -69,18 +69,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                       ),
                     ],
                   ),
-                  child: Image.asset(
-                    'assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png',
-                    width: 136,
-                    height: 136,
-                    excludeFromSemantics: true,
-                    cacheWidth: imageDecodeSize(
-                      logicalSize: 136,
-                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-                      sourceSize: 768,
-                    ),
-                    color: tone.ink,
-                  ),
+                  child: FlashstepLogo(size: 136, color: tone.ink),
                 ),
                 const SizedBox(height: 24),
                 Text(
