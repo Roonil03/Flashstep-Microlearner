@@ -99,15 +99,6 @@ class LegalSettingsPage extends StatelessWidget {
                     );
                   },
                 ),
-                const Divider(height: 1),
-                AccountSettingsRow(
-                  icon: Icons.bug_report_outlined,
-                  title: 'Report a Bug',
-                  subtitle: 'Submit a public GitHub issue',
-                  onTap:
-                      () =>
-                          Navigator.of(context).pushNamed(AppRoutes.bugReport),
-                ),
               ],
             ),
           ),
