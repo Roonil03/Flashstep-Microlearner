@@ -286,24 +286,6 @@ class _ProfileSettingsEntry extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final sheet = dark ? const Color(0xFF603329) : const Color(0xFFFFC6A1);
     final lettering = dark ? const Color(0xFFFFE9D7) : const Color(0xFF402419);
-    final avatar =
-        name.isEmpty
-            ? Icon(Icons.person_outline, color: sheet)
-            : Padding(
-              padding: const EdgeInsets.all(4),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  name.characters.first.toUpperCase(),
-                  style: TextStyle(
-                    color: sheet,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            );
-
     return Semantics(
       button: true,
       label: name.isEmpty ? 'Account Settings' : 'Account Settings, $name',
@@ -320,18 +302,6 @@ class _ProfileSettingsEntry extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: lettering,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: SizedBox(
-                    width: 48,
-                    height: 58,
-                    child: Center(child: avatar),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
