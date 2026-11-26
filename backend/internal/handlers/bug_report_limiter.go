@@ -25,8 +25,18 @@ type bugReportLimiter struct {
 
 type bugReportReservation struct {
 	lastAttempt time.Time
-	accepted    bool
+	outcome     bugReportOutcome
 }
+
+// Once an attempt may have reached GitHub, a later rejection cannot establish
+// that this report was never queued. Keep the strongest evidence for its ID.
+type bugReportOutcome uint8
+
+const (
+	bugReportRejected bugReportOutcome = iota
+	bugReportUncertain
+	bugReportAccepted
+)
 
 type bugReportAttempt struct {
 	account [sha256.Size]byte
@@ -35,7 +45,7 @@ type bugReportAttempt struct {
 
 // Domain-separated HMACs keep account identity private in both process metadata
 // and the public report UUID. Reusing the configured JWT secret requires no new
-// secret; rotating it changes IDs and starts a new durable deduplication scope.
+// secret; rotating it changes IDs, so older issue markers no longer match.
 func bugReportIdentity(key []byte, account uuid.UUID, canonical []byte) (string, [sha256.Size]byte) {
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte("flashstep/bug-report/account/v1\x00"))
@@ -62,7 +72,7 @@ func (l *bugReportLimiter) reserve(id string, account [sha256.Size]byte, now tim
 		}
 	}
 	entry := l.entries[id]
-	if entry != nil && entry.accepted {
+	if entry != nil && entry.outcome == bugReportAccepted {
 		return nil, true, true
 	}
 	if entry != nil && entry.lastAttempt.After(now.Add(-time.Minute)) {
@@ -100,10 +110,26 @@ func (l *bugReportLimiter) reserve(id string, account [sha256.Size]byte, now tim
 	return entry, false, true
 }
 
-func (l *bugReportLimiter) finish(id string, reservation *bugReportReservation, accepted bool) {
+func (l *bugReportLimiter) outcome(id string, now time.Time) bugReportOutcome {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if current := l.entries[id]; current == reservation && accepted {
-		current.accepted = true
+	if entry := l.entries[id]; entry != nil {
+		if entry.lastAttempt.After(now.Add(-bugReportMetadataTTL)) {
+			return entry.outcome
+		}
+		delete(l.entries, id)
 	}
+	return bugReportRejected
+}
+
+func (l *bugReportLimiter) finish(id string, reservation *bugReportReservation, outcome bugReportOutcome) bugReportOutcome {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if current := l.entries[id]; current == reservation {
+		if outcome > current.outcome {
+			current.outcome = outcome
+		}
+		return current.outcome
+	}
+	return outcome
 }
