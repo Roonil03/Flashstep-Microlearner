@@ -23,7 +23,7 @@ The goal of the project is to make short, repeatable learning sessions feel smoo
 
 Screenshots from the Android app with sample study decks. Select an image to view it at a larger size.
 
-<table>
+<table align="center">
   <tr>
     <th>Home · Light</th>
     <th>Home · Dark</th>
