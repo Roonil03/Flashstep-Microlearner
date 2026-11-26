@@ -50,7 +50,17 @@ class App extends ConsumerWidget {
         AppRoutes.register: (_) => const RegisterPage(),
         AppRoutes.home: (_) => const HomeDashboardPage(),
         AppRoutes.analytics: (_) => const AnalyticsPage(),
-        AppRoutes.settings: (_) => const SettingsPage(),
+        AppRoutes.settings: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          final cached = args is SettingsArguments ? args : null;
+          return SettingsPage(
+            initialUsername: cached?.username,
+            initialReviewPreferences: cached?.reviewPreferences,
+            onUsernameSaved: () => ref.invalidate(usernameProvider),
+            onReviewPreferencesSaved:
+                () => ref.invalidate(homeDashboardProvider),
+          );
+        },
         AppRoutes.legal: (_) => const LegalSettingsPage(),
         AppRoutes.bugReport: (_) => const BugReportPage(),
         AppRoutes.privacyPolicy: (_) => const LegalDocumentPage.privacy(),

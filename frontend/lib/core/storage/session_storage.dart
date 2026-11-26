@@ -1,5 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+typedef ReviewPreferenceSnapshot =
+    ({int dailyLimit, bool selectiveDecksOnly, bool bypassSrs});
+
 class SessionStorage {
   static const _tokenKey = 'jwt_token';
   static const _deviceIdKey = 'device_id';
@@ -84,7 +87,7 @@ class SessionStorage {
   }
 
   Future<void> writeDailyReviewLimit(int limit) async {
-    final normalized = limit.clamp(1, 500) as int;
+    final normalized = limit.clamp(1, 500);
     await _storage.write(
       key: _dailyReviewLimitKey,
       value: normalized.toString(),

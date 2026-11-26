@@ -39,7 +39,7 @@ final homePendingSyncCountProvider = StreamProvider.autoDispose
 final usernameProvider = FutureProvider<String>((ref) async {
   final repository = ref.watch(homeRepositoryProvider);
   final username = await repository.getUsername();
-  return username?.isNotEmpty == true ? username! : 'User';
+  return username?.trim() ?? '';
 });
 
 final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
@@ -51,10 +51,13 @@ final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
 final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   ref.watch(homeDataRevisionProvider);
   final repository = ref.watch(homeRepositoryProvider);
-  final sessionStorage = const SessionStorage();
-  final userId = await sessionStorage.readUserId();
-  final username = await ref.watch(usernameProvider.future);
-  final decks = await ref.watch(userDecksProvider.future);
+  final sessionStorage = ref.watch(sessionStorageProvider);
+  final (userId, username, decks) =
+      await (
+        sessionStorage.readUserId(),
+        ref.watch(usernameProvider.future),
+        ref.watch(userDecksProvider.future),
+      ).wait;
   final dashboardStats = await repository.getDashboardStats();
 
   final dailyReviewLimit = await sessionStorage.readDailyReviewLimit();
@@ -77,7 +80,7 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
 
   DeckSummary? deckOfTheDay;
   for (final deck in decks) {
-    if (deck.dueCards > 0) {
+    if (bypass ? deck.totalCards > 0 : deck.dueCards > 0) {
       deckOfTheDay = deck;
       break;
     }
@@ -85,6 +88,12 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   deckOfTheDay ??= decks.isNotEmpty ? decks.first : null;
 
   return HomeDashboardData(
+    reviewDayUtc: dashboardStats.reviewDayUtc,
+    reviewPreferences: (
+      dailyLimit: dailyReviewLimit,
+      selectiveDecksOnly: selective,
+      bypassSrs: bypass,
+    ),
     userId: userId,
     displayName: username,
     decksCount: decks.length,
@@ -147,11 +156,40 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
   }
 
   Future<void> _openSettings() async {
-    await Navigator.of(context).pushNamed(AppRoutes.settings);
+    final dashboard = ref.read(homeDashboardProvider).asData?.value;
+    await Navigator.of(context).pushNamed(
+      AppRoutes.settings,
+      arguments:
+          dashboard == null
+              ? null
+              : (
+                username: dashboard.displayName,
+                reviewPreferences: dashboard.reviewPreferences,
+              ),
+    );
     if (!mounted) return;
-
-    ref.invalidate(homeDashboardProvider);
-    await ref.read(homeDashboardProvider.future);
+    // Writes notify Home directly. Merely visiting Settings needs no new query
+    // unless the clock crossed a due time or the start of a new review day.
+    final now = DateTime.now().toUtc();
+    final currentDashboard =
+        ref.read(homeDashboardProvider).valueOrNull ?? dashboard;
+    final reviewDayUtc = currentDashboard?.reviewDayUtc;
+    final reviewDayExpired =
+        reviewDayUtc != null &&
+        (reviewDayUtc.year != now.year ||
+            reviewDayUtc.month != now.month ||
+            reviewDayUtc.day != now.day);
+    final scheduleExpired =
+        currentDashboard?.decks.any((deck) {
+          final due = deck.nextDueAt;
+          return due != null && !due.isAfter(now);
+        }) ??
+        false;
+    if (reviewDayExpired || scheduleExpired) {
+      ref.read(homeRepositoryProvider).expireScheduledSummaries();
+      ref.invalidate(userDecksProvider);
+      ref.invalidate(homeDashboardProvider);
+    }
   }
 
   Future<void> _openReview([String? deckId]) async {

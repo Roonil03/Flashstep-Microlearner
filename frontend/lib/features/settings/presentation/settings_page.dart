@@ -17,7 +17,18 @@ import '../../../core/storage/session_storage.dart';
 import '../../../core/storage/theme_storage.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  final String? initialUsername;
+  final ReviewPreferenceSnapshot? initialReviewPreferences;
+  final VoidCallback? onUsernameSaved;
+  final VoidCallback? onReviewPreferencesSaved;
+
+  const SettingsPage({
+    super.key,
+    this.initialUsername,
+    this.initialReviewPreferences,
+    this.onUsernameSaved,
+    this.onReviewPreferencesSaved,
+  });
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -27,6 +38,46 @@ enum _SettingsView { main, account, system }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   _SettingsView _view = _SettingsView.main;
+  String _username = '';
+  bool _usernameEdited = false;
+  bool _usernameLoadFailed = false;
+  late final _reviewPreferences = _ReviewPreferences(
+    ref.read(sessionStorageProvider),
+    initial: widget.initialReviewPreferences,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _username = widget.initialUsername?.trim() ?? '';
+    if (widget.initialUsername == null) _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    _usernameLoadFailed = false;
+    try {
+      final username = await ref.read(sessionStorageProvider).readUsername();
+      if (!mounted || _usernameEdited) return;
+      setState(() => _username = username?.trim() ?? '');
+    } catch (_) {
+      // Keep the same unnamed profile fallback when local storage is unavailable.
+      _usernameLoadFailed = true;
+    }
+  }
+
+  void _updateUsername(String username) {
+    setState(() {
+      _usernameEdited = true;
+      _username = username;
+    });
+    widget.onUsernameSaved?.call();
+  }
+
+  void _reviewPreferencesSaved() {
+    // A write may finish after its originating System view was replaced.
+    if (mounted) setState(() {});
+    widget.onReviewPreferencesSaved?.call();
+  }
 
   Future<void> _logout() async {
     try {
@@ -51,6 +102,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   void _goBack() {
+    if (_usernameLoadFailed && !_usernameEdited) _loadUsername();
     setState(() {
       _view = _SettingsView.main;
     });
@@ -61,13 +113,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final Widget view;
     switch (_view) {
       case _SettingsView.account:
-        view = _AccountSettings(onBack: _goBack);
+        view = _AccountSettings(
+          onBack: _goBack,
+          username: _username,
+          onUsernameChanged: _updateUsername,
+        );
         break;
       case _SettingsView.system:
-        view = _SystemSettings(onBack: _goBack);
+        view = _SystemSettings(
+          onBack: _goBack,
+          preferences: _reviewPreferences,
+          onPreferencesSaved: _reviewPreferencesSaved,
+        );
         break;
       case _SettingsView.main:
         view = _MainSettings(
+          username: _username,
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
@@ -90,25 +151,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _MainSettings extends ConsumerStatefulWidget {
+class _MainSettings extends StatelessWidget {
+  final String username;
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
   final VoidCallback onReplayTour;
 
   const _MainSettings({
+    required this.username,
     required this.onAccountTap,
     required this.onSystemTap,
     required this.onLogout,
     required this.onReplayTour,
   });
-
-  @override
-  ConsumerState<_MainSettings> createState() => _MainSettingsState();
-}
-
-class _MainSettingsState extends ConsumerState<_MainSettings> {
-  late final _username = ref.read(sessionStorageProvider).readUsername();
 
   @override
   Widget build(BuildContext context) {
@@ -146,20 +202,13 @@ class _MainSettingsState extends ConsumerState<_MainSettings> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               children: [
-                FutureBuilder<String?>(
-                  future: _username,
-                  builder:
-                      (context, snapshot) => _ProfileSettingsEntry(
-                        name: snapshot.data?.trim() ?? '',
-                        onTap: widget.onAccountTap,
-                      ),
-                ),
+                _ProfileSettingsEntry(name: username, onTap: onAccountTap),
                 const SizedBox(height: 18),
                 entry(
                   'System Settings',
                   'Theme, font size and daily review limits',
                   Icons.tune_rounded,
-                  widget.onSystemTap,
+                  onSystemTap,
                 ),
                 const SizedBox(height: 18),
                 Semantics(
@@ -178,7 +227,7 @@ class _MainSettingsState extends ConsumerState<_MainSettings> {
                   'Relearn app navigation',
                   'Replay the nine-step guide',
                   Icons.route_outlined,
-                  widget.onReplayTour,
+                  onReplayTour,
                 ),
                 const Divider(height: 1),
                 entry(
@@ -202,7 +251,7 @@ class _MainSettingsState extends ConsumerState<_MainSettings> {
                   spacing: 12,
                   children: [
                     TextButton.icon(
-                      onPressed: widget.onLogout,
+                      onPressed: onLogout,
                       icon: const Icon(Icons.logout),
                       label: const Text('Sign Out'),
                     ),
@@ -315,8 +364,14 @@ class _ProfileSettingsEntry extends StatelessWidget {
 
 class _AccountSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
+  final String username;
+  final ValueChanged<String> onUsernameChanged;
 
-  const _AccountSettings({required this.onBack});
+  const _AccountSettings({
+    required this.onBack,
+    required this.username,
+    required this.onUsernameChanged,
+  });
 
   @override
   ConsumerState<_AccountSettings> createState() => _AccountSettingsState();
@@ -554,7 +609,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   }
 
   Future<void> _showChangeUsernameDialog() async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -596,7 +651,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     .changeUsername(username: username);
 
                 if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop(true);
+                Navigator.of(dialogContext).pop(username);
               } catch (e) {
                 if (!dialogContext.mounted) return;
                 setStateDialog(() {
@@ -652,7 +707,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     onPressed:
                         isSubmitting
                             ? null
-                            : () => Navigator.of(dialogContext).pop(false),
+                            : () => Navigator.of(dialogContext).pop(),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
@@ -676,8 +731,8 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
 
     if (!mounted) return;
 
-    if (result == true) {
-      setState(() {});
+    if (result != null) {
+      widget.onUsernameChanged(result);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username updated successfully')),
       );
@@ -870,16 +925,12 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                 constraints: const BoxConstraints(maxWidth: 520),
                 child: Column(
                   children: [
-                    FutureBuilder<String?>(
-                      future: ref.read(sessionStorageProvider).readUsername(),
-                      builder:
-                          (context, snapshot) => AccountSectionHeader(
-                            title:
-                                snapshot.data?.isNotEmpty == true
-                                    ? snapshot.data!
-                                    : 'Your account',
-                            icon: Icons.person_outline_rounded,
-                          ),
+                    AccountSectionHeader(
+                      title:
+                          widget.username.isNotEmpty
+                              ? widget.username
+                              : 'Your account',
+                      icon: Icons.person_outline_rounded,
                     ),
                     const SizedBox(height: 20),
                     _sectionCard(
@@ -924,31 +975,98 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   }
 }
 
+// Route-local storage reads survive section switches without retaining hidden
+// Scaffolds or rebuilding a waiting FutureBuilder on each return.
+class _ReviewPreferences {
+  final SessionStorage storage;
+  int? dailyLimit;
+  bool? selectiveDecksOnly;
+  bool? bypassSrs;
+
+  Future<int>? _dailyLimitFuture;
+  Future<bool>? _selectiveDecksOnlyFuture;
+  Future<bool>? _bypassSrsFuture;
+
+  _ReviewPreferences(this.storage, {ReviewPreferenceSnapshot? initial})
+    : dailyLimit = initial?.dailyLimit,
+      selectiveDecksOnly = initial?.selectiveDecksOnly,
+      bypassSrs = initial?.bypassSrs;
+
+  Future<int> get dailyLimitFuture =>
+      _dailyLimitFuture ??=
+          dailyLimit != null
+              ? Future<int>.value(dailyLimit)
+              : storage.readDailyReviewLimit().then(
+                (value) => dailyLimit ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _dailyLimitFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  Future<bool> get selectiveDecksOnlyFuture =>
+      _selectiveDecksOnlyFuture ??=
+          selectiveDecksOnly != null
+              ? Future<bool>.value(selectiveDecksOnly)
+              : storage.readSelectiveReviewDecksOnly().then(
+                (value) => selectiveDecksOnly ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _selectiveDecksOnlyFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  Future<bool> get bypassSrsFuture =>
+      _bypassSrsFuture ??=
+          bypassSrs != null
+              ? Future<bool>.value(bypassSrs)
+              : storage.readBypassSrs().then(
+                (value) => bypassSrs ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _bypassSrsFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  void updateDailyLimit(int value) {
+    dailyLimit = value;
+    _dailyLimitFuture = Future<int>.value(value);
+  }
+
+  void updateSelectiveDecksOnly(bool value) {
+    selectiveDecksOnly = value;
+    _selectiveDecksOnlyFuture = Future<bool>.value(value);
+  }
+
+  void updateBypassSrs(bool value) {
+    bypassSrs = value;
+    _bypassSrsFuture = Future<bool>.value(value);
+  }
+}
+
 class _SystemSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
+  final _ReviewPreferences preferences;
+  final VoidCallback? onPreferencesSaved;
 
-  const _SystemSettings({required this.onBack});
+  const _SystemSettings({
+    required this.onBack,
+    required this.preferences,
+    this.onPreferencesSaved,
+  });
 
   @override
   ConsumerState<_SystemSettings> createState() => _SystemSettingsState();
 }
 
 class _SystemSettingsState extends ConsumerState<_SystemSettings> {
-  static const _storage = SessionStorage();
-  late Future<int> _dailyLimitFuture;
-  late Future<bool> _selectiveDecksOnlyFuture;
-  late Future<bool> _bypassSrsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _dailyLimitFuture = _storage.readDailyReviewLimit();
-    _selectiveDecksOnlyFuture = _storage.readSelectiveReviewDecksOnly();
-    _bypassSrsFuture = _storage.readBypassSrs();
-  }
+  _ReviewPreferences get _preferences => widget.preferences;
 
   Future<void> _showDailyReviewLimitDialog() async {
-    final currentLimit = await _storage.readDailyReviewLimit();
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    final currentLimit =
+        preferences.dailyLimit ?? await preferences.dailyLimitFuture;
     if (!mounted) {
       return;
     }
@@ -1031,9 +1149,13 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                         Expanded(
                           child: FilledButton(
                             onPressed: () async {
-                              await _storage.writeDailyReviewLimit(
-                                selectedLimit,
-                              );
+                              if (selectedLimit != currentLimit) {
+                                await preferences.storage.writeDailyReviewLimit(
+                                  selectedLimit,
+                                );
+                                preferences.updateDailyLimit(selectedLimit);
+                                onSaved?.call();
+                              }
                               if (!sheetContext.mounted) return;
                               Navigator.of(sheetContext).pop(true);
                             },
@@ -1051,9 +1173,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       },
     );
     if (saved == true && mounted) {
-      setState(() {
-        _dailyLimitFuture = _storage.readDailyReviewLimit();
-      });
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Daily review limit updated')),
       );
@@ -1061,13 +1181,16 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 
   Future<void> _toggleSelectiveDecksOnly(bool value) async {
-    await _storage.writeSelectiveReviewDecksOnly(value);
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    if (value == preferences.selectiveDecksOnly) return;
+    await preferences.storage.writeSelectiveReviewDecksOnly(value);
+    preferences.updateSelectiveDecksOnly(value);
+    onSaved?.call();
 
     if (!mounted) return;
 
-    setState(() {
-      _selectiveDecksOnlyFuture = Future<bool>.value(value);
-    });
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1081,13 +1204,16 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 
   Future<void> _toggleBypassSrs(bool value) async {
-    await _storage.writeBypassSrs(value);
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    if (value == preferences.bypassSrs) return;
+    await preferences.storage.writeBypassSrs(value);
+    preferences.updateBypassSrs(value);
+    onSaved?.call();
 
     if (!mounted) return;
 
-    setState(() {
-      _bypassSrsFuture = Future<bool>.value(value);
-    });
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1243,18 +1369,24 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       ),
                     ),
                     FutureBuilder<int>(
-                      future: _dailyLimitFuture,
+                      future: _preferences.dailyLimitFuture,
+                      initialData: _preferences.dailyLimit,
                       builder:
                           (context, snapshot) => DailyReviewLimitTile(
-                            limit: snapshot.data ?? 25,
+                            limit:
+                                _preferences.dailyLimit ?? snapshot.data ?? 25,
                             onTap: _showDailyReviewLimitDialog,
                           ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
-                      future: _selectiveDecksOnlyFuture,
+                      future: _preferences.selectiveDecksOnlyFuture,
+                      initialData: _preferences.selectiveDecksOnly,
                       builder: (context, snapshot) {
-                        final value = snapshot.data ?? true;
+                        final value =
+                            _preferences.selectiveDecksOnly ??
+                            snapshot.data ??
+                            true;
                         return SwitchListTile.adaptive(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -1274,9 +1406,11 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
-                      future: _bypassSrsFuture,
+                      future: _preferences.bypassSrsFuture,
+                      initialData: _preferences.bypassSrs,
                       builder: (context, snapshot) {
-                        final value = snapshot.data ?? false;
+                        final value =
+                            _preferences.bypassSrs ?? snapshot.data ?? false;
                         return SwitchListTile.adaptive(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,

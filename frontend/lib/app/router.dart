@@ -1,3 +1,8 @@
+import '../core/storage/session_storage.dart';
+
+typedef SettingsArguments =
+    ({String username, ReviewPreferenceSnapshot? reviewPreferences});
+
 class AppRoutes {
   static const String splash = '/splash';
   static const String login = '/login';
