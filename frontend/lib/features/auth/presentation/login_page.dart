@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import 'account_frame.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/network/api_errors.dart';
 import '../data/auth_api.dart';
@@ -104,135 +105,111 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final theme = Theme.of(context);
     return BlocProvider(
       create: (_) => LoginCubit(ref.read(authRepositoryProvider)),
-      child: Scaffold(
-        body: SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Form(
-                  key: _formKey,
-                  child: Builder(
-                    builder: (context) {
-                      final isLoading = context.select<LoginCubit, bool>(
-                        (cubit) => cubit.state,
-                      );
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Flashstep Microlearner',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          const Divider(height: 32),
-                          Semantics(
-                            header: true,
-                            child: Text(
-                              'Welcome back',
-                              style: theme.textTheme.headlineMedium,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Sign in to keep your decks and reviews in sync.',
-                            style: theme.textTheme.bodyLarge,
-                          ),
-                          const SizedBox(height: 32),
-                          TextFormField(
-                            controller: _emailController,
-                            enabled: !isLoading,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.username],
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              hintText: 'name@example.com',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Enter your email';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscure,
-                            enabled: !isLoading,
-                            autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) {
-                              if (!isLoading) _handleLogin(context);
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              suffixIcon: IconButton(
-                                tooltip:
-                                    _obscure
-                                        ? 'Show password'
-                                        : 'Hide password',
-                                onPressed: () {
-                                  setState(() {
-                                    _obscure = !_obscure;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscure
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                ),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Enter your password';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            child: FilledButton(
-                              onPressed:
-                                  isLoading
-                                      ? null
-                                      : () => _handleLogin(context),
-
-                              child:
-                                  isLoading
-                                      ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                      : const Text('Log in'),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () {
-                                Navigator.of(
-                                  context,
-                                ).pushNamed(AppRoutes.register);
-                              },
-                              child: const Text('Create an account'),
-                            ),
-                          ),
-                        ],
-                      );
+      child: AccountFrame(
+        child: Form(
+          key: _formKey,
+          child: Builder(
+            builder: (context) {
+              final isLoading = context.select<LoginCubit, bool>(
+                (cubit) => cubit.state,
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AccountMark(),
+                  const SizedBox(height: 24),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      'Welcome back',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to keep your decks and reviews in sync.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 32),
+                  TextFormField(
+                    controller: _emailController,
+                    enabled: !isLoading,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'name@example.com',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter your email';
+                      }
+                      return null;
                     },
                   ),
-                ),
-              ),
-            ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscure,
+                    enabled: !isLoading,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) {
+                      if (!isLoading) _handleLogin(context);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      suffixIcon: IconButton(
+                        tooltip: _obscure ? 'Show password' : 'Hide password',
+                        onPressed: () {
+                          setState(() {
+                            _obscure = !_obscure;
+                          });
+                        },
+                        icon: Icon(
+                          _obscure ? Icons.visibility_off : Icons.visibility,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    child: FilledButton(
+                      onPressed: isLoading ? null : () => _handleLogin(context),
+
+                      child:
+                          isLoading
+                              ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('Log in'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.center,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pushNamed(AppRoutes.register);
+                      },
+                      child: const Text('Create an account'),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

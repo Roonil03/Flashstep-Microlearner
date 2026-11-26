@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
+import 'account_frame.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/network/api_errors.dart';
 import '../data/auth_api.dart';
@@ -127,134 +128,106 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness != Brightness.dark;
     final theme = isDark ? AppTheme.dark() : AppTheme.light();
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        body: SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 468),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Flashstep Microlearner',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        const Divider(height: 32),
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            'Create an account',
-                            style: theme.textTheme.headlineMedium,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Use your account to study across devices.',
-                          style: theme.textTheme.bodyLarge,
-                        ),
-                        const SizedBox(height: 24),
-                        _inputField("Username", usernameController),
-                        const SizedBox(height: 15),
-                        _inputField("Email", emailController),
-                        const SizedBox(height: 15),
-                        _inputField(
-                          "Password",
-                          passwordController,
-                          obscure: true,
-                          hidden: _obscurePassword,
-                          onToggleVisibility:
-                              () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                          errorText: passwordErrorText,
-                        ),
-                        const SizedBox(height: 15),
-                        _inputField(
-                          "Confirm Password",
-                          confirmPasswordController,
-                          obscure: true,
-                          hidden: _obscureConfirmation,
-                          onToggleVisibility:
-                              () => setState(
-                                () =>
-                                    _obscureConfirmation =
-                                        !_obscureConfirmation,
-                              ),
-                        ),
-                        const SizedBox(height: 25),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: isLoading ? null : register,
-                            child:
-                                isLoading
-                                    ? const SizedBox.square(
-                                      dimension: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                    : const Text("Create account"),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'These pages are information placeholders. Account creation does not accept future terms or data practices.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Wrap(
-                          alignment: WrapAlignment.start,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.termsOfService),
-                              child: const Text('Terms of Service'),
-                            ),
-                            TextButton(
-                              onPressed:
-                                  () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.privacyPolicy),
-                              child: const Text('Privacy Policy'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () {
-                            if (Navigator.canPop(context)) {
-                              Navigator.pop(context);
-                            } else {
-                              Navigator.pushReplacementNamed(
-                                context,
-                                AppRoutes.login,
-                              );
-                            }
-                          },
-                          child: const Text("Back to login"),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+    return AccountFrame(
+      theme: theme,
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AccountMark(),
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                'Create an account',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineMedium,
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Use your account to study across devices.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            _inputField("Username", usernameController),
+            const SizedBox(height: 15),
+            _inputField("Email", emailController),
+            const SizedBox(height: 15),
+            _inputField(
+              "Password",
+              passwordController,
+              obscure: true,
+              hidden: _obscurePassword,
+              onToggleVisibility:
+                  () => setState(() => _obscurePassword = !_obscurePassword),
+              errorText: passwordErrorText,
+            ),
+            const SizedBox(height: 15),
+            _inputField(
+              "Confirm Password",
+              confirmPasswordController,
+              obscure: true,
+              hidden: _obscureConfirmation,
+              onToggleVisibility:
+                  () => setState(
+                    () => _obscureConfirmation = !_obscureConfirmation,
+                  ),
+            ),
+            const SizedBox(height: 25),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: isLoading ? null : register,
+                child:
+                    isLoading
+                        ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Text("Create account"),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'These pages are information placeholders. Account creation does not accept future terms or data practices.',
+              style: theme.textTheme.bodySmall,
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(
+                        context,
+                      ).pushNamed(AppRoutes.termsOfService),
+                  child: const Text('Terms of Service'),
+                ),
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(
+                        context,
+                      ).pushNamed(AppRoutes.privacyPolicy),
+                  child: const Text('Privacy Policy'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                } else {
+                  Navigator.pushReplacementNamed(context, AppRoutes.login);
+                }
+              },
+              child: const Text("Back to login"),
+            ),
+          ],
         ),
       ),
     );

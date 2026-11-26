@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/widgets/image_decode_size.dart';
 
@@ -45,7 +46,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tone = context.studyTone(StudyArea.account);
     return Scaffold(
+      backgroundColor: tone.fill,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -53,17 +56,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset(
-                  'assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png',
-                  width: 136,
-                  height: 136,
-                  excludeFromSemantics: true,
-                  cacheWidth: imageDecodeSize(
-                    logicalSize: 136,
-                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-                    sourceSize: 768,
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(color: tone.accent, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tone.accent.withValues(alpha: .2),
+                        offset: const Offset(8, 8),
+                      ),
+                    ],
                   ),
-                  color: theme.colorScheme.onSurface,
+                  child: Image.asset(
+                    'assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png',
+                    width: 136,
+                    height: 136,
+                    excludeFromSemantics: true,
+                    cacheWidth: imageDecodeSize(
+                      logicalSize: 136,
+                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                      sourceSize: 768,
+                    ),
+                    color: tone.ink,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -72,6 +89,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text('Opening your study library'),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: 120,
+                  child: LinearProgressIndicator(
+                    color: tone.accent,
+                    backgroundColor: tone.accent.withValues(alpha: .15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
               ],
             ),
           ),
