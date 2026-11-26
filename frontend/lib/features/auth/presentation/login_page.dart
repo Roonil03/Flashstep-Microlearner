@@ -23,10 +23,10 @@ class LoginCubit extends Cubit<bool> {
         email: email,
         password: password,
       );
-      emit(false);
+      if (!isClosed) emit(false);
       return session.username.isNotEmpty ? session.username : email;
     } catch (e) {
-      emit(false);
+      if (!isClosed) emit(false);
       rethrow;
     }
   }
@@ -57,17 +57,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
-        backgroundColor: const Color(0xFF003153),
-        content: Text(
-          'Welcome Back, $username!',
-          style: const TextStyle(color: Colors.white),
-        ),
+
+        content: Text('Welcome Back, $username!'),
       ),
     );
   }
 
   Future<void> _handleLogin(BuildContext context) async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (context.read<LoginCubit>().state ||
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     try {
@@ -75,30 +73,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
       _showTopSnackBar(context, username);
-      if (!mounted) {
-        return;
-      }
       Navigator.of(
         context,
       ).pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
     } catch (e) {
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
-      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final palette = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
-          backgroundColor:
-              isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
+          backgroundColor: palette.errorContainer,
           content: Text(
             e is AuthApiException ? e.message : networkErrorMessage(e),
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: palette.onErrorContainer),
           ),
         ),
       );
@@ -107,22 +101,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? Colors.black : Colors.white;
-    final greenFieldFill =
-        isDark ? const Color(0xFF063B2E) : const Color(0xFFEAF7EC);
-    final greenTextColor =
-        isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
-    final fieldBorderColor = const Color(0xFF2E8B57);
-    final buttonColor =
-        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
-    final linkBlue = Colors.blueAccent;
+    final theme = Theme.of(context);
     return BlocProvider(
       create: (_) => LoginCubit(ref.read(authRepositoryProvider)),
       child: Scaffold(
-        backgroundColor: backgroundColor,
         body: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: Alignment.topCenter,
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
@@ -138,47 +123,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            'Login',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineMedium?.copyWith(
-                              color: isDark ? Colors.white : Colors.black87,
-                              fontWeight: FontWeight.w700,
+                            'Flashstep Microlearner',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const Divider(height: 32),
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              'Welcome back',
+                              style: theme.textTheme.headlineMedium,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Enter your account details to continue.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.copyWith(
-                              color: isDark ? Colors.white70 : Colors.black54,
-                            ),
+                            'Sign in to keep your decks and reviews in sync.',
+                            style: theme.textTheme.bodyLarge,
                           ),
                           const SizedBox(height: 32),
                           TextFormField(
                             controller: _emailController,
-                            style: TextStyle(color: greenTextColor),
-                            cursorColor: greenTextColor,
+                            enabled: !isLoading,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.username],
+                            decoration: const InputDecoration(
                               labelText: 'Email',
-                              labelStyle: TextStyle(color: greenTextColor),
-                              filled: true,
-                              fillColor: greenFieldFill,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: fieldBorderColor),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: fieldBorderColor,
-                                  width: 2,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                              hintText: 'name@example.com',
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -191,26 +163,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscure,
-                            style: TextStyle(color: greenTextColor),
-                            cursorColor: greenTextColor,
+                            enabled: !isLoading,
+                            autofillHints: const [AutofillHints.password],
+                            onFieldSubmitted: (_) {
+                              if (!isLoading) _handleLogin(context);
+                            },
                             decoration: InputDecoration(
                               labelText: 'Password',
-                              labelStyle: TextStyle(color: greenTextColor),
-                              filled: true,
-                              fillColor: greenFieldFill,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: fieldBorderColor),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: fieldBorderColor,
-                                  width: 2,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
                               suffixIcon: IconButton(
-                                tooltip: _obscure ? 'Show password' : 'Hide password',
+                                tooltip:
+                                    _obscure
+                                        ? 'Show password'
+                                        : 'Hide password',
                                 onPressed: () {
                                   setState(() {
                                     _obscure = !_obscure;
@@ -220,7 +184,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   _obscure
                                       ? Icons.visibility_off
                                       : Icons.visibility,
-                                  color: greenTextColor,
                                 ),
                               ),
                             ),
@@ -233,19 +196,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                           const SizedBox(height: 24),
                           SizedBox(
-                            height: 50,
-                            child: ElevatedButton(
+                            child: FilledButton(
                               onPressed:
                                   isLoading
                                       ? null
                                       : () => _handleLogin(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
+
                               child:
                                   isLoading
                                       ? const SizedBox(
@@ -253,28 +209,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                         width: 18,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white,
                                         ),
                                       )
-                                      : const Text('Login'),
+                                      : const Text('Log in'),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Center(
+                          Align(
+                            alignment: Alignment.centerLeft,
                             child: TextButton(
                               onPressed: () {
                                 Navigator.of(
                                   context,
                                 ).pushNamed(AppRoutes.register);
                               },
-                              child: Text(
-                                'Register Here',
-                                style: TextStyle(
-                                  color: linkBlue,
-                                  decoration: TextDecoration.underline,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              child: const Text('Create an account'),
                             ),
                           ),
                         ],
