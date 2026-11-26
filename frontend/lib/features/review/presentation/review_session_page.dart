@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart' as db;
 import '../../../app/router.dart';
+import '../../../core/widgets/ln_study_cards_illustration.dart';
 import 'start_review_page.dart';
 import '../data/review_repository.dart';
+import 'review_rating_row.dart';
 
 class ReviewSessionPage extends ConsumerStatefulWidget {
   final String deckId;
@@ -34,7 +36,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
   Timer? _startupTimer;
   List<db.Card> _cards = const [];
   final _scrollController = ScrollController(keepScrollOffset: false);
-  final _answerHeadingKey = GlobalKey();
   int _questionRevision = 0;
 
   @override
@@ -106,39 +107,22 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
 
   void _revealAnswer() {
     setState(() => _revealed = true);
-    final revision = _questionRevision;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!_isCurrentRoute || revision != _questionRevision || !_revealed) {
-        return;
-      }
-      final headingContext = _answerHeadingKey.currentContext;
-      if (headingContext != null) {
-        await Scrollable.ensureVisible(
-          headingContext,
-          alignment: 0,
-          duration:
-              MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-        );
-      }
-    });
   }
 
   Widget _reviewContent({
     required String heading,
     required String text,
     required TextStyle? textStyle,
-    Key? headingKey,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           heading,
-          key: headingKey,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 12),
@@ -287,10 +271,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
+              constraints: const BoxConstraints(maxWidth: 560),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -302,7 +286,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                       Text(
                         'Card ${_index + 1} of ${_cards.length}',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text('$_index reviewed · ${_cards.length - _index} left'),
@@ -310,6 +294,8 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   ),
                   const SizedBox(height: 12),
                   LinearProgressIndicator(
+                    minHeight: 3,
+                    borderRadius: BorderRadius.circular(2),
                     value: _index / _cards.length,
                     semanticsLabel: 'Session progress',
                     semanticsValue:
@@ -318,6 +304,10 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   const SizedBox(height: 24),
                   Card.outlined(
                     margin: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
@@ -327,7 +317,7 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                             heading: 'Question',
                             text: card.front,
                             textStyle: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                               height: 1.35,
                             ),
                           ),
@@ -339,9 +329,8 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                             _reviewContent(
                               heading: 'Answer',
                               text: card.back,
-                              headingKey: _answerHeadingKey,
                               textStyle: theme.textTheme.titleLarge?.copyWith(
-                                height: 1.4,
+                                height: 1.5,
                               ),
                             ),
                           ] else ...[
@@ -358,7 +347,12 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                   if (!_revealed)
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size(48, 52),
+                        minimumSize: const Size(48, 56),
+                        splashFactory:
+                            MediaQuery.disableAnimationsOf(context)
+                                ? NoSplash.splashFactory
+                                : InkRipple.splashFactory,
+                        animationDuration: Duration.zero,
                       ),
                       onPressed: _revealAnswer,
                       icon: const Icon(Icons.visibility_outlined),
@@ -368,45 +362,25 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
                     Text(
                       'How well did you recall it?',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns =
-                            constraints.maxWidth >= 340 &&
-                                    MediaQuery.textScalerOf(
-                                          context,
-                                        ).scale(16) <=
-                                        22
-                                ? 2
-                                : 1;
-                        final width =
-                            (constraints.maxWidth - (columns - 1) * 12) /
-                            columns;
-                        return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            for (final rating in const [
-                              ('again', 'Again', 'Not yet'),
-                              ('hard', 'Hard', 'With effort'),
-                              ('good', 'Good', 'Recalled it'),
-                              ('easy', 'Easy', 'Without effort'),
-                            ])
-                              SizedBox(
-                                width: width,
-                                child: _ratingButton(
-                                  rating.$1,
-                                  rating.$2,
-                                  rating.$3,
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+                    for (final rating in const [
+                      ('again', 'Again', 'Not yet'),
+                      ('hard', 'Hard', 'With effort'),
+                      ('good', 'Good', 'Recalled it'),
+                      ('easy', 'Easy', 'Without effort'),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: ReviewRatingRow(
+                          label: rating.$2,
+                          description: rating.$3,
+                          onPressed:
+                              _saving ? null : () => _rateCard(rating.$1),
+                        ),
+                      ),
                   ],
                   if (_saving) ...[
                     const SizedBox(height: 16),
@@ -447,23 +421,6 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
     );
   }
 
-  Widget _ratingButton(String value, String label, String description) {
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(48, 64),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      onPressed: _saving ? null : () => _rateCard(value),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-          Text(description, textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
   String _ratingLabel(String rating) => switch (rating) {
     'again' => 'Again',
     'hard' => 'Hard',
@@ -482,11 +439,14 @@ class _ReviewSessionPageState extends ConsumerState<ReviewSessionPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                empty ? Icons.check_circle_outline : Icons.celebration_outlined,
-                size: 60,
-                color: theme.colorScheme.primary,
-              ),
+              if (empty)
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 60,
+                  color: theme.colorScheme.primary,
+                )
+              else
+                const LnStudyCardsIllustration(),
               const SizedBox(height: 16),
               Text(
                 empty ? 'No cards available' : 'Review complete',

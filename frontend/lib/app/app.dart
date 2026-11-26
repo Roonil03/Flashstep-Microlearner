@@ -84,7 +84,26 @@ class _PlaceholderPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: Center(
-        child: Text(title, style: Theme.of(context).textTheme.headlineMedium),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('This page could not be opened.'),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    Navigator.pushReplacementNamed(context, AppRoutes.splash);
+                  }
+                },
+                child: const Text('Return to Flashstep'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

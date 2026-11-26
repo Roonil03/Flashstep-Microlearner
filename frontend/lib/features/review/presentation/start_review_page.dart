@@ -127,66 +127,84 @@ class StartReviewPage extends ConsumerWidget {
               0,
               (total, deck) => total + deck.dueCount,
             );
-            return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              itemCount: decks.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Choose a deck',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$available card${available == 1 ? '' : 's'} available across ${decks.length} deck${decks.length == 1 ? '' : 's'}.',
-                      ),
-                    ],
-                  );
-                }
-                final deck = decks[index - 1];
-                return Card.outlined(
-                  margin: EdgeInsets.zero,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          deck.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${deck.dueCount} card${deck.dueCount == 1 ? '' : 's'} available',
-                        ),
-                        const SizedBox(height: 20),
-                        Semantics(
-                          label: 'Start review for ${deck.title}',
-                          excludeSemantics: true,
-                          button: true,
-                          onTap: () => _start(context, deck),
-                          child: FilledButton.icon(
-                            onPressed: () => _start(context, deck),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Start review'),
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size(48, 48),
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+                  itemCount: decks.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'YOUR NEXT SESSION',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              letterSpacing: 1.2,
+                              color: colors.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Choose a deck',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$available card${available == 1 ? '' : 's'} available across ${decks.length} deck${decks.length == 1 ? '' : 's'}.',
+                          ),
+                        ],
+                      );
+                    }
+                    final deck = decks[index - 1];
+                    return Card.outlined(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(color: colors.outlineVariant),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              deck.title,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${deck.dueCount} card${deck.dueCount == 1 ? '' : 's'} available',
+                            ),
+                            const SizedBox(height: 20),
+                            Semantics(
+                              label: 'Start review for ${deck.title}',
+                              excludeSemantics: true,
+                              button: true,
+                              onTap: () => _start(context, deck),
+                              child: FilledButton.icon(
+                                onPressed: () => _start(context, deck),
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                label: const Text('Start review'),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size(48, 56),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                      ),
+                    );
+                  },
+                ),
+              ),
             );
           },
         ),

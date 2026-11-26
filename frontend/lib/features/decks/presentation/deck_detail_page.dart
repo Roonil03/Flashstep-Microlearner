@@ -381,13 +381,11 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
   Widget build(BuildContext context) {
     final repo = ref.read(deckRepositoryProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
 
-    final backgroundColor = isDark ? Colors.black : Colors.white;
-    final greenTextColor =
-        isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
-    final buttonColor =
-        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final greenTextColor = colors.onSurface;
+    final buttonColor = colors.primary;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -400,11 +398,6 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
         ),
         title: const Text('Deck'),
         actions: [
-          IconButton(
-            tooltip: 'Start review',
-            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.review),
-            icon: const Icon(Icons.school_outlined),
-          ),
           IconButton(
             tooltip: 'Sync now',
             onPressed: () => ref.read(deckSyncServiceProvider).syncNow(),
@@ -453,11 +446,8 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color:
-                                    isDark
-                                        ? const Color(0xFF1A2D3D)
-                                        : const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(12),
+                                color: colors.surfaceContainerLow,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,6 +466,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                         ),
                                       ),
                                       PopupMenuButton<_DeckDetailAction>(
+                                        tooltip: 'Deck actions',
                                         onSelected:
                                             (action) =>
                                                 _handleDeckAction(action, deck),
@@ -515,7 +506,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                     deck.description ?? 'No description yet.',
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.textTheme.bodySmall?.color
-                                          ?.withOpacity(0.8),
+                                          ?.withValues(alpha: 0.8),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -536,13 +527,22 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    onPressed:
+                                        () => Navigator.of(
+                                          context,
+                                        ).pushNamed(AppRoutes.review),
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: const Text('Start review'),
+                                  ),
                                   if (hasReachedLimit) ...[
                                     const SizedBox(height: 12),
                                     Text(
                                       'This deck already has the maximum 50 cards.',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
-                                            color: Colors.redAccent,
+                                            color: colors.error,
                                             fontWeight: FontWeight.w600,
                                           ),
                                     ),
@@ -556,60 +556,40 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                               child: Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  color:
-                                      isDark
-                                          ? const Color(0xFF111827)
-                                          : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: colors.surface,
                                   border: Border.all(
-                                    color:
-                                        isDark
-                                            ? Colors.white12
-                                            : const Color(0xFFE3E3E3),
+                                    color: colors.outlineVariant,
                                   ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Add card',
-                                                style: theme
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Limit: ${DeckRepository.maxCardsPerDeck} cards per deck',
-                                                style:
-                                                    theme.textTheme.bodySmall,
-                                              ),
-                                            ],
-                                          ),
+                                    Semantics(
+                                      header: true,
+                                      child: Text(
+                                        'Add card',
+                                        style: theme.textTheme.titleLarge,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Keep each card focused on one idea.',
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            hasReachedLimit || _loading
+                                                ? null
+                                                : _openCsvImport,
+                                        icon: const Icon(
+                                          Icons.upload_file_outlined,
                                         ),
-                                        const SizedBox(width: 12),
-                                        LearningAction(
-                                          onPressed:
-                                              (hasReachedLimit || _loading)
-                                                  ? null
-                                                  : _openCsvImport,
-                                          icon: Icons.upload_file_outlined,
-                                          label: 'Import CSV',
-                                        ),
-                                      ],
+                                        label: const Text('Import CSV'),
+                                      ),
                                     ),
                                     const SizedBox(height: 16),
                                     TextFormField(
@@ -661,14 +641,14 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                     const SizedBox(height: 16),
                                     SizedBox(
                                       height: 50,
-                                      child: ElevatedButton(
+                                      child: FilledButton(
                                         onPressed:
                                             (_loading || hasReachedLimit)
                                                 ? null
                                                 : _addCard,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: buttonColor,
-                                          foregroundColor: Colors.white,
+                                          foregroundColor: colors.onPrimary,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
                                               14,
@@ -699,7 +679,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Cards in this deck',
+                              'Your cards',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
@@ -731,16 +711,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                   return Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(18),
-                                      color:
-                                          isDark
-                                              ? const Color(0xFF111827)
-                                              : Colors.white,
-                                      border: Border.all(
-                                        color:
-                                            isDark
-                                                ? Colors.white12
-                                                : const Color(0xFFE8E8E8),
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: colors.outlineVariant,
+                                        ),
                                       ),
                                     ),
                                     child: Column(
@@ -764,6 +738,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                               ),
                                             ),
                                             PopupMenuButton<_CardMenuAction>(
+                                              tooltip: 'Card actions',
                                               onSelected:
                                                   (action) => _handleCardAction(
                                                     action,
@@ -1058,7 +1033,7 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.08),
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

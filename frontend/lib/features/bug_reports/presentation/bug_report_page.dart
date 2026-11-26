@@ -214,11 +214,7 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
         maxLines: lines == 1 ? 1 : 8,
         maxLength: maximum,
         textCapitalization: TextCapitalization.sentences,
-        decoration: InputDecoration(
-          labelText: label,
-          alignLabelWithHint: true,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: InputDecoration(labelText: label, alignLabelWithHint: true),
         autovalidateMode: AutovalidateMode.onUserInteraction,
         validator: (value) {
           final length = (value ?? '').trim().runes.length;
@@ -237,65 +233,86 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Report a Bug')),
         body: SafeArea(
-          child: Form(
-            key: _form,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Reports are posted publicly to GitHub. Include only information you want everyone to see. No personal or diagnostic data is attached automatically.',
-                  ),
-                  const SizedBox(height: 20),
-                  _field('Title (required)', _title, 5, 120, lines: 1),
-                  _field('Description (required)', _description, 20, 4000),
-                  _field(
-                    'Steps to reproduce (optional)',
-                    _reproduction,
-                    0,
-                    3000,
-                  ),
-                  _field('Expected behavior (required)', _expected, 5, 2000),
-                  _field('Actual behavior (required)', _actual, 5, 2000),
-                  if (_error != null || _success != null) ...[
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _error ?? _success!,
-                        style: TextStyle(
-                          color:
-                              _error == null
-                                  ? null
-                                  : Theme.of(context).colorScheme.error,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Form(
+                key: _form,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          'Before you post',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  FilledButton.icon(
-                    onPressed:
-                        _loadingSession ||
-                                (_accountId?.isEmpty ?? true) ||
-                                (_accountToken?.isEmpty ?? true) ||
-                                _sending ||
-                                _confirming ||
-                                _success != null
-                            ? null
-                            : _submit,
-                    icon:
-                        _sending
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Icon(Icons.bug_report_outlined),
-                    label: Text(
-                      _sending ? 'Submitting report…' : 'Review and submit',
-                    ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Reports are posted publicly to GitHub. Include only information you want everyone to see. No personal or diagnostic data is attached automatically.',
+                      ),
+                      const SizedBox(height: 20),
+                      _field('Title (required)', _title, 5, 120, lines: 1),
+                      _field('Description (required)', _description, 20, 4000),
+                      _field(
+                        'Steps to reproduce (optional)',
+                        _reproduction,
+                        0,
+                        3000,
+                      ),
+                      _field(
+                        'Expected behavior (required)',
+                        _expected,
+                        5,
+                        2000,
+                      ),
+                      _field('Actual behavior (required)', _actual, 5, 2000),
+                      if (_error != null || _success != null) ...[
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            _error ?? _success!,
+                            style: TextStyle(
+                              color:
+                                  _error == null
+                                      ? null
+                                      : Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      FilledButton.icon(
+                        onPressed:
+                            _loadingSession ||
+                                    (_accountId?.isEmpty ?? true) ||
+                                    (_accountToken?.isEmpty ?? true) ||
+                                    _sending ||
+                                    _confirming ||
+                                    _success != null
+                                ? null
+                                : _submit,
+                        icon:
+                            _sending
+                                ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Icon(Icons.bug_report_outlined),
+                        label: Text(
+                          _sending ? 'Submitting report…' : 'Review and submit',
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

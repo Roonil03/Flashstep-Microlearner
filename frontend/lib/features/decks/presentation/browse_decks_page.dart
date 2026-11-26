@@ -34,7 +34,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
     super.initState();
     _searchController.addListener(() {
       setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
+        _searchQuery = _searchController.text.trim().toLowerCase();
       });
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -307,20 +307,37 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
-                children: const [
-                  SizedBox(height: 120),
-                  Icon(Icons.style_outlined, size: 52),
-                  SizedBox(height: 16),
+                children: [
+                  const SizedBox(height: 120),
+                  const Icon(Icons.style_outlined, size: 52),
+                  const SizedBox(height: 16),
                   Text(
-                    'No decks yet. Create a deck from Home, or browse public decks below.',
+                    _searchQuery.isNotEmpty
+                        ? 'No decks match "${_searchController.text.trim()}".'
+                        : 'No decks yet. Create a deck from Home, or browse public decks below.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
-                    'Create a deck or download one from the public library.',
+                    _searchQuery.isNotEmpty
+                        ? 'Try another title or clear your search.'
+                        : 'Create a deck or download one from the public library.',
                     textAlign: TextAlign.center,
                   ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _searchController.clear,
+                        icon: const Icon(Icons.clear),
+                        label: const Text('Clear search'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -331,16 +348,24 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               itemCount: decks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final deck = decks[index];
-                return Card(
+                return Material(
+                  color: Colors.transparent,
                   child: Row(
                     children: [
                       Expanded(
                         child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 12,
+                          ),
                           onTap: () => _openDeck(deck.id),
+                          leading: Icon(
+                            Icons.style_outlined,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                           title: Text(
                             deck.title,
                             style: const TextStyle(fontWeight: FontWeight.w700),
