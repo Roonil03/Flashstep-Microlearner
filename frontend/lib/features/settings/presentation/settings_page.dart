@@ -4,7 +4,10 @@ import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import '../../../core/widgets/image_decode_size.dart';
-import '../../../core/widgets/flashstep_logo.dart';
+import '../../home/presentation/home_dashboard_page.dart';
+import '../../decks/data/data_sync_service.dart';
+import '../../decks/data/sync_status.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -42,6 +45,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _username = '';
   bool _usernameEdited = false;
   bool _usernameLoadFailed = false;
+  bool _signingOut = false;
   late final _reviewPreferences = _ReviewPreferences(
     ref.read(sessionStorageProvider),
     initial: widget.initialReviewPreferences,
@@ -81,14 +85,57 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _logout() async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
     try {
-      await ref.read(authRepositoryProvider).logout();
+      final storage = ref.read(sessionStorageProvider);
+      final userId = await storage.readUserId();
+      final token = await storage.readToken();
+      if (userId == null || userId.isEmpty || token == null || token.isEmpty) {
+        throw StateError('Connect and sync before signing out');
+      }
+      final result = await ref.read(deckSyncServiceProvider).syncNow();
+      if (!mounted) return;
+      if (!result.success) {
+        throw StateError(
+          'Connect and sync before signing out. ${result.message}',
+        );
+      }
+      // Read the live bounded queue again: an edit may have arrived during sync.
+      final pending =
+          await ref
+              .read(homeRepositoryProvider)
+              .watchPendingSyncCount(userId)
+              .first;
+      final connection =
+          await ref.read(syncConnectivityProvider).checkConnectivity();
+      final currentUserId = await storage.readUserId();
+      final currentToken = await storage.readToken();
+      if (!mounted) return;
+      final status = ref.read(syncStatusProvider);
+      if (pending != 0 ||
+          !connection.any((value) => value != ConnectivityResult.none) ||
+          currentUserId != userId ||
+          currentToken != token ||
+          status.userId != userId ||
+          status.phase != SyncPhase.success) {
+        throw StateError('Connect and sync before signing out');
+      }
+      await ref
+          .read(authRepositoryProvider)
+          .logout(expectedUserId: userId, expectedToken: token);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_messageFromError(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is StateError ? e.message.toString() : _messageFromError(e),
+          ),
+        ),
+      );
       return;
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
     }
 
     if (!mounted) return;
@@ -133,6 +180,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
+          signingOut: _signingOut,
           onReplayTour:
               () => launchNavigationTour(
                 context,
@@ -152,12 +200,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _MainSettings extends StatelessWidget {
+class _MainSettings extends ConsumerWidget {
   final String username;
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
   final VoidCallback onReplayTour;
+  final bool signingOut;
 
   const _MainSettings({
     required this.username,
@@ -165,12 +214,28 @@ class _MainSettings extends StatelessWidget {
     required this.onSystemTap,
     required this.onLogout,
     required this.onReplayTour,
+    required this.signingOut,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final userId = ref.watch(currentSyncAccountProvider).asData?.value;
+    final pending =
+        ref.watch(homePendingSyncCountProvider(userId)).asData?.value;
+    final status = ref.watch(syncStatusProvider);
+    final accountStatus =
+        userId != null && status.userId == userId ? status : const SyncStatus();
+    final offline = ref.watch(syncConnectionProvider).asData?.value == false;
+    final canLogout =
+        !signingOut &&
+        userId != null &&
+        pending == 0 &&
+        accountStatus.phase == SyncPhase.success &&
+        !offline;
+    final reauthenticate =
+        accountStatus.statusCode == 401 || accountStatus.statusCode == 403;
 
     Widget entry(
       String title,
@@ -249,7 +314,7 @@ class _MainSettings extends StatelessWidget {
                 Column(
                   children: [
                     FilledButton.icon(
-                      onPressed: onLogout,
+                      onPressed: canLogout ? onLogout : null,
                       style: FilledButton.styleFrom(
                         backgroundColor:
                             theme.brightness == Brightness.dark
@@ -267,10 +332,55 @@ class _MainSettings extends StatelessWidget {
                         ),
                       ),
                       icon: const Icon(Icons.logout),
-                      label: const Text('Sign Out'),
+                      label: Text(
+                        signingOut ? 'Syncing before sign out…' : 'Sign Out',
+                      ),
                     ),
+                    if (!canLogout) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Connect and sync before signing out',
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton.icon(
+                        onPressed:
+                            signingOut ||
+                                    accountStatus.phase == SyncPhase.syncing ||
+                                    userId == null
+                                ? null
+                                : () async {
+                                  if (reauthenticate) {
+                                    await Navigator.of(context).pushNamed(
+                                      AppRoutes.login,
+                                      arguments: {'expectedUserId': userId},
+                                    );
+                                  } else {
+                                    await ref
+                                        .read(deckSyncServiceProvider)
+                                        .syncNow();
+                                  }
+                                },
+                        icon: Icon(reauthenticate ? Icons.login : Icons.sync),
+                        label: Text(
+                          reauthenticate ? 'Sign in to sync' : 'Retry sync',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
-                    const FlashstepLogo(size: 72),
+                    Image.asset(
+                      'assets/LogoWithText_WithoutBG.png',
+                      width: 200,
+                      height: 96,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'FlashStep',
+                      cacheWidth: imageDecodeSize(
+                        logicalSize: 200,
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                          context,
+                        ),
+                        sourceSize: 1056,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Version ${AppVersion.name}',

@@ -2,6 +2,7 @@ import '../../../core/network/providers.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
 
@@ -34,6 +35,24 @@ final homePendingSyncCountProvider = StreamProvider.autoDispose
       if (userId == null || userId.isEmpty) return Stream.value(0);
       return ref.watch(homeRepositoryProvider).watchPendingSyncCount(userId);
     });
+
+// Database switches invalidate the account identity before another account's
+// queue or completed sync can be shown.
+final currentSyncAccountProvider = FutureProvider.autoDispose<String?>((ref) {
+  ref.watch(appDatabaseProvider);
+  return ref.watch(sessionStorageProvider).readUserId();
+});
+
+final syncConnectivityProvider = Provider<Connectivity>(
+  (ref) => Connectivity(),
+);
+final syncConnectionProvider = StreamProvider.autoDispose<bool>((ref) async* {
+  final connectivity = ref.watch(syncConnectivityProvider);
+  bool connected(List<ConnectivityResult> results) =>
+      results.any((result) => result != ConnectivityResult.none);
+  yield connected(await connectivity.checkConnectivity());
+  yield* connectivity.onConnectivityChanged.map(connected).distinct();
+});
 
 final usernameProvider = FutureProvider<String>((ref) async {
   final repository = ref.watch(homeRepositoryProvider);
@@ -239,6 +258,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                 backgroundColor: theme.scaffoldBackgroundColor,
                 title: const Text('Home'),
                 actions: [
+                  const _HomeSyncAction(),
                   IconButton(
                     tooltip: 'Analytics',
                     icon: const Icon(Icons.insights_outlined),
@@ -381,6 +401,77 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HomeSyncAction extends ConsumerWidget {
+  const _HomeSyncAction();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId = ref.watch(currentSyncAccountProvider).asData?.value;
+    final pending =
+        ref.watch(homePendingSyncCountProvider(userId)).asData?.value;
+    final reported = ref.watch(syncStatusProvider);
+    final status =
+        userId != null && reported.userId == userId
+            ? reported
+            : const SyncStatus();
+    final offline =
+        ref.watch(syncConnectionProvider).asData?.value == false ||
+        status.phase == SyncPhase.offline;
+    final reauthenticate = status.statusCode == 401 || status.statusCode == 403;
+    final syncing = status.phase == SyncPhase.syncing;
+    final synced =
+        userId != null &&
+        pending == 0 &&
+        status.phase == SyncPhase.success &&
+        !offline;
+    final label =
+        offline
+            ? 'Offline'
+            : syncing
+            ? 'Syncing'
+            : reauthenticate
+            ? 'Sign in to sync'
+            : status.phase == SyncPhase.failed
+            ? 'Retry sync'
+            : synced
+            ? 'Synced'
+            : 'Sync now';
+    final icon =
+        offline
+            ? Icons.cloud_off_outlined
+            : reauthenticate
+            ? Icons.login
+            : synced
+            ? Icons.cloud_done_outlined
+            : status.phase == SyncPhase.failed
+            ? Icons.sync_problem_outlined
+            : Icons.sync;
+    return IconButton(
+      tooltip: offline ? 'Offline. Tap to retry sync' : label,
+      onPressed:
+          syncing || userId == null
+              ? null
+              : () async {
+                if (reauthenticate) {
+                  await Navigator.of(context).pushNamed(
+                    AppRoutes.login,
+                    arguments: {'expectedUserId': userId},
+                  );
+                } else {
+                  await ref.read(deckSyncServiceProvider).syncNow();
+                }
+              },
+      icon:
+          syncing
+              ? const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+              : Icon(icon),
     );
   }
 }
