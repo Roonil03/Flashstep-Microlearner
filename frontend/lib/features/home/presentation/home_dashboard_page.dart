@@ -12,7 +12,6 @@ import '../data/home_repository.dart';
 import '../../decks/data/data_sync_service.dart';
 import '../../decks/data/sync_status.dart';
 import '../domain/home_dashboard_models.dart';
-import 'study_cover_art.dart';
 
 // Local table changes also invalidate the rendered dashboard, including when
 // another route saved a review while Home remained mounted in the navigator.
@@ -329,7 +328,10 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                 Semantics(
                                   header: true,
                                   child: Text(
-                                    'Your decks · ${data.decksCount}',
+                                    data.deckOfTheDay != null &&
+                                            data.decksCount > 1
+                                        ? 'Other decks · ${data.decksCount - 1}'
+                                        : 'Manage decks',
                                     style: theme.textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -348,35 +350,21 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                               onBrowseDecks: _openBrowseDecks,
                             ),
                             const SizedBox(height: 16),
-                            if (data.decks.isEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 24,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'Your library is ready. Create your first deck or browse public decks to get started.',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      fontStyle: FontStyle.italic,
-                                      color: theme.textTheme.bodySmall?.color,
+                            ...data.decks
+                                .where(
+                                  (deck) => deck.id != data.deckOfTheDay?.id,
+                                )
+                                .take(5)
+                                .map(
+                                  (deck) => _DeckTrack(
+                                    deck: deck,
+                                    timeLabel: _timeLabel(
+                                      deck.nextDueAt,
+                                      dueCards: deck.dueCards,
                                     ),
-                                    textAlign: TextAlign.center,
+                                    onTap: () => _openDeckDetail(deck.id),
                                   ),
                                 ),
-                              )
-                            else
-                              ...data.decks
-                                  .take(5)
-                                  .map(
-                                    (deck) => _DeckTrack(
-                                      deck: deck,
-                                      timeLabel: _timeLabel(
-                                        deck.nextDueAt,
-                                        dueCards: deck.dueCards,
-                                      ),
-                                      onTap: () => _openDeckDetail(deck.id),
-                                    ),
-                                  ),
                             const SizedBox(height: 24),
                             _SyncFooterCard(
                               syncStatus: syncStatus,
@@ -415,208 +403,165 @@ class _StudyOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final accent = dark ? const Color(0xFFFFB58A) : const Color(0xFFA64D24);
     final rawDueCards = data.decks.fold<int>(
       0,
       (sum, deck) => sum + deck.dueCards,
     );
-    const petrol = Color(0xFF123F43);
-    const cream = Color(0xFFFFF4DC);
-    const orange = Color(0xFFFFA064);
-    final count = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'DAILY REVIEW',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: cream,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          '${data.dueToday}',
-          style: theme.textTheme.displayLarge?.copyWith(
-            fontSize: data.dueToday > 999 ? 48 : 72,
-            color: cream,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -3,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${data.dueToday == 1 ? 'card' : 'cards'} available',
-          style: theme.textTheme.titleMedium?.copyWith(color: cream),
-        ),
-      ],
-    );
+    final deck = data.deckOfTheDay;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            'Welcome back, ${data.displayName}',
-            style: theme.textTheme.bodyLarge,
+        if (deck != null) ...[
+          Text(
+            data.dueToday > 0 && deck.totalCards > 0
+                ? 'Next deck'
+                : 'Featured deck',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
           ),
-        ),
-        DecoratedBox(
-          decoration: const BoxDecoration(
-            color: petrol,
-            borderRadius: BorderRadius.all(Radius.circular(4)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final hideArt =
-                        constraints.maxWidth < 250 ||
-                        MediaQuery.textScalerOf(context).scale(1) > 1.35;
-                    if (hideArt) return count;
-                    return Row(
-                      children: [
-                        Expanded(child: count),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: constraints.maxWidth * .42,
-                          height: 176,
-                          child: const StudyCoverArt(),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                if (data.decks.isEmpty || data.dueToday == 0) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    data.decks.isEmpty
-                        ? 'Create a deck or browse public decks to begin.'
-                        : rawDueCards > 0
-                        ? 'Daily review limit reached. $rawDueCards ${rawDueCards == 1 ? 'card is' : 'cards are'} still due. Check review settings to continue.'
-                        : 'You are caught up. Check your decks or review settings.',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: cream),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: onReview,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Start review'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: orange,
-                    foregroundColor: const Color(0xFF252C29),
-                    minimumSize: const Size(double.infinity, 56),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    textStyle: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (data.deckOfTheDay case final deck?) ...[
-                  const SizedBox(height: 16),
-                  Divider(color: cream.withValues(alpha: .3), height: 1),
-                  Semantics(
-                    container: true,
-                    button: true,
-                    label:
-                        'Open featured deck: ${deck.title}, ${deck.dueCards} due, $timeLabel',
-                    onTap: onOpenDeck,
-                    excludeSemantics: true,
-                    child: InkWell(
-                      onTap: onOpenDeck,
-                      excludeFromSemantics: true,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(
+          const SizedBox(height: 8),
+          Material(
+            color: dark ? const Color(0xFF192230) : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colors.outlineVariant),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Semantics(
+              container: true,
+              button: true,
+              label:
+                  'Open featured deck: ${deck.title}, ${deck.dueCards} due, $timeLabel',
+              onTap: onOpenDeck,
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: onOpenDeck,
+                excludeFromSemantics: true,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    deck.title,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          color: cream,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${deck.dueCards} due — $timeLabel',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: cream,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              deck.title,
+                              style: theme.textTheme.headlineLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                height: 1.15,
+                                letterSpacing: -.6,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const ExcludeSemantics(
-                              child: Icon(
-                                Icons.arrow_forward,
-                                color: cream,
-                                size: 20,
+                            const SizedBox(height: 12),
+                            Text(
+                              '${deck.dueCards} due — $timeLabel',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colors.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          color: colors.onSurfaceVariant,
+                          size: 24,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ],
+                ),
+              ),
+            ),
+          ),
+        ] else ...[
+          Semantics(
+            header: true,
+            child: Text(
+              'No decks yet',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Create a deck or browse public decks to begin.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            Text(
+              'Today',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '${data.dueToday} available · ${data.reviewedToday} reviewed',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        if (deck != null && data.dueToday == 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            rawDueCards > 0
+                ? 'Daily review limit reached. $rawDueCards ${rawDueCards == 1 ? 'card is' : 'cards are'} still due. Check review settings to continue.'
+                : 'You are caught up. Check your decks or review settings.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: onReview,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('Start review'),
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: dark ? const Color(0xFF332014) : Colors.white,
+            minimumSize: const Size(double.infinity, 52),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            textStyle: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final minimumWidth =
-                108 * MediaQuery.textScalerOf(context).scale(1);
-            final columns = ((constraints.maxWidth + 12) / (minimumWidth + 12))
-                .floor()
-                .clamp(1, 3);
-            final width = (constraints.maxWidth - 12 * (columns - 1)) / columns;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 16,
-              children: [
-                SizedBox(
-                  width: width,
-                  child: _PlanStat(
-                    value: '${data.reviewedToday}',
-                    label: 'reviewed today',
-                  ),
-                ),
-                SizedBox(
-                  width: width,
-                  child: _PlanStat(
-                    value: '${data.streak}',
-                    label: '${data.streak == 1 ? 'day' : 'days'} streak',
-                  ),
-                ),
-                SizedBox(
-                  width: width,
-                  child: _PlanStat(
-                    value: '${data.retentionRate.toStringAsFixed(1)}%',
-                    label: 'retention',
-                  ),
-                ),
-              ],
-            );
-          },
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 24,
+          runSpacing: 8,
+          children: [
+            _PlanStat(
+              value: '${data.streak}',
+              label: '${data.streak == 1 ? 'day' : 'days'} streak',
+            ),
+            _PlanStat(
+              value: '${data.retentionRate.toStringAsFixed(1)}%',
+              label: 'retention',
+            ),
+          ],
         ),
       ],
     );
@@ -628,19 +573,23 @@ class _PlanStat extends StatelessWidget {
   final String label;
   const _PlanStat({required this.value, required this.label});
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        value,
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: value,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: ' $label'),
+        ],
       ),
-      const SizedBox(height: 2),
-      Text(label, style: Theme.of(context).textTheme.bodySmall),
-    ],
-  );
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
 }
 
 class _DeckTrack extends StatelessWidget {
@@ -657,9 +606,6 @@ class _DeckTrack extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final date = MaterialLocalizations.of(
-      context,
-    ).formatMediumDate(deck.updatedAt.toLocal());
     return Column(
       children: [
         const Divider(height: 1),
@@ -667,16 +613,15 @@ class _DeckTrack extends StatelessWidget {
           container: true,
           button: true,
           label:
-              'Open deck: ${deck.title}, ${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'}, ${deck.isPublic ? 'Public' : 'Private'}, ${deck.dueCards} due, $timeLabel, updated $date',
+              'Open deck: ${deck.title}, ${deck.dueCards} due, $timeLabel, ${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'}, ${deck.isPublic ? 'Public' : 'Private'}',
           onTap: onTap,
           excludeSemantics: true,
           child: InkWell(
             onTap: onTap,
             excludeFromSemantics: true,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
@@ -688,39 +633,20 @@ class _DeckTrack extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} · ${deck.isPublic ? 'Public' : 'Private'}',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 5),
                         Text(
                           '${deck.dueCards} due · $timeLabel',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color:
-                                deck.dueCards > 0
-                                    ? colors.primary
-                                    : colors.onSurfaceVariant,
-                            fontWeight:
-                                deck.dueCards > 0
-                                    ? FontWeight.w700
-                                    : FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Updated $date',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: colors.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   ExcludeSemantics(
                     child: Icon(
-                      Icons.arrow_outward_rounded,
+                      Icons.chevron_right_rounded,
                       size: 20,
                       color: colors.onSurfaceVariant,
                     ),
