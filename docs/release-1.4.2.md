@@ -4,8 +4,8 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 
 ## Finding your way
 
-- Look for cobalt when starting a review, green when managing a deck, sunflower yellow when reading progress, and coral when managing your account. Each action also has a text label.
-- Home shows how many cards you can study today, with shortcuts to your library and a visible sync status.
+- Home pairs today's available card count with a full-width **Start review** button on an illustrated flashcard cover. Tap the featured deck underneath to open it directly. On narrow screens and at larger text sizes, the cover gives more space to the count and controls.
+- Inside a study session, cobalt identifies the question and green identifies the answer. Deck management, progress and account screens also pair color with text labels.
 - Sign-in and registration use centered forms on a coral background. Registration uses the opposite light or dark theme, so it is easy to tell which form is open. The forms scroll above the keyboard.
 
 ## Decks and review
@@ -20,7 +20,7 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 
 - Analytics groups activity, retention and card workload with the selected date range and snapshot time. Activity and retention charts sit alongside each other on wider layouts and stack on phones.
 - Expand a chart’s daily values to read the review count or retention for a particular date. Each date is also available individually to assistive technology.
-- Settings groups account and study preferences separately from the navigation guide, legal information and public bug reporting. Long legal notices remain readable offline.
+- In Settings, tap your name to open **Account Settings**, or **System Settings** to change your theme, font size and review limits. **Help & information** groups the navigation guide, legal notices and public bug reporting in one list. Long legal notices remain readable offline.
 - On small screens with enlarged text, deck and card save buttons grow to fit their labels. The deck creation action remains reachable while the keyboard is open.
 
 ## Compatibility
