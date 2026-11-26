@@ -1,3 +1,5 @@
+import 'library_heading.dart';
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/api_errors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
@@ -73,42 +75,75 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
 
-    final borderColor = isDark ? Colors.white12 : const Color(0xFFE3E3E3);
-    final buttonColor =
-        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
+    final buttonColor = colors.primary;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Create deck')),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            _pageInset(context),
+            8,
+            _pageInset(context),
+            12 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: FilledButton(
+              onPressed: _loading ? null : _saveDeck,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: buttonColor,
+                foregroundColor: colors.onPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child:
+                  _loading
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Text('Create deck', textAlign: TextAlign.center),
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          padding: EdgeInsets.fromLTRB(
+            _pageInset(context),
+            16,
+            _pageInset(context),
+            24,
+          ),
           child: Form(
             key: _formKey,
             child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color:
-                    isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                border: Border.all(color: borderColor),
-              ),
+              padding: const EdgeInsets.all(4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const LibraryHeading(
+                    title: 'Deck details',
+                    description:
+                        'Create the deck first, then add up to 50 cards inside it.',
+                  ),
+                  const SizedBox(height: 28),
                   Text(
-                    'New deck',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+                    '01 / Name your topic',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: context.studyTone(StudyArea.library).accent,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Create the deck first, then add up to 50 cards inside it.',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _titleController,
                     enabled: !_loading,
@@ -137,6 +172,15 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  const Divider(height: 32),
+                  Text(
+                    '02 / Choose visibility',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: context.studyTone(StudyArea.library).accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   PublicVisibilityControl(
                     value: _isPublic,
                     onChanged:
@@ -145,31 +189,6 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                             : (value) => setState(() => _isPublic = value),
                   ),
                   const SizedBox(height: 20),
-                  SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _saveDeck,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                        foregroundColor:
-                            isDark ? const Color(0xFF003153) : Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child:
-                          _loading
-                              ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                              : const Text('Create deck'),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -178,4 +197,9 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
       ),
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

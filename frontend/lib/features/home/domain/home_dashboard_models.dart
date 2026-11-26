@@ -1,3 +1,5 @@
+import '../../../core/storage/session_storage.dart';
+
 class DeckSummary {
   final String id;
   final String title;
@@ -23,6 +25,9 @@ class DeckSummary {
 }
 
 class HomeDashboardData {
+  final ReviewPreferenceSnapshot? reviewPreferences;
+  // The UTC day used to calculate reviewedToday and the daily allowance.
+  final DateTime? reviewDayUtc;
   final String? userId;
   final String displayName;
   final int decksCount;
@@ -35,6 +40,8 @@ class HomeDashboardData {
   final List<DeckSummary> decks;
 
   const HomeDashboardData({
+    this.reviewPreferences,
+    this.reviewDayUtc,
     required this.userId,
     required this.displayName,
     required this.decksCount,

@@ -1,3 +1,4 @@
+import '../../../app/theme/study_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,10 +11,7 @@ import '../model/csv_import_models.dart';
 class CsvImportPage extends ConsumerStatefulWidget {
   final String deckId;
 
-  const CsvImportPage({
-    super.key,
-    required this.deckId,
-  });
+  const CsvImportPage({super.key, required this.deckId});
 
   @override
   ConsumerState<CsvImportPage> createState() => _CsvImportPageState();
@@ -32,7 +30,9 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
     });
 
     try {
-      final preview = await ref.read(csvImportServiceProvider).pickAndValidateCsv(
+      final preview = await ref
+          .read(csvImportServiceProvider)
+          .pickAndValidateCsv(
             existingCardCount: existingCardCount,
             maxCardsAllowed: DeckRepository.maxCardsPerDeck,
           );
@@ -76,10 +76,9 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
     });
 
     try {
-      final importedCount = await ref.read(deckRepositoryProvider).importCardsOffline(
-            deckId: widget.deckId,
-            cards: preview.cards,
-          );
+      final importedCount = await ref
+          .read(deckRepositoryProvider)
+          .importCardsOffline(deckId: widget.deckId, cards: preview.cards);
 
       final syncResult = await ref.read(deckSyncServiceProvider).syncNow();
 
@@ -89,9 +88,10 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
         CsvImportSuccessResult(
           importedCount: importedCount,
           syncedNow: syncResult.success,
-          message: syncResult.success
-              ? '$importedCount cards were imported and synced.'
-              : '$importedCount cards were imported locally. ${syncResult.message} They will sync automatically when internet is back.',
+          message:
+              syncResult.success
+                  ? '$importedCount cards were imported and synced.'
+                  : '$importedCount cards were imported locally. ${syncResult.message} They will sync automatically when internet is back.',
         ),
       );
     } catch (e) {
@@ -107,31 +107,27 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
   Widget build(BuildContext context) {
     final repo = ref.read(deckRepositoryProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
 
     final scaffoldColor = theme.scaffoldBackgroundColor;
-    final panelColor = isDark ? const Color(0xFF111827) : Colors.white;
-    final mutedPanelColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
-    final borderColor = isDark ? Colors.white12 : const Color(0xFFE5E7EB);
-    final primaryButton = isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
-    final accentFill = isDark ? const Color(0xFF063B2E) : const Color(0xFFEAF7EC);
-    final accentText = isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
-    final warningFill = isDark ? const Color(0xFF3A2D00) : const Color(0xFFFFF7D6);
+    final panelColor = colors.surface;
+    final mutedPanelColor = context.studyTone(StudyArea.library).fill;
+    final borderColor = colors.outlineVariant;
+    final primaryButton = colors.primary;
+    final accentFill = context.studyTone(StudyArea.library).fill;
+    final accentText = context.studyTone(StudyArea.library).ink;
+    final warningFill = colors.errorContainer;
 
     return Scaffold(
       backgroundColor: scaffoldColor,
-      appBar: AppBar(
-        title: const Text('Import CSV'),
-      ),
+      appBar: AppBar(title: const Text('Import CSV')),
       body: StreamBuilder<db.Deck?>(
         stream: repo.watchDeckById(widget.deckId),
         builder: (context, deckSnapshot) {
           final deck = deckSnapshot.data;
 
           if (deck == null) {
-            return const Center(
-              child: Text('Deck not found'),
-            );
+            return const Center(child: Text('Deck not found'));
           }
 
           return StreamBuilder<List<db.Card>>(
@@ -139,9 +135,10 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
             builder: (context, cardsSnapshot) {
               final existingCards = cardsSnapshot.data ?? const <db.Card>[];
               final existingCount = existingCards.length;
-              final remainingSlots = existingCount >= DeckRepository.maxCardsPerDeck
-                  ? 0
-                  : DeckRepository.maxCardsPerDeck - existingCount;
+              final remainingSlots =
+                  existingCount >= DeckRepository.maxCardsPerDeck
+                      ? 0
+                      : DeckRepository.maxCardsPerDeck - existingCount;
 
               final preview = _preview;
               final previewCards = preview?.cards ?? const <CsvCardDraft>[];
@@ -150,30 +147,45 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
 
               return SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(8),
                           color: mutedPanelColor,
-                          border: Border.all(color: borderColor),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               deck.title,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: accentText,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Add cards from CSV',
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
+                                color: accentText,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'Pick a CSV with exactly two columns: Front and Back. The cards will be created locally first and synced later when internet is available.',
-                              style: theme.textTheme.bodyMedium,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: accentText,
+                              ),
                             ),
                             const SizedBox(height: 14),
                             Wrap(
@@ -186,7 +198,8 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                                   highlighted: remainingSlots > 0,
                                 ),
                                 _InfoPill(
-                                  label: 'Max ${DeckRepository.maxCardsPerDeck}',
+                                  label:
+                                      'Max ${DeckRepository.maxCardsPerDeck}',
                                 ),
                               ],
                             ),
@@ -194,55 +207,37 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          color: panelColor,
-                          border: Border.all(color: borderColor),
+                      ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                        title: const Text('Expected CSV format'),
+                        subtitle: const Text(
+                          'Exactly two columns: Front and Back',
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Expected CSV format',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                        childrenPadding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: accentFill,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            const SizedBox(height: 10),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: accentFill,
-                              ),
-                              child: Text(
-                                'Front,Back\n'
-                                'What is 2 + 2?,4\n'
-                                'Hola,Hello\n'
-                                'Capital of France,Paris',
-                                style: TextStyle(
-                                  color: accentText,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.5,
-                                ),
-                              ),
+                            child: SelectableText(
+                              'Front,Back\nWhat is 2 + 2?,4\nHola,Hello\nCapital of France,Paris',
+                              style: TextStyle(color: accentText, height: 1.5),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Rules: real CSV only, exactly 2 columns, header must be Front and Back, maximum 50 card rows, and the file must still fit inside the deck limit.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Use a real CSV file with the Front,Back header and up to 50 card rows. Every row must fit in the remaining deck capacity.',
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(12),
                           color: panelColor,
                           border: Border.all(color: borderColor),
                         ),
@@ -259,11 +254,10 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                                 Expanded(
                                   child: Text(
                                     preview == null
-                                        ? 'Choose a CSV to preview'
+                                        ? '1. Choose a CSV to preview'
                                         : preview.fileName,
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               ],
@@ -271,36 +265,44 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                             const SizedBox(height: 8),
                             Text(
                               preview == null
-                                  ? 'Nothing selected yet.'
+                                  ? 'Choose a file to validate its cards before importing.'
                                   : '${preview.importedCount} cards validated and ready to import.',
                               style: theme.textTheme.bodyMedium,
                             ),
                             const SizedBox(height: 16),
                             SizedBox(
                               height: 50,
-                              child: ElevatedButton.icon(
-                                onPressed: (remainingSlots <= 0 || _isPicking || _isImporting)
-                                    ? null
-                                    : () => _pickCsv(existingCount),
+                              child: FilledButton.icon(
+                                onPressed:
+                                    (remainingSlots <= 0 ||
+                                            _isPicking ||
+                                            _isImporting)
+                                        ? null
+                                        : () => _pickCsv(existingCount),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryButton,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: colors.onPrimary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: _isPicking
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
+                                icon:
+                                    _isPicking
+                                        ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                        : const Icon(
+                                          Icons.folder_open_outlined,
                                         ),
-                                      )
-                                    : const Icon(Icons.folder_open_outlined),
                                 label: Text(
-                                  _isPicking ? 'Reading CSV...' : 'Pick CSV file',
+                                  _isPicking
+                                      ? 'Reading CSV...'
+                                      : 'Pick CSV file',
                                 ),
                               ),
                             ),
@@ -331,7 +333,7 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(12),
                             color: panelColor,
                             border: Border.all(color: borderColor),
                           ),
@@ -339,7 +341,7 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                'Preview',
+                                '2. Check your cards',
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -355,7 +357,9 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                                   ),
                                   const _InfoPill(label: '2 columns only'),
                                   const _InfoPill(label: 'Local-first import'),
-                                  const _InfoPill(label: 'Auto-sync when online'),
+                                  const _InfoPill(
+                                    label: 'Auto-sync when online',
+                                  ),
                                 ],
                               ),
                               if (previewTooLargeNow) ...[
@@ -363,7 +367,8 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                                 _MessageBanner(
                                   backgroundColor: warningFill,
                                   icon: Icons.warning_amber_rounded,
-                                  title: 'Deck changed while this page was open',
+                                  title:
+                                      'Deck changed while this page was open',
                                   message:
                                       'Your preview now exceeds the remaining capacity. Pick a smaller CSV.',
                                 ),
@@ -372,33 +377,44 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                               ListView.separated(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
-                                itemCount: previewCards.length > 6 ? 6 : previewCards.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemCount:
+                                    previewCards.length > 6
+                                        ? 6
+                                        : previewCards.length,
+                                separatorBuilder:
+                                    (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final card = previewCards[index];
                                   return Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
+                                      borderRadius: BorderRadius.circular(8),
                                       color: mutedPanelColor,
                                       border: Border.all(color: borderColor),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Row ${card.sourceRow}',
-                                          style: theme.textTheme.labelMedium?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color: theme.textTheme.bodySmall?.color,
-                                          ),
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color:
+                                                    theme
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.color,
+                                              ),
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
                                           card.front,
-                                          style: theme.textTheme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                          style: theme.textTheme.titleSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                         ),
                                         const SizedBox(height: 6),
                                         Text(card.back),
@@ -417,27 +433,33 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
                               const SizedBox(height: 18),
                               SizedBox(
                                 height: 50,
-                                child: ElevatedButton.icon(
-                                  onPressed: (_isImporting || previewTooLargeNow || remainingSlots <= 0)
-                                      ? null
-                                      : _importCards,
+                                child: FilledButton.icon(
+                                  onPressed:
+                                      (_isImporting ||
+                                              previewTooLargeNow ||
+                                              remainingSlots <= 0)
+                                          ? null
+                                          : _importCards,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryButton,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: colors.onPrimary,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                   ),
-                                  icon: _isImporting
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
+                                  icon:
+                                      _isImporting
+                                          ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                          : const Icon(
+                                            Icons.cloud_upload_outlined,
                                           ),
-                                        )
-                                      : const Icon(Icons.cloud_upload_outlined),
                                   label: Text(
                                     _isImporting
                                         ? 'Importing cards...'
@@ -465,28 +487,15 @@ class _InfoPill extends StatelessWidget {
   final String label;
   final bool highlighted;
 
-  const _InfoPill({
-    required this.label,
-    this.highlighted = false,
-  });
+  const _InfoPill({required this.label, this.highlighted = false});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: highlighted
-            ? theme.colorScheme.primary.withOpacity(0.12)
-            : theme.colorScheme.primary.withOpacity(0.08),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: context.studyTone(StudyArea.library).ink,
+        fontWeight: highlighted ? FontWeight.w800 : FontWeight.w500,
       ),
     );
   }
@@ -539,4 +548,9 @@ class _MessageBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

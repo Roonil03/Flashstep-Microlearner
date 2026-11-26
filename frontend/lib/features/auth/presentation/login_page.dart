@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router.dart';
+import 'account_frame.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/network/api_errors.dart';
 import '../data/auth_api.dart';
 import '../data/auth_repository.dart';
+import '../../decks/data/data_sync_service.dart';
 
 class LoginCubit extends Cubit<bool> {
   final AuthRepository _authRepository;
@@ -16,17 +20,19 @@ class LoginCubit extends Cubit<bool> {
   Future<String> login({
     required String email,
     required String password,
+    String? expectedUserId,
   }) async {
     emit(true);
     try {
       final session = await _authRepository.login(
         email: email,
         password: password,
+        expectedUserId: expectedUserId,
       );
-      emit(false);
+      if (!isClosed) emit(false);
       return session.username.isNotEmpty ? session.username : email;
     } catch (e) {
-      emit(false);
+      if (!isClosed) emit(false);
       rethrow;
     }
   }
@@ -45,6 +51,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _passwordController = TextEditingController();
   bool _obscure = true;
 
+  String? _expectedUserId(BuildContext context) {
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    return arguments is Map && arguments['expectedUserId'] is String
+        ? arguments['expectedUserId'] as String
+        : null;
+  }
+
+  Future<void> _resumeSync() async {
+    try {
+      await ref.read(deckSyncServiceProvider).syncNow();
+    } catch (_) {
+      // A later automatic or manual sync can retry; saved changes remain local.
+    }
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -57,48 +78,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
-        backgroundColor: const Color(0xFF003153),
-        content: Text(
-          'Welcome Back, $username!',
-          style: const TextStyle(color: Colors.white),
-        ),
+
+        content: Text('Welcome Back, $username!'),
       ),
     );
   }
 
   Future<void> _handleLogin(BuildContext context) async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (context.read<LoginCubit>().state ||
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     try {
+      final expectedUserId = _expectedUserId(context);
       final username = await context.read<LoginCubit>().login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        expectedUserId: expectedUserId,
       );
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
+      if (expectedUserId != null) unawaited(_resumeSync());
       _showTopSnackBar(context, username);
-      if (!mounted) {
-        return;
-      }
       Navigator.of(
         context,
       ).pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
     } catch (e) {
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
-      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final palette = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
-          backgroundColor:
-              isDark ? const Color(0xFFFF4C4C) : const Color(0xFF8B0000),
+          backgroundColor: palette.errorContainer,
           content: Text(
             e is AuthApiException ? e.message : networkErrorMessage(e),
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: palette.onErrorContainer),
           ),
         ),
       );
@@ -107,183 +125,112 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? Colors.black : Colors.white;
-    final greenFieldFill =
-        isDark ? const Color(0xFF063B2E) : const Color(0xFFEAF7EC);
-    final greenTextColor =
-        isDark ? const Color(0xFFB8F2C8) : const Color(0xFF0B5D1E);
-    final fieldBorderColor = const Color(0xFF2E8B57);
-    final buttonColor =
-        isDark ? const Color(0xFF6EC1E4) : const Color(0xFF003153);
-    final linkBlue = Colors.blueAccent;
+    final theme = Theme.of(context);
+    final renewingSession = _expectedUserId(context) != null;
     return BlocProvider(
       create: (_) => LoginCubit(ref.read(authRepositoryProvider)),
-      child: Scaffold(
-        backgroundColor: backgroundColor,
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Form(
-                  key: _formKey,
-                  child: Builder(
-                    builder: (context) {
-                      final isLoading = context.select<LoginCubit, bool>(
-                        (cubit) => cubit.state,
-                      );
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Login',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineMedium?.copyWith(
-                              color: isDark ? Colors.white : Colors.black87,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Enter your account details to continue.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.copyWith(
-                              color: isDark ? Colors.white70 : Colors.black54,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          TextFormField(
-                            controller: _emailController,
-                            style: TextStyle(color: greenTextColor),
-                            cursorColor: greenTextColor,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              labelStyle: TextStyle(color: greenTextColor),
-                              filled: true,
-                              fillColor: greenFieldFill,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: fieldBorderColor),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: fieldBorderColor,
-                                  width: 2,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Enter your email';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscure,
-                            style: TextStyle(color: greenTextColor),
-                            cursorColor: greenTextColor,
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              labelStyle: TextStyle(color: greenTextColor),
-                              filled: true,
-                              fillColor: greenFieldFill,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: fieldBorderColor),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: fieldBorderColor,
-                                  width: 2,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              suffixIcon: IconButton(
-                                tooltip: _obscure ? 'Show password' : 'Hide password',
-                                onPressed: () {
-                                  setState(() {
-                                    _obscure = !_obscure;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscure
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  color: greenTextColor,
-                                ),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Enter your password';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed:
-                                  isLoading
-                                      ? null
-                                      : () => _handleLogin(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child:
-                                  isLoading
-                                      ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                      : const Text('Login'),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Center(
-                            child: TextButton(
-                              onPressed: () {
-                                Navigator.of(
-                                  context,
-                                ).pushNamed(AppRoutes.register);
-                              },
-                              child: Text(
-                                'Register Here',
-                                style: TextStyle(
-                                  color: linkBlue,
-                                  decoration: TextDecoration.underline,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
+      child: AccountFrame(
+        child: Form(
+          key: _formKey,
+          child: Builder(
+            builder: (context) {
+              final isLoading = context.select<LoginCubit, bool>(
+                (cubit) => cubit.state,
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AccountMark(),
+                  const SizedBox(height: 24),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      renewingSession
+                          ? 'Sign in to sync your saved account'
+                          : 'Welcome back',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  TextFormField(
+                    controller: _emailController,
+                    enabled: !isLoading,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'name@example.com',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter your email';
+                      }
+                      return null;
                     },
                   ),
-                ),
-              ),
-            ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscure,
+                    enabled: !isLoading,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) {
+                      if (!isLoading) _handleLogin(context);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      suffixIcon: IconButton(
+                        tooltip: _obscure ? 'Show password' : 'Hide password',
+                        onPressed: () {
+                          setState(() {
+                            _obscure = !_obscure;
+                          });
+                        },
+                        icon: Icon(
+                          _obscure ? Icons.visibility_off : Icons.visibility,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    child: FilledButton(
+                      onPressed: isLoading ? null : () => _handleLogin(context),
+
+                      child:
+                          isLoading
+                              ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('Log in'),
+                    ),
+                  ),
+                  if (!renewingSession) const SizedBox(height: 16),
+                  if (!renewingSession)
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(AppRoutes.register);
+                        },
+                        child: const Text('Create an account'),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),

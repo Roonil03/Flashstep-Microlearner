@@ -1,7 +1,7 @@
 name: frontend
 description: "The frontend of the entire project"
 publish_to: 'none'
-version: 1.4.0+5
+version: 1.4.2+6
 
 environment:
   sdk: ">=3.7.0 <4.0.0"
@@ -19,9 +19,9 @@ dependencies:
   path: any
 
   http: ^1.6.0
+  url_launcher: ^6.3.2
   flutter_secure_storage: ^9.2.4
   uuid: ^4.5.1
-  cupertino_icons: ^1.0.8
 
   file_picker: ^11.0.2
   csv: ^8.0.0
@@ -48,13 +48,25 @@ flutter:
     - assets/legal/project_license.txt
     - assets/legal/artwork_license.txt
     - assets/legal/backend_licenses.json
-    - assets/LogoWIthoutText_WithoutBG.png
-    - assets/LogoWithoutText_WhiteBackground.png
-    - assets/LogoWithText.png
-    - assets/LogoWithoutText_WithoutBGLarge.png
+    - assets/legal/dm_sans_license.txt
     - assets/LogoWithText_WithoutBG.png
     - assets/LogoWithoutText_WithoutBGLarge_Square.png
-    - assets/LogoWithoutText_WithoutBGLarge_Square_Monochrome.png
+
+  fonts:
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 800
+        - asset: assets/fonts/DMSans-Variable.ttf
+          weight: 900
 
 flutter_launcher_icons:
   android: true

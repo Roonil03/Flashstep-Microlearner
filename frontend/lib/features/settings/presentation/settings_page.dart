@@ -3,18 +3,36 @@ import '../../auth/data/auth_api.dart';
 import '../../../app/app_version.dart';
 import '../../onboarding/presentation/navigation_tour_launcher.dart';
 import '../../../core/widgets/learning_controls.dart';
+import '../../../core/widgets/image_decode_size.dart';
+import '../../home/presentation/home_dashboard_page.dart';
+import '../../decks/data/data_sync_service.dart';
+import '../../decks/data/sync_status.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/study_colors.dart';
+import 'account_sections.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/storage/session_storage.dart';
 import '../../../core/storage/theme_storage.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  final String? initialUsername;
+  final ReviewPreferenceSnapshot? initialReviewPreferences;
+  final VoidCallback? onUsernameSaved;
+  final VoidCallback? onReviewPreferencesSaved;
+
+  const SettingsPage({
+    super.key,
+    this.initialUsername,
+    this.initialReviewPreferences,
+    this.onUsernameSaved,
+    this.onReviewPreferencesSaved,
+  });
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -24,16 +42,100 @@ enum _SettingsView { main, account, system }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   _SettingsView _view = _SettingsView.main;
+  String _username = '';
+  bool _usernameEdited = false;
+  bool _usernameLoadFailed = false;
+  bool _signingOut = false;
+  late final _reviewPreferences = _ReviewPreferences(
+    ref.read(sessionStorageProvider),
+    initial: widget.initialReviewPreferences,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _username = widget.initialUsername?.trim() ?? '';
+    if (widget.initialUsername == null) _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    _usernameLoadFailed = false;
+    try {
+      final username = await ref.read(sessionStorageProvider).readUsername();
+      if (!mounted || _usernameEdited) return;
+      setState(() => _username = username?.trim() ?? '');
+    } catch (_) {
+      // Keep the same unnamed profile fallback when local storage is unavailable.
+      _usernameLoadFailed = true;
+    }
+  }
+
+  void _updateUsername(String username) {
+    setState(() {
+      _usernameEdited = true;
+      _username = username;
+    });
+    widget.onUsernameSaved?.call();
+  }
+
+  void _reviewPreferencesSaved() {
+    // A write may finish after its originating System view was replaced.
+    if (mounted) setState(() {});
+    widget.onReviewPreferencesSaved?.call();
+  }
 
   Future<void> _logout() async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
     try {
-      await ref.read(authRepositoryProvider).logout();
+      final storage = ref.read(sessionStorageProvider);
+      final userId = await storage.readUserId();
+      final token = await storage.readToken();
+      if (userId == null || userId.isEmpty || token == null || token.isEmpty) {
+        throw StateError('Connect and sync before signing out');
+      }
+      final result = await ref.read(deckSyncServiceProvider).syncNow();
+      if (!mounted) return;
+      if (!result.success) {
+        throw StateError(
+          'Connect and sync before signing out. ${result.message}',
+        );
+      }
+      // Read the live bounded queue again: an edit may have arrived during sync.
+      final pending =
+          await ref
+              .read(homeRepositoryProvider)
+              .watchPendingSyncCount(userId)
+              .first;
+      final connection =
+          await ref.read(syncConnectivityProvider).checkConnectivity();
+      final currentUserId = await storage.readUserId();
+      final currentToken = await storage.readToken();
+      if (!mounted) return;
+      final status = ref.read(syncStatusProvider);
+      if (pending != 0 ||
+          !connection.any((value) => value != ConnectivityResult.none) ||
+          currentUserId != userId ||
+          currentToken != token ||
+          status.userId != userId ||
+          status.phase != SyncPhase.success) {
+        throw StateError('Connect and sync before signing out');
+      }
+      await ref
+          .read(authRepositoryProvider)
+          .logout(expectedUserId: userId, expectedToken: token);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_messageFromError(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is StateError ? e.message.toString() : _messageFromError(e),
+          ),
+        ),
+      );
       return;
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
     }
 
     if (!mounted) return;
@@ -48,6 +150,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   void _goBack() {
+    if (_usernameLoadFailed && !_usernameEdited) _loadUsername();
     setState(() {
       _view = _SettingsView.main;
     });
@@ -58,16 +161,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final Widget view;
     switch (_view) {
       case _SettingsView.account:
-        view = _AccountSettings(onBack: _goBack);
+        view = _AccountSettings(
+          onBack: _goBack,
+          username: _username,
+          onUsernameChanged: _updateUsername,
+        );
         break;
       case _SettingsView.system:
-        view = _SystemSettings(onBack: _goBack);
+        view = _SystemSettings(
+          onBack: _goBack,
+          preferences: _reviewPreferences,
+          onPreferencesSaved: _reviewPreferencesSaved,
+        );
         break;
       case _SettingsView.main:
         view = _MainSettings(
+          username: _username,
           onAccountTap: () => setState(() => _view = _SettingsView.account),
           onSystemTap: () => setState(() => _view = _SettingsView.system),
           onLogout: _logout,
+          signingOut: _signingOut,
           onReplayTour:
               () => launchNavigationTour(
                 context,
@@ -87,105 +200,261 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _MainSettings extends StatelessWidget {
+class _MainSettings extends ConsumerWidget {
+  final String username;
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
   final VoidCallback onReplayTour;
+  final bool signingOut;
 
   const _MainSettings({
+    required this.username,
     required this.onAccountTap,
     required this.onSystemTap,
     required this.onLogout,
     required this.onReplayTour,
+    required this.signingOut,
   });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final userId = ref.watch(currentSyncAccountProvider).asData?.value;
+    final pending =
+        ref.watch(homePendingSyncCountProvider(userId)).asData?.value;
+    final status = ref.watch(syncStatusProvider);
+    final accountStatus =
+        userId != null && status.userId == userId ? status : const SyncStatus();
+    final offline = ref.watch(syncConnectionProvider).asData?.value == false;
+    final canLogout =
+        !signingOut &&
+        userId != null &&
+        pending == 0 &&
+        accountStatus.phase == SyncPhase.success &&
+        !offline;
+    final reauthenticate =
+        accountStatus.statusCode == 401 || accountStatus.statusCode == 403;
+
+    Widget entry(
+      String title,
+      String subtitle,
+      IconData icon,
+      VoidCallback open,
+    ) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        leading: Icon(icon, color: colors.onSurfaceVariant),
+        title: Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+        onTap: open,
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              children: [
+                _ProfileSettingsEntry(name: username, onTap: onAccountTap),
+                const SizedBox(height: 18),
+                entry(
+                  'System Settings',
+                  'Theme, font size and daily review limits',
+                  Icons.tune_rounded,
+                  onSystemTap,
+                ),
+                const SizedBox(height: 18),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Help & information',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Divider(height: 1),
+                entry(
+                  'Relearn app navigation',
+                  'Replay the nine-step guide',
+                  Icons.route_outlined,
+                  onReplayTour,
+                ),
+                const Divider(height: 1),
+                entry(
+                  'Legal',
+                  'Privacy, terms and licenses',
+                  Icons.gavel_outlined,
+                  () => Navigator.of(context).pushNamed(AppRoutes.legal),
+                ),
+                const Divider(height: 1),
+                entry(
+                  'Report a Bug',
+                  'Submit a public GitHub issue',
+                  Icons.bug_report_outlined,
+                  () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
+                ),
+                const Divider(height: 1),
+                const SizedBox(height: 20),
+                Column(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: canLogout ? onLogout : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor:
+                            theme.brightness == Brightness.dark
+                                ? const Color(0xFFC62828)
+                                : const Color(0xFFB3261E),
+                        foregroundColor: Colors.white,
+                        overlayColor: Colors.white,
+                        minimumSize: const Size(160, 52),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        textStyle: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      icon: const Icon(Icons.logout),
+                      label: Text(
+                        signingOut ? 'Syncing before sign out…' : 'Sign Out',
+                      ),
+                    ),
+                    if (!canLogout) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Connect and sync before signing out',
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton.icon(
+                        onPressed:
+                            signingOut ||
+                                    accountStatus.phase == SyncPhase.syncing ||
+                                    userId == null
+                                ? null
+                                : () async {
+                                  if (reauthenticate) {
+                                    await Navigator.of(context).pushNamed(
+                                      AppRoutes.login,
+                                      arguments: {'expectedUserId': userId},
+                                    );
+                                  } else {
+                                    await ref
+                                        .read(deckSyncServiceProvider)
+                                        .syncNow();
+                                  }
+                                },
+                        icon: Icon(reauthenticate ? Icons.login : Icons.sync),
+                        label: Text(
+                          reauthenticate ? 'Sign in to sync' : 'Retry sync',
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Image.asset(
+                      'assets/LogoWithText_WithoutBG.png',
+                      width: 200,
+                      height: 96,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'FlashStep',
+                      cacheWidth: imageDecodeSize(
+                        logicalSize: 200,
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                          context,
+                        ),
+                        sourceSize: 1056,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Version ${AppVersion.name}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSettingsEntry extends StatelessWidget {
+  final String name;
+  final VoidCallback onTap;
+
+  const _ProfileSettingsEntry({required this.name, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _sectionCard(
-            isDark,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Account Settings'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: onAccountTap,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.settings_suggest_outlined),
-                title: const Text('System Settings'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: onSystemTap,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.route_outlined),
-            title: const Text('Relearn app navigation'),
-            subtitle: const Text(
-              'Replay the nine-step guide with safe examples.',
-            ),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: onReplayTour,
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.gavel_outlined),
-            title: const Text('Legal'),
-            subtitle: const Text('Privacy, terms, and open-source licenses'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => Navigator.of(context).pushNamed(AppRoutes.legal),
-          ),
-          ListTile(
-            leading: const Icon(Icons.bug_report_outlined),
-            title: const Text('Report a Bug'),
-            subtitle: const Text('Submit a public GitHub issue'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
-          ),
-          const SizedBox(height: 24),
-          Column(
-            children: [
-              Image.asset('assets/LogoWithText_WithoutBG.png', height: 80),
-              const SizedBox(height: 8),
-              Text(
-                'Flashstep Microlearner',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+    final dark = theme.brightness == Brightness.dark;
+    final sheet = dark ? const Color(0xFF603329) : const Color(0xFFFFC6A1);
+    final lettering = dark ? const Color(0xFFFFE9D7) : const Color(0xFF402419);
+    return Semantics(
+      button: true,
+      label: name.isEmpty ? 'Account Settings' : 'Account Settings, $name',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        color: sheet,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          excludeFromSemantics: true,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Account Settings',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: lettering,
+                        ),
+                      ),
+                      if (name.isNotEmpty)
+                        Text(
+                          name,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: lettering,
+                            height: 1.2,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Version ${AppVersion.name}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout),
-              label: const Text('Sign Out'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    isDark ? Colors.red.shade400 : Colors.red.shade700,
-                foregroundColor: Colors.white,
-              ),
+                Icon(Icons.chevron_right_rounded, color: lettering),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -193,15 +462,25 @@ class _MainSettings extends StatelessWidget {
 
 class _AccountSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
+  final String username;
+  final ValueChanged<String> onUsernameChanged;
 
-  const _AccountSettings({required this.onBack});
+  const _AccountSettings({
+    required this.onBack,
+    required this.username,
+    required this.onUsernameChanged,
+  });
 
   @override
   ConsumerState<_AccountSettings> createState() => _AccountSettingsState();
 }
 
 class _AccountSettingsState extends ConsumerState<_AccountSettings> {
-  String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
+  String _messageFromError(Object error) {
+    return error is AuthApiException
+        ? error.message
+        : networkErrorMessage(error);
+  }
 
   Future<void> _showChangePasswordDialog() async {
     final result = await showDialog<bool>(
@@ -288,15 +567,20 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.08),
+                            color: Theme.of(context).colorScheme.errorContainer,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.red.withOpacity(0.2),
+                              color: Theme.of(context).colorScheme.error,
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                            ),
                           ),
                         ),
                       ],
@@ -423,7 +707,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   }
 
   Future<void> _showChangeUsernameDialog() async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -465,7 +749,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     .changeUsername(username: username);
 
                 if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop(true);
+                Navigator.of(dialogContext).pop(username);
               } catch (e) {
                 if (!dialogContext.mounted) return;
                 setStateDialog(() {
@@ -489,15 +773,20 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.08),
+                            color: Theme.of(context).colorScheme.errorContainer,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.red.withOpacity(0.2),
+                              color: Theme.of(context).colorScheme.error,
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                            ),
                           ),
                         ),
                       ],
@@ -516,7 +805,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     onPressed:
                         isSubmitting
                             ? null
-                            : () => Navigator.of(dialogContext).pop(false),
+                            : () => Navigator.of(dialogContext).pop(),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
@@ -540,7 +829,8 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
 
     if (!mounted) return;
 
-    if (result == true) {
+    if (result != null) {
+      widget.onUsernameChanged(result);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username updated successfully')),
       );
@@ -610,15 +900,20 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.08),
+                            color: Theme.of(context).colorScheme.errorContainer,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.red.withOpacity(0.2),
+                              color: Theme.of(context).colorScheme.error,
                             ),
                           ),
                           child: Text(
                             errorText!,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                            ),
                           ),
                         ),
                       ],
@@ -642,8 +937,8 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade700,
-                      foregroundColor: Colors.white,
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                      foregroundColor: Theme.of(context).colorScheme.onError,
                     ),
                     onPressed: isDeleting ? null : submit,
                     child:
@@ -683,9 +978,6 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -696,6 +988,7 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
         title: const Text('Account Settings'),
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Positioned.fill(
             child: IgnorePointer(
@@ -708,6 +1001,13 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
                     child: Image.asset(
                       'assets/LogoWithText_WithoutBG.png',
                       width: 320,
+                      cacheWidth: imageDecodeSize(
+                        logicalSize: 320,
+                        devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                          context,
+                        ),
+                        sourceSize: 1056,
+                      ),
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -721,49 +1021,46 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
-                child: _sectionCard(
-                  isDark,
+                child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Text(
-                        'Account',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    AccountSectionHeader(
+                      title:
+                          widget.username.isNotEmpty
+                              ? widget.username
+                              : 'Your account',
+                      icon: Icons.person_outline_rounded,
                     ),
-                    ListTile(
-                      leading: const Icon(Icons.person_outline),
-                      title: Text(
-                        'Change Username',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    _sectionCard(
+                      context,
+                      children: [
+                        AccountSettingsRow(
+                          title: 'Change Username',
+                          subtitle: 'Update the name on your account',
+                          icon: Icons.person_outline,
+                          onTap: _showChangeUsernameDialog,
                         ),
-                      ),
-                      onTap: _showChangeUsernameDialog,
+                        const Divider(height: 1, indent: 70, endIndent: 16),
+                        AccountSettingsRow(
+                          title: 'Change Password',
+                          subtitle: 'Choose a new sign-in password',
+                          icon: Icons.lock_outline,
+                          onTap: _showChangePasswordDialog,
+                        ),
+                      ],
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.lock_outline),
-                      title: Text(
-                        'Change Password',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    _sectionCard(
+                      context,
+                      children: [
+                        AccountSettingsRow(
+                          title: 'Delete Account',
+                          subtitle: 'Permanently remove your account',
+                          icon: Icons.delete_outline,
+                          destructive: true,
+                          onTap: _showDeleteAccountDialog,
                         ),
-                      ),
-                      onTap: _showChangePasswordDialog,
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.delete_outline),
-                      title: Text(
-                        'Delete Account',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      onTap: _showDeleteAccountDialog,
+                      ],
                     ),
                   ],
                 ),
@@ -776,31 +1073,98 @@ class _AccountSettingsState extends ConsumerState<_AccountSettings> {
   }
 }
 
+// Route-local storage reads survive section switches without retaining hidden
+// Scaffolds or rebuilding a waiting FutureBuilder on each return.
+class _ReviewPreferences {
+  final SessionStorage storage;
+  int? dailyLimit;
+  bool? selectiveDecksOnly;
+  bool? bypassSrs;
+
+  Future<int>? _dailyLimitFuture;
+  Future<bool>? _selectiveDecksOnlyFuture;
+  Future<bool>? _bypassSrsFuture;
+
+  _ReviewPreferences(this.storage, {ReviewPreferenceSnapshot? initial})
+    : dailyLimit = initial?.dailyLimit,
+      selectiveDecksOnly = initial?.selectiveDecksOnly,
+      bypassSrs = initial?.bypassSrs;
+
+  Future<int> get dailyLimitFuture =>
+      _dailyLimitFuture ??=
+          dailyLimit != null
+              ? Future<int>.value(dailyLimit)
+              : storage.readDailyReviewLimit().then(
+                (value) => dailyLimit ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _dailyLimitFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  Future<bool> get selectiveDecksOnlyFuture =>
+      _selectiveDecksOnlyFuture ??=
+          selectiveDecksOnly != null
+              ? Future<bool>.value(selectiveDecksOnly)
+              : storage.readSelectiveReviewDecksOnly().then(
+                (value) => selectiveDecksOnly ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _selectiveDecksOnlyFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  Future<bool> get bypassSrsFuture =>
+      _bypassSrsFuture ??=
+          bypassSrs != null
+              ? Future<bool>.value(bypassSrs)
+              : storage.readBypassSrs().then(
+                (value) => bypassSrs ??= value,
+                onError: (Object error, StackTrace stack) {
+                  _bypassSrsFuture = null;
+                  Error.throwWithStackTrace(error, stack);
+                },
+              );
+
+  void updateDailyLimit(int value) {
+    dailyLimit = value;
+    _dailyLimitFuture = Future<int>.value(value);
+  }
+
+  void updateSelectiveDecksOnly(bool value) {
+    selectiveDecksOnly = value;
+    _selectiveDecksOnlyFuture = Future<bool>.value(value);
+  }
+
+  void updateBypassSrs(bool value) {
+    bypassSrs = value;
+    _bypassSrsFuture = Future<bool>.value(value);
+  }
+}
+
 class _SystemSettings extends ConsumerStatefulWidget {
   final VoidCallback onBack;
+  final _ReviewPreferences preferences;
+  final VoidCallback? onPreferencesSaved;
 
-  const _SystemSettings({required this.onBack});
+  const _SystemSettings({
+    required this.onBack,
+    required this.preferences,
+    this.onPreferencesSaved,
+  });
 
   @override
   ConsumerState<_SystemSettings> createState() => _SystemSettingsState();
 }
 
 class _SystemSettingsState extends ConsumerState<_SystemSettings> {
-  static const _storage = SessionStorage();
-  late Future<int> _dailyLimitFuture;
-  late Future<bool> _selectiveDecksOnlyFuture;
-  late Future<bool> _bypassSrsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _dailyLimitFuture = _storage.readDailyReviewLimit();
-    _selectiveDecksOnlyFuture = _storage.readSelectiveReviewDecksOnly();
-    _bypassSrsFuture = _storage.readBypassSrs();
-  }
+  _ReviewPreferences get _preferences => widget.preferences;
 
   Future<void> _showDailyReviewLimitDialog() async {
-    final currentLimit = await _storage.readDailyReviewLimit();
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    final currentLimit =
+        preferences.dailyLimit ?? await preferences.dailyLimitFuture;
     if (!mounted) {
       return;
     }
@@ -832,7 +1196,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose how many cards you want available each day.',
+                      'Limits different cards reviewed each day (UTC) with selective review on. Review all cards overrides this limit.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -883,9 +1247,13 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                         Expanded(
                           child: FilledButton(
                             onPressed: () async {
-                              await _storage.writeDailyReviewLimit(
-                                selectedLimit,
-                              );
+                              if (selectedLimit != currentLimit) {
+                                await preferences.storage.writeDailyReviewLimit(
+                                  selectedLimit,
+                                );
+                                preferences.updateDailyLimit(selectedLimit);
+                                onSaved?.call();
+                              }
                               if (!sheetContext.mounted) return;
                               Navigator.of(sheetContext).pop(true);
                             },
@@ -903,9 +1271,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       },
     );
     if (saved == true && mounted) {
-      setState(() {
-        _dailyLimitFuture = _storage.readDailyReviewLimit();
-      });
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Daily review limit updated')),
       );
@@ -913,40 +1279,46 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 
   Future<void> _toggleSelectiveDecksOnly(bool value) async {
-    await _storage.writeSelectiveReviewDecksOnly(value);
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    if (value == preferences.selectiveDecksOnly) return;
+    await preferences.storage.writeSelectiveReviewDecksOnly(value);
+    preferences.updateSelectiveDecksOnly(value);
+    onSaved?.call();
 
     if (!mounted) return;
 
-    setState(() {
-      _selectiveDecksOnlyFuture = Future<bool>.value(value);
-    });
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           value
-              ? 'Start Review will use selective decks from the algorithm'
-              : 'Start Review will show all decks with due cards',
+              ? 'Selective review on. Daily limit applies unless Review all cards is on.'
+              : 'Selective review off. Daily limit does not apply.',
         ),
       ),
     );
   }
 
   Future<void> _toggleBypassSrs(bool value) async {
-    await _storage.writeBypassSrs(value);
+    final preferences = _preferences;
+    final onSaved = widget.onPreferencesSaved;
+    if (value == preferences.bypassSrs) return;
+    await preferences.storage.writeBypassSrs(value);
+    preferences.updateBypassSrs(value);
+    onSaved?.call();
 
     if (!mounted) return;
 
-    setState(() {
-      _bypassSrsFuture = Future<bool>.value(value);
-    });
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           value
-              ? 'Review will ignore limits and due dates'
-              : 'Review will respect limits and due dates',
+              ? 'Review includes all cards, ignoring daily limits and due dates.'
+              : 'Review uses due dates; selective review controls the daily limit.',
         ),
       ),
     );
@@ -955,7 +1327,6 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final themeMode = ref.watch(appThemeModeProvider);
     final fontSize = ref.watch(appFontSizeProvider);
 
@@ -971,14 +1342,20 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Align(
-          alignment: Alignment.topLeft,
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const AccountSectionHeader(
+                  title: 'Study preferences',
+                  subtitle: 'Appearance and review preferences',
+                  icon: Icons.tune_rounded,
+                ),
+                const SizedBox(height: 20),
                 _sectionCard(
-                  isDark,
+                  context,
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -1020,7 +1397,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           Text('Font size', style: theme.textTheme.titleMedium),
                           const SizedBox(height: 4),
                           Text(
-                            'Adjusts text throughout the app relative to your device setting.',
+                            'Device default uses 115% of your device text size. All four choices follow your device setting.',
                             style: theme.textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
@@ -1074,7 +1451,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                 ),
                 const SizedBox(height: 16),
                 _sectionCard(
-                  isDark,
+                  context,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -1090,18 +1467,24 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                       ),
                     ),
                     FutureBuilder<int>(
-                      future: _dailyLimitFuture,
+                      future: _preferences.dailyLimitFuture,
+                      initialData: _preferences.dailyLimit,
                       builder:
                           (context, snapshot) => DailyReviewLimitTile(
-                            limit: snapshot.data ?? 25,
+                            limit:
+                                _preferences.dailyLimit ?? snapshot.data ?? 25,
                             onTap: _showDailyReviewLimitDialog,
                           ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
-                      future: _selectiveDecksOnlyFuture,
+                      future: _preferences.selectiveDecksOnlyFuture,
+                      initialData: _preferences.selectiveDecksOnly,
                       builder: (context, snapshot) {
-                        final value = snapshot.data ?? true;
+                        final value =
+                            _preferences.selectiveDecksOnly ??
+                            snapshot.data ??
+                            true;
                         return SwitchListTile.adaptive(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -1111,8 +1494,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           title: const Text('Use selective review decks'),
                           subtitle: Text(
                             value
-                                ? 'Only show decks chosen by the review algorithm'
-                                : 'Show all decks with due cards',
+                                ? 'Applies your daily limit to due cards, starting with recently updated decks. Review all cards overrides this.'
+                                : 'Shows all due cards with no daily limit. Review all cards also includes cards not yet due.',
                           ),
                           value: value,
                           onChanged: _toggleSelectiveDecksOnly,
@@ -1121,9 +1504,11 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     FutureBuilder<bool>(
-                      future: _bypassSrsFuture,
+                      future: _preferences.bypassSrsFuture,
+                      initialData: _preferences.bypassSrs,
                       builder: (context, snapshot) {
-                        final value = snapshot.data ?? false;
+                        final value =
+                            _preferences.bypassSrs ?? snapshot.data ?? false;
                         return SwitchListTile.adaptive(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -1133,8 +1518,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           title: const Text('Review all cards'),
                           subtitle: Text(
                             value
-                                ? 'Ignores daily limits and due dates.'
-                                : 'Respects daily limits and due dates.',
+                                ? 'Includes cards not yet due and ignores the daily limit and selective review.'
+                                : 'Uses due dates. The daily limit applies only when selective review is on.',
                           ),
                           value: value,
                           onChanged: _toggleBypassSrs,
@@ -1152,17 +1537,22 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
   }
 }
 
-Widget _sectionCard(bool isDark, {required List<Widget> children}) {
+Widget _sectionCard(BuildContext context, {required List<Widget> children}) {
+  final colors = Theme.of(context).colorScheme;
+  final tone = context.studyTone(StudyArea.account);
   return Container(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(12),
-      color: isDark ? const Color(0xFF1A2D3D) : const Color(0xFFF5F5F5),
+      borderRadius: BorderRadius.circular(20),
+      color: colors.surfaceContainerLowest,
+      border: Border.all(color: tone.accent.withValues(alpha: .28)),
     ),
     child: Column(children: children),
   );
 }
 
-String _messageFromError(Object error) { return error is AuthApiException ? error.message : networkErrorMessage(error); }
+String _messageFromError(Object error) {
+  return error is AuthApiException ? error.message : networkErrorMessage(error);
+}
 
 String _fontSizeLabel(AppFontSize size) => switch (size) {
   AppFontSize.small => 'Small',

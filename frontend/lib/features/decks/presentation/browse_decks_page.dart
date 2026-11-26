@@ -1,3 +1,5 @@
+import 'library_heading.dart';
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/api_errors.dart';
 import 'dart:async';
 
@@ -34,7 +36,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
     super.initState();
     _searchController.addListener(() {
       setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
+        _searchQuery = _searchController.text.trim().toLowerCase();
       });
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -238,7 +240,7 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                     hintText: 'Search decks...',
                     border: InputBorder.none,
                   ),
-                  style: const TextStyle(fontSize: 18),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 )
                 : const Text('Your decks'),
         actions: [
@@ -277,12 +279,6 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openPublicDecks,
-        icon: const Icon(Icons.public),
-        label: const Text('Browse public decks'),
-      ),
       body: StreamBuilder<List<db.Deck>>(
         stream: repo.watchDecks(),
         builder: (context, snapshot) {
@@ -307,20 +303,46 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
-                children: const [
-                  SizedBox(height: 120),
-                  Icon(Icons.style_outlined, size: 52),
-                  SizedBox(height: 16),
-                  Text(
-                    'No decks yet. Create a deck from Home, or browse public decks below.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                children: [
+                  LibraryHeading(
+                    title: 'Your decks',
+                    description: 'Keep your topics together in one library.',
+                    count: '${decks.length} decks',
+                    action: OutlinedButton.icon(
+                      onPressed: _openPublicDecks,
+                      icon: const Icon(Icons.public),
+                      label: const Text('Browse public decks'),
+                    ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 40),
+                  const Icon(Icons.style_outlined, size: 52),
+                  const SizedBox(height: 16),
                   Text(
-                    'Create a deck or download one from the public library.',
+                    _searchQuery.isNotEmpty
+                        ? 'No decks match "${_searchController.text.trim()}".'
+                        : 'No decks yet. Create a deck from Home, or browse public decks.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _searchQuery.isNotEmpty
+                        ? 'Try another title or clear your search.'
+                        : 'Create a deck or download one from the public library.',
                     textAlign: TextAlign.center,
                   ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _searchController.clear,
+                        icon: const Icon(Icons.clear),
+                        label: const Text('Clear search'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -329,21 +351,47 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              itemCount: decks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              padding: EdgeInsets.fromLTRB(
+                _pageInset(context),
+                16,
+                _pageInset(context),
+                32,
+              ),
+              itemCount: decks.length + 1,
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                final deck = decks[index];
-                return Card(
+                if (index == 0) {
+                  return LibraryHeading(
+                    title: 'Your decks',
+                    description: 'Open a topic to add cards or plan a review.',
+                    count:
+                        '${decks.length} ${decks.length == 1 ? 'deck' : 'decks'}',
+                    action: OutlinedButton.icon(
+                      onPressed: _openPublicDecks,
+                      icon: const Icon(Icons.public),
+                      label: const Text('Browse public decks'),
+                    ),
+                  );
+                }
+                final deck = decks[index - 1];
+                return Material(
+                  color: Colors.transparent,
                   child: Row(
                     children: [
                       Expanded(
                         child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 12,
+                          ),
                           onTap: () => _openDeck(deck.id),
                           title: Text(
                             deck.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              color:
+                                  context.studyTone(StudyArea.library).accent,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 8),
@@ -494,4 +542,9 @@ class _DeckEditDialogState extends State<_DeckEditDialog> {
       ],
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

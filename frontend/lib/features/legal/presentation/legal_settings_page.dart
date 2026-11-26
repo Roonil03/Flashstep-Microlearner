@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../../../app/app_version.dart';
 import '../../../app/router.dart';
+import '../../settings/presentation/account_sections.dart';
+import 'open_source_licenses_page.dart';
 
 class LegalSettingsPage extends StatelessWidget {
   const LegalSettingsPage({super.key});
@@ -16,6 +17,14 @@ class LegalSettingsPage extends StatelessWidget {
     if (_licensesRegistered) return;
     _licensesRegistered = true;
     LicenseRegistry.addLicense(() async* {
+      final fontLicense = await rootBundle.loadString(
+        'assets/legal/dm_sans_license.txt',
+      );
+      yield LicenseEntryWithLineBreaks(
+        const ['DM Sans'],
+        fontLicense,
+      );
+
       final project = await rootBundle.loadString(
         'assets/legal/project_license.txt',
       );
@@ -54,52 +63,53 @@ class LegalSettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Legal')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('Privacy Policy'),
-              subtitle: const Text('Current information placeholder'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap:
-                  () =>
-                      Navigator.of(context).pushNamed(AppRoutes.privacyPolicy),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const AccountSectionHeader(
+                  title: 'Policies & licenses',
+                  icon: Icons.description_outlined,
+                ),
+                const SizedBox(height: 20),
+                AccountSettingsRow(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy Policy',
+                  subtitle: 'Current information placeholder',
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pushNamed(AppRoutes.privacyPolicy),
+                ),
+                const Divider(height: 1),
+                AccountSettingsRow(
+                  icon: Icons.description_outlined,
+                  title: 'Terms of Service',
+                  subtitle: 'Current information placeholder',
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pushNamed(AppRoutes.termsOfService),
+                ),
+                const Divider(height: 1),
+                AccountSettingsRow(
+                  icon: Icons.code_outlined,
+                  title: 'Open-source licenses',
+                  onTap: () {
+                    _registerProjectLicenses();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const OpenSourceLicensesPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Terms of Service'),
-              subtitle: const Text('Current information placeholder'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap:
-                  () =>
-                      Navigator.of(context).pushNamed(AppRoutes.termsOfService),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.code_outlined),
-              title: const Text('Open-source licenses'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                _registerProjectLicenses();
-                showLicensePage(
-                  context: context,
-                  applicationName: 'Flashstep Microlearner',
-                  applicationVersion: AppVersion.name,
-                );
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Report a Bug'),
-              subtitle: const Text('Submit a public GitHub issue'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap:
-                  () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
-            ),
-          ],
+          ),
         ),
       ),
     );

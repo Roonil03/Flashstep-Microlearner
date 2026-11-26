@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -28,12 +29,16 @@ type BugReportHandler struct {
 }
 
 func NewBugReportHandler(db *sql.DB, jwtSecret string) *BugReportHandler {
-	return &BugReportHandler{
+	h := &BugReportHandler{
 		db: db, token: strings.TrimSpace(os.Getenv("BUG_REPORT_GITHUB_TOKEN")),
 		client:  &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		reports: &bugReportLimiter{entries: make(map[string]*bugReportReservation)},
 		idKey:   []byte(jwtSecret),
 	}
+	if h.token == "" {
+		log.Print("Bug reporting disabled: configure BUG_REPORT_GITHUB_TOKEN on the backend service with access to the target repository and Actions write permission")
+	}
+	return h
 }
 
 type bugReportRequest struct {
@@ -91,8 +96,21 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report. Check field lengths and public posting consent."})
 		return
 	}
-	if h.token == "" || len(h.idKey) == 0 {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bug reporting is temporarily unavailable. Your report has not been sent."})
+	canonical, _ := json.Marshal(report)
+	id, accountKey := bugReportIdentity(h.idKey, accountID, canonical)
+	if h.token == "" {
+		switch h.reports.outcome(id, time.Now()) {
+		case bugReportAccepted:
+			reportAlreadyQueued(c, id)
+		case bugReportUncertain:
+			reportUnavailable(c)
+		default:
+			reportBotUnavailable(c)
+		}
+		return
+	}
+	if len(h.idKey) == 0 {
+		reportUnavailable(c)
 		return
 	}
 	// GitHub limits the size of workflow inputs. Report text is JSON data,
@@ -115,11 +133,9 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Sign in to an active account to report a bug."})
 		return
 	}
-	canonical, _ := json.Marshal(report)
-	id, accountKey := bugReportIdentity(h.idKey, accountID, canonical)
 	reservation, duplicate, permitted := h.reports.reserve(id, accountKey, time.Now())
 	if duplicate {
-		c.JSON(http.StatusAccepted, gin.H{"report_id": id, "message": "This report has already been queued for public posting."})
+		reportAlreadyQueued(c, id)
 		return
 	}
 	if !permitted {
@@ -138,22 +154,71 @@ func (h *BugReportHandler) Create(c *gin.Context) {
 	req.Header.Set("Content-Type", "application/json")
 	response, dispatchErr := h.client.Do(req)
 	accepted := dispatchErr == nil && response != nil && (response.StatusCode == http.StatusNoContent || response.StatusCode == http.StatusOK)
+	rejected := dispatchErr == nil && response != nil && bugReportDispatchRejected(response)
 	if response != nil {
 		response.Body.Close()
 	}
-	// The same private ID is regenerated after restarts, so the workflow's
-	// bot-owned issue marker also deduplicates uncertain delivery retries.
-	h.reports.finish(id, reservation, accepted)
-	if !accepted {
-		reportUnavailable(c)
-		return
+	// With the same JWT secret, an unchanged report regenerates the same ID
+	// after restart; the workflow checks for that marker on existing bot issues.
+	outcome := bugReportUncertain
+	if accepted {
+		outcome = bugReportAccepted
+	} else if rejected {
+		outcome = bugReportRejected
 	}
-	c.JSON(http.StatusAccepted, gin.H{"report_id": id, "message": "Report queued for public posting on GitHub. Posting may take a few minutes."})
+	outcome = h.reports.finish(id, reservation, outcome)
+	if rejected {
+		log.Printf("Bug report dispatch rejected by GitHub (status=%d): check BUG_REPORT_GITHUB_TOKEN validity, repository access, Actions write permission, and the bug-report.yml workflow on main", response.StatusCode)
+	}
+	switch outcome {
+	case bugReportAccepted:
+		c.JSON(http.StatusAccepted, gin.H{"report_id": id, "message": "Report queued for public posting on GitHub. Posting may take a few minutes."})
+	case bugReportUncertain:
+		reportUnavailable(c)
+	default:
+		reportBotUnavailable(c)
+	}
+}
+
+// Only definitive bot configuration/access failures allow a manual fallback.
+// Rate limits and uncertain delivery must retain the same report ID on retries.
+// Error bodies are bounded and inspected only for classification, never logged.
+func bugReportDispatchRejected(response *http.Response) bool {
+	switch response.StatusCode {
+	case http.StatusUnauthorized, http.StatusNotFound:
+		return true
+	case http.StatusForbidden:
+		if response.Header.Get("Retry-After") != "" || response.Header.Get("X-RateLimit-Remaining") == "0" {
+			return false
+		}
+		body, err := io.ReadAll(io.LimitReader(response.Body, 8193))
+		if err != nil || len(body) > 8192 {
+			return false
+		}
+		var failure struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(body, &failure) != nil || failure.Message == "" {
+			return false
+		}
+		message := strings.ToLower(failure.Message)
+		return !strings.Contains(message, "rate limit") && !strings.Contains(message, "abuse")
+	default:
+		return false
+	}
+}
+
+func reportBotUnavailable(c *gin.Context) {
+	c.JSON(http.StatusServiceUnavailable, gin.H{"code": "bot_unavailable", "error": "Automatic bug reporting is unavailable for this attempt. Check existing GitHub Issues for earlier attempts before filing manually."})
+}
+
+func reportAlreadyQueued(c *gin.Context, id string) {
+	c.JSON(http.StatusAccepted, gin.H{"report_id": id, "message": "This report has already been queued for public posting."})
 }
 
 func reportUnavailable(c *gin.Context) {
 	c.Header("Retry-After", "60")
-	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Could not confirm report delivery. Wait one minute and retry the same report safely."})
+	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Could not confirm report delivery. Check existing GitHub Issues, wait one minute, and retry the same report if needed. An earlier attempt may already be queued."})
 }
 
 func reportLimited(c *gin.Context) {

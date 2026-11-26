@@ -7,12 +7,14 @@ class SyncStatus {
   final SyncPhase phase;
   final DateTime? lastSuccessfulAt;
   final String? message;
+  final int? statusCode;
 
   const SyncStatus({
     this.userId,
     this.phase = SyncPhase.idle,
     this.lastSuccessfulAt,
     this.message,
+    this.statusCode,
   });
 }
 
@@ -39,6 +41,7 @@ class SyncStatusNotifier extends StateNotifier<SyncStatus> {
     required bool offline,
     required String message,
     DateTime? completedAt,
+    int? statusCode,
   }) {
     if (!mounted) return;
     if (state.userId != userId) return;
@@ -55,6 +58,7 @@ class SyncStatusNotifier extends StateNotifier<SyncStatus> {
               ? completedAt ?? DateTime.now().toUtc()
               : state.lastSuccessfulAt,
       message: message,
+      statusCode: statusCode,
     );
   }
 

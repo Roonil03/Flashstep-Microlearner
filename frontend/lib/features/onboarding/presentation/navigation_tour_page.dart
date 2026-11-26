@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/widgets/learning_controls.dart';
+import '../../../app/theme/study_colors.dart';
+import '../../review/presentation/notebook_card.dart';
+import '../../review/presentation/review_rating_row.dart';
 
 class TourScene {
   final int step;
@@ -70,7 +73,7 @@ const navigationTourScenes = <TourScene>[
     9,
     'Adjust daily limits',
     'Home → Settings → System Settings',
-    'Open Settings, then System Settings. Use the Font size slider to choose Small, Device default, Large, or Extra large text. Daily review limit controls cards per day (1–500). Selective review chooses recommended decks. Review all cards overrides daily limits and due dates. Replay this guide from Settings → Relearn app navigation.',
+    'Open Settings, then System Settings. Font size offers Small, Device default, Large, or Extra large text. With selective review on, the daily limit (1–500 different cards per UTC day) applies to due cards, starting with recently updated decks. With it off, all due cards are available without a daily limit. Review all cards overrides both settings and includes cards not yet due. Replay from Settings → Relearn app navigation.',
   ),
 ];
 
@@ -246,15 +249,23 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           title: Text('Everyday Spanish'),
           subtitle: Text('2 cards available'),
         ),
-        FilledButton(onPressed: _noop, child: const Text('Show answer')),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final rating in ['Again', 'Hard', 'Good', 'Easy'])
-              OutlinedButton(onPressed: _noop, child: Text(rating)),
-          ],
+        const NotebookCard(heading: 'Question', text: 'How do you say hello?'),
+        const NotebookCard(heading: 'Answer', text: 'Hola', answer: true),
+        Text(
+          'How well did you recall it?',
+          style: Theme.of(context).textTheme.titleMedium,
         ),
+        for (final rating in const [
+          ('Again', 'Not yet'),
+          ('Hard', 'With effort'),
+          ('Good', 'Recalled it'),
+          ('Easy', 'Without effort'),
+        ])
+          ReviewRatingRow(
+            label: rating.$1,
+            description: rating.$2,
+            onPressed: _noop,
+          ),
       ],
       8 => <Widget>[
         _action(Icons.bar_chart_outlined, 'Analytics'),
@@ -291,7 +302,9 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           value: true,
           onChanged: (_) {},
           title: const Text('Use selective review decks'),
-          subtitle: const Text('Show recommended decks'),
+          subtitle: const Text(
+            'Apply the daily limit to due cards, starting with recently updated decks. Review all cards overrides this.',
+          ),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -299,7 +312,7 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           onChanged: (_) {},
           title: const Text('Review all cards'),
           subtitle: const Text(
-            'When enabled, ignores daily limits and due dates',
+            'When enabled, includes cards not yet due and overrides the daily limit and selective review.',
           ),
         ),
       ],
@@ -320,7 +333,15 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
   @override
   Widget build(BuildContext context) {
     final scene = navigationTourScenes[_scene];
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final area = switch (_scene) {
+      7 => StudyArea.study,
+      8 => StudyArea.progress,
+      9 => StudyArea.account,
+      _ => StudyArea.library,
+    };
+    final tone = context.studyTone(area);
     return PopScope(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -347,57 +368,96 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
               builder: (context, constraints) {
                 _viewportHeight = constraints.maxHeight;
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Safe preview • Examples are never saved',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Semantics(
-                        liveRegion: true,
-                        header: true,
-                        child: Text(
-                          'Step ${scene.step} of 9: ${scene.title}',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(scene.path),
-                      const SizedBox(height: 12),
-                      Card(
-                        key: _instructions,
-                        color: scheme.secondaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            scene.instruction,
-                            style: TextStyle(
-                              color: scheme.onSecondaryContainer,
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: tone.fill,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              'Safe preview • Examples are never saved',
+                              style: TextStyle(color: tone.ink),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 20),
+                          LinearProgressIndicator(
+                            value: scene.step / 9,
+                            minHeight: 8,
+                            color: tone.accent,
+                            backgroundColor: tone.fill,
+                            borderRadius: BorderRadius.circular(4),
+                            semanticsLabel: 'Guide progress',
+                            semanticsValue: 'Step ${scene.step} of 9',
+                          ),
+                          const SizedBox(height: 20),
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              'Step ${scene.step} of 9: ${scene.title}',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            scene.path,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: tone.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            key: _instructions,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: tone.fill,
+                              border: Border(
+                                left: BorderSide(color: tone.accent, width: 5),
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              scene.instruction,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: tone.ink,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                          // The connector is in the same scroll layout as its instruction and
+                          // target, so it stays attached through resizing and text scaling.
+                          SizedBox(
+                            height: 36,
+                            child: CustomPaint(
+                              painter: TourArrowPainter(tone.accent),
+                            ),
+                          ),
+                          Container(
+                            key: _target,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              border: Border.all(
+                                color: tone.accent,
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: _preview(),
+                          ),
+                        ],
                       ),
-                      // The connector is in the same scroll layout as its instruction and
-                      // target, so it stays attached through resizing and text scaling.
-                      SizedBox(
-                        height: 36,
-                        child: CustomPaint(
-                          painter: TourArrowPainter(scheme.primary),
-                        ),
-                      ),
-                      Container(
-                        key: _target,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: scheme.primary, width: 3),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: _preview(),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -455,7 +515,7 @@ class TourArrowPainter extends CustomPainter {
     final paint =
         Paint()
           ..color = color
-          ..strokeWidth = 3
+          ..strokeWidth = 1.5
           ..style = PaintingStyle.stroke;
     final x = size.width / 2;
     canvas.drawLine(Offset(x, 0), Offset(x, size.height - 5), paint);

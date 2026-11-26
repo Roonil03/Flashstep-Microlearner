@@ -156,6 +156,7 @@ class DeckSyncService {
         success: result.success,
         offline: result.offline,
         message: result.message,
+        statusCode: result.statusCode,
       );
       return result;
     } finally {

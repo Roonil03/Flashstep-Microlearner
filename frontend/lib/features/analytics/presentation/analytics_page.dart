@@ -1,3 +1,4 @@
+import '../../../app/theme/study_colors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:math' as math;
 
@@ -67,7 +68,12 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
             loading:
                 () => ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   children: const [
                     _SkeletonCard(height: 220),
                     SizedBox(height: 16),
@@ -94,7 +100,12 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
             data:
                 (data) => ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   children: [
                     _AnalyticsHeroCard(data: data, isDark: isDark),
                     const SizedBox(height: 16),
@@ -108,30 +119,30 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
                     const SizedBox(height: 16),
                     _MetricWrap(data: data),
                     const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Study rhythm',
-                      subtitle:
-                          '${data.reviewsInRange} reviews across ${data.rangeDays} days',
-                      child: _ReviewBarChart(
-                        points: data.reviewActivity,
-                        isDark: isDark,
+                    _ChartSpread(
+                      first: _SectionCard(
+                        title: 'Study rhythm',
+                        subtitle:
+                            '${data.reviewsInRange} reviews across ${data.rangeDays} days',
+                        child: _ReviewBarChart(
+                          points: data.reviewActivity,
+                          isDark: isDark,
+                        ),
+                      ),
+                      second: _SectionCard(
+                        title: 'Retention trend',
+                        subtitle:
+                            '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
+                        child: _AccuracyLineChart(
+                          points: data.accuracyTrend,
+                          isDark: isDark,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Retention trend',
-                      subtitle:
-                          '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
-                      child: _AccuracyLineChart(
-                        points: data.accuracyTrend,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                     _SectionCard(
                       title: 'Learning pipeline',
-                      subtitle:
-                          'Current card distribution from your synced database state',
+                      subtitle: 'Where your cards are in the learning cycle',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -255,134 +266,45 @@ _AnalyticsErrorData _resolveAnalyticsError(Object error) {
 class _AnalyticsHeroCard extends StatelessWidget {
   final AnalyticsDashboardData data;
   final bool isDark;
-
   const _AnalyticsHeroCard({required this.data, required this.isDark});
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final snapshot = data.generatedAt.toLocal();
+    final tone = context.studyTone(StudyArea.progress);
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors:
-              isDark
-                  ? const [Color(0xFF1D1536), Color(0xFF0F1A30)]
-                  : const [Color(0xFFF4ECFF), Color(0xFFEAF6FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: tone.fill,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color:
-                      isDark
-                          ? Colors.white.withOpacity(0.08)
-                          : Colors.white.withOpacity(0.82),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Image.asset(
-                  'assets/LogoWithText_WithoutBG.png',
-                  fit: BoxFit.contain,
-                  errorBuilder:
-                      (_, __, ___) => const Icon(Icons.auto_stories_rounded),
-                ),
+          Semantics(
+            header: true,
+            child: Text(
+              'Learning progress',
+              style: theme.textTheme.headlineLarge?.copyWith(
+                color: tone.ink,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Synced learning analytics',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      data.username.isEmpty
-                          ? 'Flashapp learner'
-                          : data.username,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.72,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Text(
             data.hasCards
-                ? 'You have ${data.totalCards} active cards across ${data.totalDecks} decks. ${data.dueNow} are currently due and ${data.dueNext24Hours} are due within the next 24 hours.'
+                ? '${data.totalCards} active ${data.totalCards == 1 ? 'card' : 'cards'} · ${data.totalDecks} ${data.totalDecks == 1 ? 'deck' : 'decks'} · ${data.currentStreak} ${data.currentStreak == 1 ? 'day' : 'days'} streak'
                 : 'Create a deck and review some cards to start building your analytics dashboard.',
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+            style: theme.textTheme.bodyLarge?.copyWith(color: tone.ink),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _HeroChip(
-                icon: Icons.local_fire_department_outlined,
-                label: '${data.currentStreak} day streak',
-              ),
-              _HeroChip(
-                icon: Icons.auto_graph_outlined,
-                label:
-                    '${(data.retentionRate * 100).toStringAsFixed(1)}% retention',
-              ),
-              _HeroChip(
-                icon: Icons.today_outlined,
-                label: '${data.reviewsToday} reviewed today',
-              ),
-            ],
+          Divider(color: tone.ink.withValues(alpha: .2)),
+          const SizedBox(height: 8),
+          Text(
+            'Snapshot ${snapshot.day}/${snapshot.month}/${snapshot.year} ${snapshot.hour.toString().padLeft(2, '0')}:${snapshot.minute.toString().padLeft(2, '0')} · Pull to refresh',
+            style: theme.textTheme.bodySmall?.copyWith(color: tone.ink),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _HeroChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color:
-            isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.white.withOpacity(0.82),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 8),
-          Flexible(child: Text(label)),
         ],
       ),
     );
@@ -434,12 +356,21 @@ class _MetricWrap extends StatelessWidget {
         final compact = constraints.maxWidth < 520;
         final tileWidth =
             compact ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final item in items) SizedBox(width: tileWidth, child: item),
-          ],
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.symmetric(
+              horizontal: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+          ),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 0,
+            children: [
+              for (final item in items) SizedBox(width: tileWidth, child: item),
+            ],
+          ),
         );
       },
     );
@@ -462,27 +393,17 @@ class _MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Container(
-      constraints: const BoxConstraints(minHeight: 148),
+      constraints: const BoxConstraints(minHeight: 120),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: isDark ? const Color(0xFF171B2E) : Colors.white,
-        border: Border.all(
-          color: isDark ? const Color(0xFF2D3454) : const Color(0xFFE8EAF2),
-        ),
-      ),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 22),
-          const SizedBox(height: 12),
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.72),
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.72),
             ),
           ),
           const SizedBox(height: 8),
@@ -519,15 +440,15 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: isDark ? const Color(0xFF121628) : Colors.white,
-        border: Border.all(
-          color: isDark ? const Color(0xFF252A45) : const Color(0xFFE7EAF3),
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: context.studyTone(StudyArea.progress).accent,
+            width: 3,
+          ),
         ),
       ),
       child: Column(
@@ -543,7 +464,7 @@ class _SectionCard extends StatelessWidget {
           Text(
             subtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.72),
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.72),
               height: 1.45,
             ),
           ),
@@ -555,6 +476,29 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _ChartSpread extends StatelessWidget {
+  final Widget first;
+  final Widget second;
+  const _ChartSpread({required this.first, required this.second});
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth < 760 ||
+          MediaQuery.textScalerOf(context).scale(1) > 1.4) {
+        return Column(children: [first, const SizedBox(height: 24), second]);
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: first),
+          const SizedBox(width: 24),
+          Expanded(child: second),
+        ],
+      );
+    },
+  );
+}
+
 class _ReviewBarChart extends StatelessWidget {
   final List<DailyCountPoint> points;
   final bool isDark;
@@ -563,8 +507,20 @@ class _ReviewBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dailyValues = _DailyChartValues(
+      title: 'View daily review counts',
+      values: [
+        for (final point in points)
+          '${_shortDate(point.date)}, ${point.date.year}: ${point.count} ${point.count == 1 ? 'review' : 'reviews'}',
+      ],
+    );
     if (points.isEmpty || points.every((point) => point.count == 0)) {
-      return const _ChartEmptyState(label: 'No review activity yet');
+      return Column(
+        children: [
+          const _ChartEmptyState(label: 'No review activity yet'),
+          if (points.isNotEmpty) dailyValues,
+        ],
+      );
     }
 
     final peak = points.fold<int>(
@@ -577,13 +533,19 @@ class _ReviewBarChart extends StatelessWidget {
         SizedBox(
           height: 180,
           child: CustomPaint(
-            painter: _BarChartPainter(points: points, isDark: isDark),
+            painter: _BarChartPainter(
+              points: points,
+              isDark: isDark,
+              color: context.studyTone(StudyArea.progress).accent,
+            ),
             child: const SizedBox.expand(),
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             Text(_shortDate(points.first.date)),
             Text(
@@ -593,6 +555,8 @@ class _ReviewBarChart extends StatelessWidget {
             Text(_shortDate(points.last.date)),
           ],
         ),
+        const SizedBox(height: 8),
+        dailyValues,
       ],
     );
   }
@@ -606,8 +570,20 @@ class _AccuracyLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dailyValues = _DailyChartValues(
+      title: 'View daily retention values',
+      values: [
+        for (final point in points)
+          '${_shortDate(point.date)}, ${point.date.year}: ${point.reviewed == 0 ? 'No graded reviews' : '${(point.accuracy * 100).toStringAsFixed(1)}% retention; ${point.correct} of ${point.reviewed} reviews recalled successfully'}',
+      ],
+    );
     if (points.isEmpty || points.every((point) => point.reviewed == 0)) {
-      return const _ChartEmptyState(label: 'No graded reviews yet');
+      return Column(
+        children: [
+          const _ChartEmptyState(label: 'No graded reviews yet'),
+          if (points.isNotEmpty) dailyValues,
+        ],
+      );
     }
 
     final highest = points.fold<double>(
@@ -620,13 +596,19 @@ class _AccuracyLineChart extends StatelessWidget {
         SizedBox(
           height: 180,
           child: CustomPaint(
-            painter: _LineChartPainter(points: points, isDark: isDark),
+            painter: _LineChartPainter(
+              points: points,
+              isDark: isDark,
+              color: context.studyTone(StudyArea.progress).accent,
+            ),
             child: const SizedBox.expand(),
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             Text(_shortDate(points.first.date)),
             Text(
@@ -636,9 +618,36 @@ class _AccuracyLineChart extends StatelessWidget {
             Text(_shortDate(points.last.date)),
           ],
         ),
+        const SizedBox(height: 8),
+        dailyValues,
       ],
     );
   }
+}
+
+class _DailyChartValues extends StatelessWidget {
+  final String title;
+  final List<String> values;
+
+  const _DailyChartValues({required this.title, required this.values});
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    tilePadding: EdgeInsets.zero,
+    childrenPadding: const EdgeInsets.only(bottom: 8),
+    title: Text(title, style: Theme.of(context).textTheme.titleSmall),
+    subtitle: const Text('Dates use UTC.'),
+    children: [
+      for (final value in values)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Semantics(container: true, child: Text(value)),
+          ),
+        ),
+    ],
+  );
 }
 
 class _StateDistributionBar extends StatelessWidget {
@@ -659,9 +668,9 @@ class _StateDistributionBar extends StatelessWidget {
       segments.add(Expanded(flex: value, child: Container(color: color)));
     }
 
-    addSegment(data.newCards, const Color(0xFF7C4DFF));
-    addSegment(data.learningCards, const Color(0xFFFFA726));
-    addSegment(data.reviewCards, const Color(0xFF26A69A));
+    addSegment(data.newCards, Theme.of(context).colorScheme.secondary);
+    addSegment(data.learningCards, Theme.of(context).colorScheme.tertiary);
+    addSegment(data.reviewCards, Theme.of(context).colorScheme.primary);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -676,17 +685,17 @@ class _StateDistributionBar extends StatelessWidget {
           runSpacing: 10,
           children: [
             _LegendItem(
-              color: const Color(0xFF7C4DFF),
+              color: Theme.of(context).colorScheme.secondary,
               label: 'New',
               value: data.newCards,
             ),
             _LegendItem(
-              color: const Color(0xFFFFA726),
+              color: Theme.of(context).colorScheme.tertiary,
               label: 'Learning',
               value: data.learningCards,
             ),
             _LegendItem(
-              color: const Color(0xFF26A69A),
+              color: Theme.of(context).colorScheme.primary,
               label: 'Review',
               value: data.reviewCards,
             ),
@@ -710,13 +719,11 @@ class _LegendItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color:
-            isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8F9FD),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -727,7 +734,7 @@ class _LegendItem extends StatelessWidget {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
-          Text('$label · $value'),
+          Flexible(child: Text('$label · $value')),
         ],
       ),
     );
@@ -748,30 +755,31 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     return Container(
       constraints: const BoxConstraints(minWidth: 140),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: isDark ? const Color(0xFF171C31) : const Color(0xFFF8F9FD),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 18),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: theme.textTheme.bodySmall),
-              Text(
-                value,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: theme.textTheme.bodySmall),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -796,7 +804,7 @@ class _RatingBreakdownCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: isDark ? const Color(0xFF1A1F34) : const Color(0xFFF8F9FD),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -873,8 +881,11 @@ class _DeckInsightTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: isDark ? const Color(0xFF171C31) : const Color(0xFFF8F9FD),
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -914,13 +925,8 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-      ),
+      padding: const EdgeInsets.only(right: 8, bottom: 4),
       child: Text('$label: $value'),
     );
   }
@@ -995,17 +1001,14 @@ class _InsightTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = [
-      const Color(0xFF7C4DFF),
-      const Color(0xFFFFA726),
-      const Color(0xFF26A69A),
-    ];
+    final scheme = Theme.of(context).colorScheme;
+    final colors = [scheme.primary, scheme.secondary, scheme.tertiary];
     final color = colors[index % colors.length];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: isDark ? const Color(0xFF171C31) : const Color(0xFFF8F9FD),
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1028,7 +1031,12 @@ class _BarChartPainter extends CustomPainter {
   final List<DailyCountPoint> points;
   final bool isDark;
 
-  _BarChartPainter({required this.points, required this.isDark});
+  final Color color;
+  _BarChartPainter({
+    required this.points,
+    required this.isDark,
+    required this.color,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1048,15 +1056,11 @@ class _BarChartPainter extends CustomPainter {
 
     final gridPaint =
         Paint()
-          ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
+          ..color = (isDark ? Colors.white : Colors.black).withValues(
+            alpha: 0.06,
+          )
           ..strokeWidth = 1;
-    final barPaint =
-        Paint()
-          ..shader = const LinearGradient(
-            colors: [Color(0xFF7C4DFF), Color(0xFFFF5BB2)],
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-          ).createShader(Rect.fromLTWH(0, topPadding, size.width, chartHeight));
+    final barPaint = Paint()..color = color;
 
     for (var i = 0; i < 4; i++) {
       final y = topPadding + (chartHeight / 3) * i;
@@ -1083,7 +1087,9 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BarChartPainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.isDark != isDark;
+    return oldDelegate.points != points ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.color != color;
   }
 }
 
@@ -1091,7 +1097,12 @@ class _LineChartPainter extends CustomPainter {
   final List<AccuracyPoint> points;
   final bool isDark;
 
-  _LineChartPainter({required this.points, required this.isDark});
+  final Color color;
+  _LineChartPainter({
+    required this.points,
+    required this.isDark,
+    required this.color,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1104,7 +1115,9 @@ class _LineChartPainter extends CustomPainter {
     final chartWidth = size.width - leftPadding - rightPadding;
     final gridPaint =
         Paint()
-          ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.06)
+          ..color = (isDark ? Colors.white : Colors.black).withValues(
+            alpha: 0.06,
+          )
           ..strokeWidth = 1;
 
     for (var i = 0; i < 4; i++) {
@@ -1121,7 +1134,7 @@ class _LineChartPainter extends CustomPainter {
         size.width / 2,
         topPadding + chartHeight * (1 - points.first.accuracy),
       );
-      final pointPaint = Paint()..color = const Color(0xFF26A69A);
+      final pointPaint = Paint()..color = color;
       canvas.drawCircle(center, 5, pointPaint);
       return;
     }
@@ -1155,20 +1168,11 @@ class _LineChartPainter extends CustomPainter {
     areaPath.lineTo(lastOffset.dx, size.height - bottomPadding);
     areaPath.close();
 
-    final fillPaint =
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              const Color(0xFF26A69A).withOpacity(0.28),
-              const Color(0xFF26A69A).withOpacity(0.02),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    final fillPaint = Paint()..color = color.withValues(alpha: 0.10);
 
     final linePaint =
         Paint()
-          ..color = const Color(0xFF26A69A)
+          ..color = color
           ..strokeWidth = 3
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
@@ -1177,7 +1181,7 @@ class _LineChartPainter extends CustomPainter {
     canvas.drawPath(areaPath, fillPaint);
     canvas.drawPath(linePath, linePaint);
 
-    final dotPaint = Paint()..color = const Color(0xFF26A69A);
+    final dotPaint = Paint()..color = color;
     final dotOutline =
         Paint()
           ..color = isDark ? const Color(0xFF111523) : Colors.white
@@ -1192,7 +1196,9 @@ class _LineChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.isDark != isDark;
+    return oldDelegate.points != points ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.color != color;
   }
 }
 
@@ -1211,7 +1217,7 @@ class _ChartEmptyState extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         color:
             theme.brightness == Brightness.dark
-                ? Colors.white.withOpacity(0.03)
+                ? Colors.white.withValues(alpha: 0.03)
                 : const Color(0xFFF8F9FD),
       ),
       child: Column(
@@ -1267,7 +1273,7 @@ class _SkeletonCardState extends State<_SkeletonCard>
           (context, _) => Container(
             height: widget.height,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(12),
               color: Color.lerp(
                 isDark ? const Color(0xFF171B2E) : const Color(0xFFE7ECF1),
                 isDark ? const Color(0xFF303751) : const Color(0xFFF7FAFC),
@@ -1297,7 +1303,7 @@ class _ErrorState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         color:
             Theme.of(context).brightness == Brightness.dark
                 ? const Color(0xFF171B2E)
@@ -1343,4 +1349,9 @@ String _shortDate(DateTime date) {
     'Dec',
   ];
   return '${months[date.month - 1]} ${date.day}';
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

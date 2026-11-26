@@ -6,11 +6,13 @@ import 'package:frontend/core/storage/session_storage.dart';
 import 'package:frontend/features/home/domain/home_dashboard_models.dart';
 
 class HomeDashboardStats {
+  final DateTime reviewDayUtc;
   final int reviewedToday;
   final int streak;
   final double retentionRate;
 
   const HomeDashboardStats({
+    required this.reviewDayUtc,
     required this.reviewedToday,
     required this.streak,
     required this.retentionRate,
@@ -26,6 +28,7 @@ class _DeckCardStats {
 class HomeRepository {
   final AppDatabase _database;
   final SessionStorage _sessionStorage;
+  final DateTime Function() _now;
   final void Function()? _onDataChanged;
   late final StreamSubscription<dynamic> _deckChanges;
   late final StreamSubscription<dynamic> _reviewChanges;
@@ -43,7 +46,9 @@ class HomeRepository {
     this._database,
     this._sessionStorage, {
     void Function()? onDataChanged,
-  }) : _onDataChanged = onDataChanged {
+    DateTime Function()? now,
+  }) : _onDataChanged = onDataChanged,
+       _now = now ?? DateTime.now {
     // A cheap watched query invalidates the summaries for local edits and
     // downloaded sync changes without loading all cards into memory.
     _deckChanges = _database
@@ -51,10 +56,7 @@ class HomeRepository {
         .watch()
         .listen((_) {
           if (_disposed) return;
-          _deckRevision++;
-          _reviewRevision++;
-          _cachedDecks = null;
-          _cachedStats = null;
+          expireScheduledSummaries();
           _onDataChanged?.call();
         });
     _reviewChanges = _database
@@ -74,42 +76,70 @@ class HomeRepository {
     await _reviewChanges.cancel();
   }
 
-  bool _fresh(DateTime? cachedAt) =>
+  bool _fresh(DateTime? cachedAt, DateTime now) =>
       cachedAt != null &&
-      DateTime.now().difference(cachedAt) < const Duration(seconds: 30);
+      !now.isBefore(cachedAt) &&
+      now.difference(cachedAt) < const Duration(seconds: 30);
+
+  bool _sameDay(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+
+  void expireScheduledSummaries() {
+    _deckRevision++;
+    _reviewRevision++;
+    _cachedDecks = null;
+    _cachedStats = null;
+  }
 
   Future<HomeDashboardStats> getDashboardStats() async {
     final currentUserId = await _sessionStorage.readUserId();
+    final now = _now().toUtc();
+    final reviewDayUtc = DateTime.utc(now.year, now.month, now.day);
 
     if (currentUserId == null || currentUserId.isEmpty) {
-      return const HomeDashboardStats(
+      return HomeDashboardStats(
+        reviewDayUtc: reviewDayUtc,
         reviewedToday: 0,
         streak: 0,
         retentionRate: 0.0,
       );
     }
 
-    if (_statsUserId == currentUserId && _fresh(_statsCachedAt)) {
+    if (_statsUserId == currentUserId &&
+        _fresh(_statsCachedAt, now) &&
+        _sameDay(_statsCachedAt!, now)) {
       final cached = _cachedStats;
       if (cached != null) return cached;
     }
     final revision = _reviewRevision;
     _statsUserId = currentUserId;
-    _statsCachedAt = DateTime.now();
-    final load = _loadDashboardStats(currentUserId);
+    _statsCachedAt = now;
+    final load = _loadDashboardStats(
+      currentUserId,
+      reviewDayUtc,
+    ).then<HomeDashboardStats>((result) {
+      // A query can itself span midnight. Guard the cached future too, so every
+      // caller waiting for that load receives the current day's allowance.
+      return revision == _reviewRevision &&
+              _sameDay(result.reviewDayUtc, _now().toUtc())
+          ? result
+          : getDashboardStats();
+    });
     _cachedStats = load;
     try {
-      final result = await load;
-      return revision == _reviewRevision ? result : getDashboardStats();
+      return await load;
     } catch (_) {
       if (identical(_cachedStats, load)) _cachedStats = null;
       rethrow;
     }
   }
 
-  Future<HomeDashboardStats> _loadDashboardStats(String currentUserId) async {
-    final now = DateTime.now().toUtc();
-    final startOfToday = DateTime.utc(now.year, now.month, now.day);
+  Future<HomeDashboardStats> _loadDashboardStats(
+    String currentUserId,
+    DateTime startOfToday,
+  ) async {
     final endOfToday = startOfToday.add(const Duration(days: 1));
 
     final reviewedTodayExpression = _database.reviewLogs.cardId.count(
@@ -142,9 +172,14 @@ class HomeRepository {
     for (final row in reviewedDateRows) {
       final reviewedAt = row.read(_database.reviewLogs.reviewedAt);
       if (reviewedAt == null) continue;
+      final reviewedAtUtc = reviewedAt.toUtc();
 
       reviewedDays.add(
-        DateTime.utc(reviewedAt.year, reviewedAt.month, reviewedAt.day),
+        DateTime.utc(
+          reviewedAtUtc.year,
+          reviewedAtUtc.month,
+          reviewedAtUtc.day,
+        ),
       );
     }
 
@@ -172,6 +207,7 @@ class HomeRepository {
         totalReviews == 0 ? 0.0 : (successfulReviews / totalReviews) * 100.0;
 
     return HomeDashboardStats(
+      reviewDayUtc: startOfToday,
       reviewedToday: reviewedToday,
       streak: streak,
       retentionRate: double.parse(retentionRate.toStringAsFixed(1)),
@@ -201,13 +237,14 @@ class HomeRepository {
   Future<List<DeckSummary>> getDecks() async {
     final currentUserId = await _sessionStorage.readUserId();
     if (currentUserId == null || currentUserId.isEmpty) return [];
-    if (_deckUserId == currentUserId && _fresh(_deckCachedAt)) {
+    final now = _now().toUtc();
+    if (_deckUserId == currentUserId && _fresh(_deckCachedAt, now)) {
       final cached = _cachedDecks;
       if (cached != null) return cached;
     }
     final revision = _deckRevision;
     _deckUserId = currentUserId;
-    _deckCachedAt = DateTime.now();
+    _deckCachedAt = now;
     final load = _loadDecks(currentUserId);
     _cachedDecks = load;
     try {
@@ -230,7 +267,7 @@ class HomeRepository {
               ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)]))
             .get();
 
-    final now = DateTime.now().toUtc();
+    final now = _now().toUtc();
     final stats = <String, _DeckCardStats>{};
     // Keep each IN clause below SQLite's bind-variable limit. Aggregate on
     // the device so Home never materializes every card in a large library.
@@ -243,10 +280,12 @@ class HomeRepository {
                 'SELECT deck_id, COUNT(*) AS total_cards, '
                 'SUM(CASE WHEN due_timestamp IS NULL OR due_timestamp <= ? '
                 'THEN 1 ELSE 0 END) AS due_cards, '
-                'MIN(due_timestamp) AS next_due_at FROM cards '
+                'MIN(CASE WHEN due_timestamp > ? THEN due_timestamp END) '
+                'AS next_due_at FROM cards '
                 'WHERE is_deleted = 0 AND deck_id IN ($placeholders) '
                 'GROUP BY deck_id',
                 variables: [
+                  Variable.withDateTime(now),
                   Variable.withDateTime(now),
                   ...ids.map(Variable.withString),
                 ],

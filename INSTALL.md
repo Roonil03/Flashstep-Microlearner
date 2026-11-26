@@ -64,7 +64,14 @@ Keep the existing strong `JWT_SECRET` across deploys. The API requires at least 
 
 ### Public bug reporting
 
-Enable Issues and Actions on the repository. GitHub can dispatch the bug report workflow after it is present on the default branch. Set `BUG_REPORT_GITHUB_TOKEN` in the backend host to a fine-grained token restricted to this repository with Actions write permission. The workflow uses its own token with Issues write permission to post a confirmed report. Keep the backend credential out of the app.
+1. Enable Issues and Actions for `Roonil03/Flashstep-Microlearner`. In **Actions**, check that **Publish app bug report** is enabled on `main`.
+2. Create a fine-grained GitHub token scoped to this repository with **Actions → Read and write**. The workflow uses its own `GITHUB_TOKEN` with Issues write permission to publish the report.
+3. On Render, open the **flashstep-api** service and add `BUG_REPORT_GITHUB_TOKEN` under **Environment**. Save and deploy the backend. The Blueprint prompts for the secret on initial setup. For an existing service, enter the value in the dashboard. Rotate it there before it expires. For local Docker, use the backend's ignored `.env` file and recreate the app container.
+4. When a user confirms a real public report, check **Actions → Publish app bug report** for the run, then **Issues** for the bot's post. A queued response means GitHub accepted the workflow request. If the job fails, inspect the run and rerun it after correcting the issue. The workflow checks for an existing report before posting again.
+
+If the token is missing or GitHub refuses access, check the backend logs for the configuration diagnostic. Users can file directly on GitHub when the app offers that option. After a timeout, wait one minute and retry the same report in the app. This preserves its ID for the workflow's duplicate check.
+
+The backend remembers accepted and uncertain attempts for up to 30 days per running instance. After a restart or when filing manually, check existing Issues first and allow time for queued workflows to finish. A manually filed issue has a different author and cannot be matched by the bot's report marker.
 
 > FOR NEW USERS
 ### Run the full app locally

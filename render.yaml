@@ -27,3 +27,5 @@ services:
         generateValue: true
       - key: JWT_EXPIRY_MINUTES
         value: "120"
+      - key: BUG_REPORT_GITHUB_TOKEN
+        sync: false
