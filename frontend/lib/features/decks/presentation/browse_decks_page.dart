@@ -1,3 +1,5 @@
+import 'library_heading.dart';
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/api_errors.dart';
 import 'dart:async';
 
@@ -277,12 +279,6 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openPublicDecks,
-        icon: const Icon(Icons.public),
-        label: const Text('Browse public decks'),
-      ),
       body: StreamBuilder<List<db.Deck>>(
         stream: repo.watchDecks(),
         builder: (context, snapshot) {
@@ -308,13 +304,23 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
                 children: [
-                  const SizedBox(height: 120),
+                  LibraryHeading(
+                    title: 'Your decks',
+                    description: 'Keep your topics together in one library.',
+                    count: '${decks.length} decks',
+                    action: OutlinedButton.icon(
+                      onPressed: _openPublicDecks,
+                      icon: const Icon(Icons.public),
+                      label: const Text('Browse public decks'),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                   const Icon(Icons.style_outlined, size: 52),
                   const SizedBox(height: 16),
                   Text(
                     _searchQuery.isNotEmpty
                         ? 'No decks match "${_searchController.text.trim()}".'
-                        : 'No decks yet. Create a deck from Home, or browse public decks below.',
+                        : 'No decks yet. Create a deck from Home, or browse public decks.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 20,
@@ -346,11 +352,29 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              itemCount: decks.length,
+              padding: EdgeInsets.fromLTRB(
+                _pageInset(context),
+                16,
+                _pageInset(context),
+                32,
+              ),
+              itemCount: decks.length + 1,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                final deck = decks[index];
+                if (index == 0) {
+                  return LibraryHeading(
+                    title: 'Your decks',
+                    description: 'Open a topic to add cards or plan a review.',
+                    count:
+                        '${decks.length} ${decks.length == 1 ? 'deck' : 'decks'}',
+                    action: OutlinedButton.icon(
+                      onPressed: _openPublicDecks,
+                      icon: const Icon(Icons.public),
+                      label: const Text('Browse public decks'),
+                    ),
+                  );
+                }
+                final deck = decks[index - 1];
                 return Material(
                   color: Colors.transparent,
                   child: Row(
@@ -362,9 +386,15 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                             vertical: 12,
                           ),
                           onTap: () => _openDeck(deck.id),
-                          leading: Icon(
-                            Icons.style_outlined,
-                            color: Theme.of(context).colorScheme.primary,
+                          leading: Text(
+                            index.toString().padLeft(2, '0'),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              color:
+                                  context.studyTone(StudyArea.library).accent,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           title: Text(
                             deck.title,
@@ -519,4 +549,9 @@ class _DeckEditDialogState extends State<_DeckEditDialog> {
       ],
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

@@ -1,3 +1,4 @@
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/api_errors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:async';
@@ -382,6 +383,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
     final repo = ref.read(deckRepositoryProvider);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final libraryTone = context.studyTone(StudyArea.library);
 
     final backgroundColor = theme.scaffoldBackgroundColor;
     final greenTextColor = colors.onSurface;
@@ -444,10 +446,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                           children: [
                             Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: colors.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(8),
+                                color: libraryTone.fill,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,8 +461,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       Expanded(
                                         child: Text(
                                           deck.title,
-                                          style: theme.textTheme.titleLarge
+                                          style: theme.textTheme.headlineMedium
                                               ?.copyWith(
+                                                color: libraryTone.ink,
                                                 fontWeight: FontWeight.w800,
                                               ),
                                         ),
@@ -505,8 +508,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                   Text(
                                     deck.description ?? 'No description yet.',
                                     style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.textTheme.bodySmall?.color
-                                          ?.withValues(alpha: 0.8),
+                                      color: libraryTone.ink,
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -554,12 +556,15 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                             Form(
                               key: _formKey,
                               child: Container(
-                                padding: const EdgeInsets.all(16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 20,
+                                  horizontal: 4,
+                                ),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: colors.surface,
-                                  border: Border.all(
-                                    color: colors.outlineVariant,
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: colors.outlineVariant,
+                                    ),
                                   ),
                                 ),
                                 child: Column(
@@ -679,7 +684,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Your cards',
+                              'Your cards · $totalCards',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
@@ -709,8 +714,9 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                 itemBuilder: (context, index) {
                                   final card = cards[index];
                                   return Container(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.all(18),
                                     decoration: BoxDecoration(
+                                      color: colors.surface,
                                       border: Border(
                                         bottom: BorderSide(
                                           color: colors.outlineVariant,
@@ -776,6 +782,16 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                           ],
                                         ),
                                         const SizedBox(height: 8),
+                                        const Divider(height: 24),
+                                        Text(
+                                          'ANSWER',
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: libraryTone.accent,
+                                                letterSpacing: 1,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
                                         Text(card.back),
                                       ],
                                     ),
@@ -1028,17 +1044,10 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: context.studyTone(StudyArea.library).ink,
       ),
     );
   }

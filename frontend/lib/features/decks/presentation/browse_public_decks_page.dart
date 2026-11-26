@@ -1,3 +1,5 @@
+import 'library_heading.dart';
+import '../../../app/theme/study_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -297,11 +299,24 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                 return RefreshIndicator(
                   onRefresh: _loadPublicDecks,
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                    itemCount: _decks.length,
+                    padding: EdgeInsets.fromLTRB(
+                      _pageInset(context),
+                      16,
+                      _pageInset(context),
+                      24,
+                    ),
+                    itemCount: _decks.length + 1,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final deck = _decks[index];
+                      if (index == 0) {
+                        return LibraryHeading(
+                          title: 'Public decks',
+                          description:
+                              'Find a topic and add an editable copy to your library.',
+                          count: '${_decks.length} results',
+                        );
+                      }
+                      final deck = _decks[index - 1];
                       final downloading = _downloadingDeckIds.contains(deck.id);
                       return Material(
                         color: Colors.transparent,
@@ -309,6 +324,16 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 4,
                             vertical: 16,
+                          ),
+                          leading: Text(
+                            index.toString().padLeft(2, '0'),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              color:
+                                  context.studyTone(StudyArea.library).accent,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           title: Text(
                             deck.title,
@@ -363,4 +388,9 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
       ),
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }

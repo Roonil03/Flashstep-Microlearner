@@ -1,3 +1,4 @@
+import '../../../app/theme/study_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -110,11 +111,11 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
 
     final scaffoldColor = theme.scaffoldBackgroundColor;
     final panelColor = colors.surface;
-    final mutedPanelColor = colors.surfaceContainerLow;
+    final mutedPanelColor = context.studyTone(StudyArea.library).fill;
     final borderColor = colors.outlineVariant;
     final primaryButton = colors.primary;
-    final accentFill = colors.primaryContainer;
-    final accentText = colors.onPrimaryContainer;
+    final accentFill = context.studyTone(StudyArea.library).fill;
+    final accentText = context.studyTone(StudyArea.library).ink;
     final warningFill = colors.errorContainer;
 
     return Scaffold(
@@ -146,30 +147,45 @@ class _CsvImportPageState extends ConsumerState<CsvImportPage> {
 
               return SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           color: mutedPanelColor,
-                          border: Border.all(color: borderColor),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               deck.title,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: accentText,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Add cards from CSV',
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
+                                color: accentText,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'Pick a CSV with exactly two columns: Front and Back. The cards will be created locally first and synced later when internet is available.',
-                              style: theme.textTheme.bodyMedium,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: accentText,
+                              ),
                             ),
                             const SizedBox(height: 14),
                             Wrap(
@@ -475,20 +491,11 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color:
-            highlighted
-                ? theme.colorScheme.primary.withValues(alpha: 0.12)
-                : theme.colorScheme.primary.withValues(alpha: 0.08),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: context.studyTone(StudyArea.library).ink,
+        fontWeight: highlighted ? FontWeight.w800 : FontWeight.w500,
       ),
     );
   }
@@ -541,4 +548,9 @@ class _MessageBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }
