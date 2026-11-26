@@ -18,6 +18,10 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 
 ## Progress and preferences
 
+- A cloud button beside Analytics shows sync progress and whether your device is working offline. Tap it to retry, or sign in again when your session needs renewing.
+- Opening the app offline restores your saved account and its local decks. Sign Out becomes available after a successful sync with no pending changes, so you can reconnect before leaving the account.
+- Settings displays the Flashstep logo with its name. Uninstalling the Android app removes its local library. App data is excluded from Android cloud backup and device transfer.
+
 - In System Settings, **Device default** now matches the previous **Large** size. All four presets follow your device's text-size setting.
 - Analytics groups activity, retention and card workload with the selected date range and snapshot time. Activity and retention charts sit alongside each other on wider layouts and stack on phones.
 - Expand a chart’s daily values to read the review count or retention for a particular date. Each date is also available individually to assistive technology.
