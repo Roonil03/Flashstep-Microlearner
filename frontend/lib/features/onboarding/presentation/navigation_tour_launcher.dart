@@ -22,8 +22,9 @@ Future<void> launchNavigationTour(
     final scene = replay ? 0 : await tourStorage.pendingScene(userId ?? '');
     if (!context.mounted ||
         scene == null ||
-        ModalRoute.of(context)?.isCurrent != true)
+        ModalRoute.of(context)?.isCurrent != true) {
       return;
+    }
     if (replay) await tourStorage.saveProgress(userId ?? '', 0);
     if (!context.mounted) return;
     await Navigator.of(context).push<void>(

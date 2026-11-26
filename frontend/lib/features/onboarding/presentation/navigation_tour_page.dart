@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/widgets/learning_controls.dart';
+import '../../../app/theme/study_colors.dart';
+import '../../review/presentation/notebook_card.dart';
 import '../../review/presentation/review_rating_row.dart';
 
 class TourScene {
@@ -247,41 +249,8 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           title: Text('Everyday Spanish'),
           subtitle: Text('2 cards available'),
         ),
-        Card.outlined(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Question',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'How do you say hello?',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 20),
-                Text(
-                  'Answer',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Hola', style: Theme.of(context).textTheme.titleLarge),
-              ],
-            ),
-          ),
-        ),
+        const NotebookCard(heading: 'Question', text: 'How do you say hello?'),
+        const NotebookCard(heading: 'Answer', text: 'Hola', answer: true),
         Text(
           'How well did you recall it?',
           style: Theme.of(context).textTheme.titleMedium,
@@ -362,7 +331,15 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
   @override
   Widget build(BuildContext context) {
     final scene = navigationTourScenes[_scene];
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final area = switch (_scene) {
+      7 => StudyArea.study,
+      8 => StudyArea.progress,
+      9 => StudyArea.account,
+      _ => StudyArea.library,
+    };
+    final tone = context.studyTone(area);
     return PopScope(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -392,34 +369,93 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
                   padding: const EdgeInsets.all(24),
                   child: Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
+                      constraints: const BoxConstraints(maxWidth: 640),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text(
-                            'Safe preview • Examples are never saved',
-                            textAlign: TextAlign.center,
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: tone.fill,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.menu_book_rounded,
+                                      color: tone.ink,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'YOUR APP FIELD GUIDE',
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              color: tone.ink,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 1,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Safe preview • Examples are never saved',
+                                  style: TextStyle(color: tone.ink),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
+                          LinearProgressIndicator(
+                            value: scene.step / 9,
+                            minHeight: 8,
+                            color: tone.accent,
+                            backgroundColor: tone.fill,
+                            borderRadius: BorderRadius.circular(4),
+                            semanticsLabel: 'Guide progress',
+                            semanticsValue: 'Step ${scene.step} of 9',
+                          ),
+                          const SizedBox(height: 20),
                           Semantics(
-                            liveRegion: true,
                             header: true,
                             child: Text(
                               'Step ${scene.step} of 9: ${scene.title}',
-                              style: Theme.of(context).textTheme.titleLarge,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.3,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(scene.path),
+                          Text(
+                            scene.path,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: tone.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(height: 12),
-                          Card(
+                          Container(
                             key: _instructions,
-                            color: scheme.surfaceContainerLow,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(
-                                scene.instruction,
-                                style: TextStyle(color: scheme.onSurface),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: tone.fill,
+                              border: Border(
+                                left: BorderSide(color: tone.accent, width: 5),
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              scene.instruction,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: tone.ink,
+                                height: 1.5,
                               ),
                             ),
                           ),
@@ -428,20 +464,35 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
                           SizedBox(
                             height: 36,
                             child: CustomPaint(
-                              painter: TourArrowPainter(scheme.primary),
+                              painter: TourArrowPainter(tone.accent),
                             ),
                           ),
                           Container(
                             key: _target,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
+                              color: scheme.surface,
                               border: Border.all(
-                                color: scheme.primary,
-                                width: 1,
+                                color: tone.accent,
+                                width: 1.5,
                               ),
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: _preview(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'EXAMPLE SCREEN',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: tone.accent,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                _preview(),
+                              ],
+                            ),
                           ),
                         ],
                       ),
