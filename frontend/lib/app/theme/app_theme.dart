@@ -99,38 +99,80 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
 }
 
 class AppTheme {
-  static ThemeData light() {
-    return ThemeData(
-      useMaterial3: true,
-      visualDensity: VisualDensity.standard,
-      materialTapTargetSize: MaterialTapTargetSize.padded,
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: Colors.white,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF003153),
-        brightness: Brightness.light,
-      ),
-    );
-  }
+  static ThemeData light() => _studyTheme(Brightness.light);
+  static ThemeData dark() => _studyTheme(Brightness.dark);
 
-  static ThemeData dark() {
+  static ThemeData _studyTheme(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    final paper = dark ? const Color(0xFF10242F) : const Color(0xFFF5F8F8);
+    final ink = dark ? const Color(0xFFEDF5F4) : const Color(0xFF102F47);
+    final accent = dark ? const Color(0xFF8BDACB) : const Color(0xFF006D66);
+    final colors = ColorScheme.fromSeed(
+      seedColor: accent,
+      brightness: brightness,
+    ).copyWith(
+      primary: accent,
+      onPrimary: dark ? paper : Colors.white,
+      primaryContainer:
+          dark ? const Color(0xFF1A3642) : const Color(0xFFE4F1EE),
+      onPrimaryContainer: ink,
+      surface: paper,
+      onSurface: ink,
+      onSurfaceVariant:
+          dark ? const Color(0xFFB5C8CC) : const Color(0xFF486270),
+      outlineVariant: dark ? const Color(0xFF425E68) : const Color(0xFFCBD8D9),
+    );
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+    );
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(8));
     return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
+      colorScheme: colors,
+      scaffoldBackgroundColor: paper,
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      appBarTheme: AppBarTheme(
+        backgroundColor: paper,
+        foregroundColor: ink,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 23,
+          fontWeight: FontWeight.w700,
+          color: ink,
+        ),
       ),
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF7EC8E3),
-        brightness: Brightness.dark,
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 52),
+          shape: shape,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          shape: shape,
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: colors.outlineVariant,
+        thickness: 1,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: dark ? colors.primaryContainer : Colors.white,
+        border: border,
+        enabledBorder: border.copyWith(
+          borderSide: BorderSide(color: colors.outline),
+        ),
+        focusedBorder: border.copyWith(
+          borderSide: BorderSide(color: accent, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
