@@ -1,3 +1,4 @@
+import '../../../app/theme/study_colors.dart';
 import '../../../core/widgets/learning_controls.dart';
 import 'dart:math' as math;
 
@@ -67,7 +68,12 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
             loading:
                 () => ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   children: const [
                     _SkeletonCard(height: 220),
                     SizedBox(height: 16),
@@ -94,7 +100,12 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
             data:
                 (data) => ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    _pageInset(context),
+                    16,
+                    _pageInset(context),
+                    24,
+                  ),
                   children: [
                     _AnalyticsHeroCard(data: data, isDark: isDark),
                     const SizedBox(height: 16),
@@ -108,30 +119,30 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
                     const SizedBox(height: 16),
                     _MetricWrap(data: data),
                     const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Study rhythm',
-                      subtitle:
-                          '${data.reviewsInRange} reviews across ${data.rangeDays} days',
-                      child: _ReviewBarChart(
-                        points: data.reviewActivity,
-                        isDark: isDark,
+                    _ChartSpread(
+                      first: _SectionCard(
+                        title: 'Study rhythm',
+                        subtitle:
+                            '${data.reviewsInRange} reviews across ${data.rangeDays} days',
+                        child: _ReviewBarChart(
+                          points: data.reviewActivity,
+                          isDark: isDark,
+                        ),
+                      ),
+                      second: _SectionCard(
+                        title: 'Retention trend',
+                        subtitle:
+                            '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
+                        child: _AccuracyLineChart(
+                          points: data.accuracyTrend,
+                          isDark: isDark,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Retention trend',
-                      subtitle:
-                          '${(data.retentionRate * 100).toStringAsFixed(1)}% pass rate in the selected window',
-                      child: _AccuracyLineChart(
-                        points: data.accuracyTrend,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                     _SectionCard(
                       title: 'Learning pipeline',
-                      subtitle:
-                          'Current card distribution from your synced database state',
+                      subtitle: 'Where your cards are in the learning cycle',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -260,32 +271,42 @@ class _AnalyticsHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final snapshot = data.generatedAt.toLocal();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          header: true,
-          child: Text(
-            'Learning progress',
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+    final tone = context.studyTone(StudyArea.progress);
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: tone.fill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              'Learning progress',
+              style: theme.textTheme.headlineLarge?.copyWith(
+                color: tone.ink,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          data.hasCards
-              ? '${data.totalCards} active cards · ${data.totalDecks} decks · ${data.currentStreak} ${data.currentStreak == 1 ? 'day' : 'days'} streak'
-              : 'Create a deck and review some cards to start building your analytics dashboard.',
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Snapshot ${snapshot.day}/${snapshot.month}/${snapshot.year} ${snapshot.hour.toString().padLeft(2, '0')}:${snapshot.minute.toString().padLeft(2, '0')} · Pull to refresh',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(height: 20),
+          Text(
+            data.hasCards
+                ? '${data.totalCards} active cards · ${data.totalDecks} decks · ${data.currentStreak} ${data.currentStreak == 1 ? 'day' : 'days'} streak'
+                : 'Create a deck and review some cards to start building your analytics dashboard.',
+            style: theme.textTheme.bodyLarge?.copyWith(color: tone.ink),
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Divider(color: tone.ink.withValues(alpha: .2)),
+          const SizedBox(height: 8),
+          Text(
+            'Snapshot ${snapshot.day}/${snapshot.month}/${snapshot.year} ${snapshot.hour.toString().padLeft(2, '0')}:${snapshot.minute.toString().padLeft(2, '0')} · Pull to refresh',
+            style: theme.textTheme.bodySmall?.copyWith(color: tone.ink),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -335,12 +356,21 @@ class _MetricWrap extends StatelessWidget {
         final compact = constraints.maxWidth < 520;
         final tileWidth =
             compact ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final item in items) SizedBox(width: tileWidth, child: item),
-          ],
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.symmetric(
+              horizontal: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+          ),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 0,
+            children: [
+              for (final item in items) SizedBox(width: tileWidth, child: item),
+            ],
+          ),
         );
       },
     );
@@ -366,16 +396,10 @@ class _MetricCard extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minHeight: 120),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: theme.colorScheme.surfaceContainerLow,
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 22),
-          const SizedBox(height: 12),
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
@@ -419,9 +443,13 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
         color: theme.colorScheme.surface,
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        border: Border(
+          top: BorderSide(
+            color: context.studyTone(StudyArea.progress).accent,
+            width: 3,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,6 +474,29 @@ class _SectionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ChartSpread extends StatelessWidget {
+  final Widget first;
+  final Widget second;
+  const _ChartSpread({required this.first, required this.second});
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth < 760 ||
+          MediaQuery.textScalerOf(context).scale(1) > 1.4) {
+        return Column(children: [first, const SizedBox(height: 24), second]);
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: first),
+          const SizedBox(width: 24),
+          Expanded(child: second),
+        ],
+      );
+    },
+  );
 }
 
 class _ReviewBarChart extends StatelessWidget {
@@ -473,7 +524,7 @@ class _ReviewBarChart extends StatelessWidget {
             painter: _BarChartPainter(
               points: points,
               isDark: isDark,
-              color: Theme.of(context).colorScheme.primary,
+              color: context.studyTone(StudyArea.progress).accent,
             ),
             child: const SizedBox.expand(),
           ),
@@ -522,7 +573,7 @@ class _AccuracyLineChart extends StatelessWidget {
             painter: _LineChartPainter(
               points: points,
               isDark: isDark,
-              color: Theme.of(context).colorScheme.primary,
+              color: context.studyTone(StudyArea.progress).accent,
             ),
             child: const SizedBox.expand(),
           ),
@@ -777,8 +828,11 @@ class _DeckInsightTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -819,11 +873,7 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Theme.of(context).colorScheme.surface,
-      ),
+      padding: const EdgeInsets.only(right: 8, bottom: 4),
       child: Text('$label: $value'),
     );
   }
@@ -1065,16 +1115,7 @@ class _LineChartPainter extends CustomPainter {
     areaPath.lineTo(lastOffset.dx, size.height - bottomPadding);
     areaPath.close();
 
-    final fillPaint =
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              color.withValues(alpha: 0.28),
-              color.withValues(alpha: 0.02),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    final fillPaint = Paint()..color = color.withValues(alpha: 0.10);
 
     final linePaint =
         Paint()
@@ -1255,4 +1296,9 @@ String _shortDate(DateTime date) {
     'Dec',
   ];
   return '${months[date.month - 1]} ${date.day}';
+}
+
+double _pageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  return width > 1080 ? (width - 1048) / 2 : 16;
 }
