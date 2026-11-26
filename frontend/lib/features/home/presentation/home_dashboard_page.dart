@@ -489,9 +489,15 @@ class _StudyOverview extends StatelessWidget {
                   const SizedBox(height: 16),
                   Divider(color: cream.withValues(alpha: .3), height: 1),
                   Semantics(
+                    container: true,
                     button: true,
+                    label:
+                        'Open featured deck: ${deck.title}, ${deck.dueCards} due, $timeLabel',
+                    onTap: onOpenDeck,
+                    excludeSemantics: true,
                     child: InkWell(
                       onTap: onOpenDeck,
+                      excludeFromSemantics: true,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Row(
@@ -620,9 +626,15 @@ class _DeckTrack extends StatelessWidget {
       children: [
         const Divider(height: 1),
         Semantics(
+          container: true,
           button: true,
+          label:
+              'Open deck: ${deck.title}, ${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'}, ${deck.isPublic ? 'Public' : 'Private'}, ${deck.dueCards} due, $timeLabel, updated $date',
+          onTap: onTap,
+          excludeSemantics: true,
           child: InkWell(
             onTap: onTap,
+            excludeFromSemantics: true,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
               child: Row(
