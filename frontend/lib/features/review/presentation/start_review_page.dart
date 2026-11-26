@@ -92,24 +92,13 @@ class StartReviewPage extends ConsumerWidget {
                         color: tone.fill,
                         borderRadius: BorderRadius.circular(22),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.auto_stories_rounded,
-                            color: tone.ink,
-                            size: 40,
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            '$count card${count == 1 ? '' : 's'} ready',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: tone.ink,
-                              fontWeight: FontWeight.w800,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        '$count card${count == 1 ? '' : 's'} ready',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          color: tone.ink,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
