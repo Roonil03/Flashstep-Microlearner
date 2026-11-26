@@ -73,7 +73,7 @@ const navigationTourScenes = <TourScene>[
     9,
     'Adjust daily limits',
     'Home → Settings → System Settings',
-    'Open Settings, then System Settings. Use the Font size slider to choose Small, Device default, Large, or Extra large text. Daily review limit controls cards per day (1–500). Selective review chooses recommended decks. Review all cards overrides daily limits and due dates. Replay this guide from Settings → Relearn app navigation.',
+    'Open Settings, then System Settings. Font size offers Small, Device default, Large, or Extra large text. With selective review on, the daily limit (1–500 different cards per UTC day) applies to due cards, starting with recently updated decks. With it off, all due cards are available without a daily limit. Review all cards overrides both settings and includes cards not yet due. Replay from Settings → Relearn app navigation.',
   ),
 ];
 
@@ -302,7 +302,9 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           value: true,
           onChanged: (_) {},
           title: const Text('Use selective review decks'),
-          subtitle: const Text('Show recommended decks'),
+          subtitle: const Text(
+            'Apply the daily limit to due cards, starting with recently updated decks. Review all cards overrides this.',
+          ),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -310,7 +312,7 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
           onChanged: (_) {},
           title: const Text('Review all cards'),
           subtitle: const Text(
-            'When enabled, ignores daily limits and due dates',
+            'When enabled, includes cards not yet due and overrides the daily limit and selective review.',
           ),
         ),
       ],
@@ -379,36 +381,9 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
                               color: tone.fill,
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      Icons.menu_book_rounded,
-                                      color: tone.ink,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'YOUR APP FIELD GUIDE',
-                                        style: theme.textTheme.labelLarge
-                                            ?.copyWith(
-                                              color: tone.ink,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 1,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  'Safe preview • Examples are never saved',
-                                  style: TextStyle(color: tone.ink),
-                                ),
-                              ],
+                            child: Text(
+                              'Safe preview • Examples are never saved',
+                              style: TextStyle(color: tone.ink),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -478,21 +453,7 @@ class _NavigationTourPageState extends State<NavigationTourPage> {
                               ),
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'EXAMPLE SCREEN',
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    color: tone.accent,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                _preview(),
-                              ],
-                            ),
+                            child: _preview(),
                           ),
                         ],
                       ),
