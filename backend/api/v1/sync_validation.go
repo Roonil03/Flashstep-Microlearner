@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"backend/internal/httpinput"
 	"errors"
 	"math"
 	"regexp"
@@ -24,9 +25,9 @@ func parseLegacyCardCreatedAt(stamp string) (time.Time, error) {
 // coerce malformed JSON to defaults and can poison every later sync batch.
 func validateSyncRecord(raw map[string]any, entity string) error {
 	bad := errors.New("invalid " + entity + " fields, values or timestamps")
-	for _, field := range []string{"id", "deck_id", "user_id", "front", "back", "title", "description", "state", "rating", "device_id"} {
+	for _, field := range []string{"id", "deck_id", "card_id", "user_id", "front", "back", "title", "description", "state", "rating", "device_id"} {
 		if value, ok := raw[field]; ok && value != nil {
-			if _, ok := value.(string); !ok {
+			if text, ok := value.(string); !ok || !httpinput.ValidText(text) {
 				return bad
 			}
 		}
@@ -58,13 +59,14 @@ func validateSyncRecord(raw map[string]any, entity string) error {
 			if !ok {
 				return bad
 			}
+			stamp = strings.TrimSpace(stamp)
 			parsed, err := time.Parse(time.RFC3339Nano, stamp)
 			legacyCreation := false
 			if err != nil && entity == "card" && field == "created_at" {
 				parsed, err = parseLegacyCardCreatedAt(stamp)
 				legacyCreation = err == nil
 			}
-			if err != nil || parsed.Year() < 1 || parsed.Year() > 9998 {
+			if err != nil || parsed.UTC().Year() < 1 || parsed.UTC().Year() > 9998 {
 				return bad
 			}
 			if !legacyCreation && field != "due_timestamp" && parsed.After(time.Now().Add(10*time.Minute)) {

@@ -21,7 +21,15 @@ String apiErrorMessage(
     case 413:
       return 'This request is too large. Please use a smaller batch.';
     case 429:
-      return 'Too many requests. Please wait a minute and try again.';
+      final seconds = int.tryParse(
+        response.headers['retry-after'] ?? '',
+        radix: 10,
+      );
+      if (seconds == 1) return 'Too many requests. Try again in 1 second.';
+      if (seconds != null && seconds > 1 && seconds <= 60) {
+        return 'Too many requests. Try again in $seconds seconds.';
+      }
+      return 'Too many requests. Please wait and try again.';
   }
   if (response.statusCode >= 500) {
     return 'The server is temporarily unavailable. Please try again shortly.';

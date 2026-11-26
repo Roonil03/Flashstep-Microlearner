@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/router.dart';
 import '../data/review_repository.dart';
 import 'review_session_page.dart';
 
-final reviewDecksProvider = FutureProvider.autoDispose<List<ReviewDeckSummary>>((ref) async {
-  return ref.read(reviewRepositoryProvider).getReviewableDecks();
-});
+final reviewDecksProvider = FutureProvider.autoDispose<List<ReviewDeckSummary>>(
+  (ref) async {
+    return ref.read(reviewRepositoryProvider).getReviewableDecks();
+  },
+);
 
 class StartReviewPage extends ConsumerWidget {
   const StartReviewPage({super.key});
@@ -14,114 +17,189 @@ class StartReviewPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
     final asyncDecks = ref.watch(reviewDecksProvider);
-
-    final bgColor = isDark ? const Color(0xFF2A1243) : const Color(0xFFF1E4FF);
-    final accent = isDark ? const Color(0xFFD8B4FE) : const Color(0xFF6B46C1);
+    void refresh() => ref.invalidate(reviewDecksProvider);
+    Future<void> openAndRefresh(String route) async {
+      await Navigator.of(context).pushNamed(route);
+      if (context.mounted) ref.invalidate(reviewDecksProvider);
+    }
 
     return Scaffold(
-      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         title: const Text('Start review'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh available cards',
+            onPressed: asyncDecks.isLoading ? null : refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Center(
-                child: Opacity(
-                  opacity: isDark ? 0.10 : 0.13,
-                  child: Image.asset(
-                    'assets/LogoWithText_WithoutBG.png',
-                    width: 240,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.auto_stories_rounded,
-                      size: 180,
-                      color: accent,
-                    ),
+      body: SafeArea(
+        child: asyncDecks.when(
+          loading:
+              () => const Center(
+                child: CircularProgressIndicator(
+                  semanticsLabel: 'Loading review decks',
+                ),
+              ),
+          error:
+              (error, _) => Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Could not load review decks',
+                        style: theme.textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Try loading your available cards again.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Try again'),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ),
-          SafeArea(
-            child: asyncDecks.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => const Center(child: Text('Could not load review decks. Reopen this page and try again.')),
-              data: (decks) {
-                if (decks.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+          data: (decks) {
+            if (decks.isEmpty) {
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 56,
+                        color: colors.primary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No cards available for review',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'You may be caught up or have reached your daily limit. You can manage your decks or check settings.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
                         children: [
-                          Icon(Icons.check_circle_outline, size: 56, color: accent),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No cards are due right now.',
-                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                            textAlign: TextAlign.center,
+                          FilledButton.icon(
+                            onPressed:
+                                () => openAndRefresh(AppRoutes.browseDecks),
+                            icon: const Icon(Icons.style_outlined),
+                            label: const Text('View decks'),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'When cards become due, they will appear here automatically.',
-                            style: theme.textTheme.bodyMedium,
-                            textAlign: TextAlign.center,
+                          OutlinedButton.icon(
+                            onPressed: () => openAndRefresh(AppRoutes.settings),
+                            icon: const Icon(Icons.settings_outlined),
+                            label: const Text('Settings'),
                           ),
                         ],
                       ),
-                    ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final available = decks.fold<int>(
+              0,
+              (total, deck) => total + deck.dueCount,
+            );
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              itemCount: decks.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Choose a deck',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$available card${available == 1 ? '' : 's'} available across ${decks.length} deck${decks.length == 1 ? '' : 's'}.',
+                      ),
+                    ],
                   );
                 }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                  itemCount: decks.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final deck = decks[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF160B28).withOpacity(0.84) : Colors.white.withOpacity(0.88),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: accent.withOpacity(0.22)),
-                        boxShadow: const [
-                          BoxShadow(blurRadius: 18, offset: Offset(0, 8), color: Colors.black12),
-                        ],
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        title: Text(deck.title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text('${deck.dueCount} card${deck.dueCount == 1 ? '' : 's'} due'),
+                final deck = decks[index - 1];
+                return Card.outlined(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          deck.title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        trailing: FilledButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ReviewSessionPage(
-                                  deckId: deck.deckId,
-                                  deckTitle: deck.title,
-                                ),
-                              ),
-                            );
-                          },
-                          child: const Text('Start'),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${deck.dueCount} card${deck.dueCount == 1 ? '' : 's'} available',
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(height: 20),
+                        Semantics(
+                          label: 'Start review for ${deck.title}',
+                          excludeSemantics: true,
+                          button: true,
+                          onTap: () => _start(context, deck),
+                          child: FilledButton.icon(
+                            onPressed: () => _start(context, deck),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Start review'),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
-            ),
-          ),
-        ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _start(BuildContext context, ReviewDeckSummary deck) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) =>
+                ReviewSessionPage(deckId: deck.deckId, deckTitle: deck.title),
       ),
     );
   }

@@ -18,6 +18,14 @@ import (
 	"backend/internal/services"
 )
 
+const (
+	apiRequestsPerMinute      = 6000
+	accountRequestsPerMinute  = 1200
+	authRequestsPerMinute     = 120
+	authRequestBurst          = 60
+	accountConcurrentRequests = 8
+)
+
 func main() {
 	cfg := config.Load()
 	conn, err := db.Connect(cfg)
@@ -67,14 +75,15 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := router.Group("/api/v1")
-	api.Use(middleware.RateLimit(6000, time.Minute), middleware.TrackMaintenanceActivity(accountCleanup))
+	api.Use(middleware.RateLimit(apiRequestsPerMinute, time.Minute), middleware.TrackMaintenanceActivity(accountCleanup))
 	{
-		authLimit := middleware.RateLimit(120, time.Minute)
+		authLimit := middleware.RateLimitWithBurst(authRequestsPerMinute, time.Minute, authRequestBurst)
 		api.POST("/auth/register", authLimit, authHandler.Register)
 		api.POST("/auth/login", authLimit, authHandler.Login)
 		protected := api.Group("")
 		protected.Use(middleware.Auth(cfg.JWTSecret))
-		protected.Use(middleware.RateLimit(1200, time.Minute))
+		protected.Use(middleware.RateLimit(accountRequestsPerMinute, time.Minute))
+		protected.Use(middleware.AccountConcurrencyLimit(accountConcurrentRequests))
 		protected.Use(middleware.RequireActiveUser(conn))
 		protected.GET("/me", authHandler.Me)
 		protected.POST("/bug-reports", reportHandler.Create)

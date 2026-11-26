@@ -410,7 +410,10 @@ class _MetricWrap extends StatelessWidget {
         icon: Icons.track_changes_outlined,
         label: 'Retention',
         value: '${(data.retentionRate * 100).toStringAsFixed(1)}%',
-        note: '${data.activeDaysInRange} active days',
+        note:
+            data.activeDaysInRange == 1
+                ? '1 active day'
+                : '${data.activeDaysInRange} active days',
       ),
       _MetricCard(
         icon: Icons.hourglass_bottom_outlined,

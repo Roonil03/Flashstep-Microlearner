@@ -29,6 +29,12 @@ final homeRepositoryProvider = Provider<HomeRepository>((ref) {
   return repository;
 });
 
+final homePendingSyncCountProvider = StreamProvider.autoDispose
+    .family<int, String?>((ref, userId) {
+      if (userId == null || userId.isEmpty) return Stream.value(0);
+      return ref.watch(homeRepositoryProvider).watchPendingSyncCount(userId);
+    });
+
 final usernameProvider = FutureProvider<String>((ref) async {
   final repository = ref.watch(homeRepositoryProvider);
   final username = await repository.getUsername();
@@ -44,9 +50,10 @@ final userDecksProvider = FutureProvider<List<DeckSummary>>((ref) async {
 final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   ref.watch(homeDataRevisionProvider);
   final repository = ref.watch(homeRepositoryProvider);
+  final sessionStorage = const SessionStorage();
+  final userId = await sessionStorage.readUserId();
   final username = await ref.watch(usernameProvider.future);
   final decks = await ref.watch(userDecksProvider.future);
-  final sessionStorage = const SessionStorage();
   final dashboardStats = await repository.getDashboardStats();
 
   final dailyReviewLimit = await sessionStorage.readDailyReviewLimit();
@@ -62,7 +69,10 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
             math.max(0, dailyReviewLimit - dashboardStats.reviewedToday),
           )
           : rawDueToday;
-  final lastSyncedAt = await sessionStorage.readLastSyncAt();
+  final lastSyncedAt =
+      userId == null || userId.isEmpty
+          ? null
+          : await sessionStorage.readLastSyncAt(userId: userId);
 
   DeckSummary? deckOfTheDay;
   for (final deck in decks) {
@@ -74,7 +84,7 @@ final homeDashboardProvider = FutureProvider<HomeDashboardData>((ref) async {
   deckOfTheDay ??= decks.isNotEmpty ? decks.first : null;
 
   return HomeDashboardData(
-    userId: await sessionStorage.readUserId(),
+    userId: userId,
     displayName: username,
     decksCount: decks.length,
     dueToday: dueToday,
@@ -235,6 +245,12 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             ),
                           ),
                       data: (data) {
+                        final pendingSyncCount =
+                            ref
+                                .watch(
+                                  homePendingSyncCountProvider(data.userId),
+                                )
+                                .valueOrNull;
                         final currentStatus = ref.watch(syncStatusProvider);
                         final syncStatus =
                             currentStatus.userId == data.userId
@@ -247,6 +263,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             _TopGreetingCard(
                               displayName: data.displayName,
                               syncStatus: syncStatus,
+                              pendingSyncCount: pendingSyncCount,
                               lastSyncedAt: lastSuccessfulAt,
                               dueToday: data.dueToday,
                               decksCount: data.decksCount,
@@ -340,6 +357,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                             const SizedBox(height: 24),
                             _SyncFooterCard(
                               syncStatus: syncStatus,
+                              pendingSyncCount: pendingSyncCount,
                               lastSyncedAt: lastSuccessfulAt,
                               onForceSync: _refreshDashboard,
                             ),
@@ -362,6 +380,7 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
 class _TopGreetingCard extends StatelessWidget {
   final String displayName;
   final SyncStatus syncStatus;
+  final int? pendingSyncCount;
   final DateTime? lastSyncedAt;
   final int dueToday;
   final int decksCount;
@@ -371,6 +390,7 @@ class _TopGreetingCard extends StatelessWidget {
   const _TopGreetingCard({
     required this.displayName,
     required this.syncStatus,
+    required this.pendingSyncCount,
     required this.lastSyncedAt,
     required this.dueToday,
     required this.decksCount,
@@ -382,6 +402,8 @@ class _TopGreetingCard extends StatelessWidget {
     if (syncStatus.phase == SyncPhase.offline) return 'Offline';
     if (syncStatus.phase == SyncPhase.syncing) return 'Syncing now';
     if (syncStatus.phase == SyncPhase.failed) return 'Sync failed';
+    if (pendingSyncCount == null) return 'Sync status unknown';
+    if (pendingSyncCount! > 0) return 'Changes pending';
     if (syncStatus.phase == SyncPhase.success) return 'All synced';
     if (lastSyncedAt == null) return 'Not synced yet';
     return 'Last sync available';
@@ -513,7 +535,7 @@ class _TopGreetingCard extends StatelessWidget {
                 child: _StatTile(
                   icon: Icons.calendar_today,
                   label: 'Due Today',
-                  value: '$dueToday cards',
+                  value: dueToday == 1 ? '1 card' : '$dueToday cards',
                   isDark: isDark,
                 ),
               ),
@@ -544,7 +566,7 @@ class _TopGreetingCard extends StatelessWidget {
                 child: _StatTile(
                   icon: Icons.local_fire_department,
                   label: 'Streak',
-                  value: '$streak days',
+                  value: streak == 1 ? '1 day' : '$streak days',
                   isDark: isDark,
                 ),
               ),
@@ -739,7 +761,7 @@ class _DeckCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${deck.totalCards} cards • ${deck.dueCards} due',
+              '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} • ${deck.dueCards} due',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
               ),
@@ -879,11 +901,13 @@ class _MiniStatsRow extends StatelessWidget {
 
 class _SyncFooterCard extends StatelessWidget {
   final SyncStatus syncStatus;
+  final int? pendingSyncCount;
   final DateTime? lastSyncedAt;
   final VoidCallback onForceSync;
 
   const _SyncFooterCard({
     required this.syncStatus,
+    required this.pendingSyncCount,
     required this.lastSyncedAt,
     required this.onForceSync,
   });
@@ -918,9 +942,11 @@ class _SyncFooterCard extends StatelessWidget {
           Text(
             switch (syncStatus.phase) {
               SyncPhase.syncing => 'Syncing...',
-              SyncPhase.success => 'All synced',
               SyncPhase.offline => 'Offline — changes saved on this device',
               SyncPhase.failed => 'Sync failed — changes remain on this device',
+              _ when pendingSyncCount == null => 'Sync status unknown',
+              _ when pendingSyncCount! > 0 => 'Changes pending',
+              SyncPhase.success => 'All synced',
               SyncPhase.idle => 'Sync status unknown',
             },
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -941,6 +967,14 @@ class _SyncFooterCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(syncStatus.message!, style: theme.textTheme.bodySmall),
           ],
+          if ((pendingSyncCount ?? 0) > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '$pendingSyncCount local ${pendingSyncCount == 1 ? 'change is' : 'changes are'} '
+              'saved on this device and waiting to sync.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
@@ -948,7 +982,9 @@ class _SyncFooterCard extends StatelessWidget {
               onPressed:
                   syncStatus.phase == SyncPhase.syncing ? null : onForceSync,
               icon: const Icon(Icons.sync),
-              label: const Text('Retry sync'),
+              label: Text(
+                (pendingSyncCount ?? 0) > 0 ? 'Sync now' : 'Retry sync',
+              ),
             ),
           ),
         ],

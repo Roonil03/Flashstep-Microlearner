@@ -3,6 +3,7 @@ package v1
 import (
 	"backend/internal/db"
 	"backend/internal/httperror"
+	"backend/internal/httpinput"
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -116,7 +117,7 @@ func SyncFetch(c *gin.Context) {
 	}
 	var request syncFetchRequest
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
-	if err := c.ShouldBindJSON(&request); err != nil {
+	if err := httpinput.BindJSON(c, &request); err != nil {
 		c.JSON(400, gin.H{"error": "invalid fetch payload"})
 		return
 	}

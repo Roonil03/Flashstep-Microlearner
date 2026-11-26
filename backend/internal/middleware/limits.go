@@ -4,7 +4,9 @@ import (
 	"container/heap"
 	"context"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -40,10 +42,12 @@ func RequestLimits() gin.HandlerFunc {
 }
 
 type rateEntry struct {
-	key   string
-	count int
-	reset time.Time
-	index int
+	key     string
+	count   int
+	reset   time.Time
+	index   int
+	tokens  float64
+	updated time.Time
 }
 
 type rateExpiryHeap []*rateEntry
@@ -73,11 +77,14 @@ type rateLimiter struct {
 	expiries rateExpiryHeap
 	limit    int
 	window   time.Duration
+	burst    int
 }
 
-func (l *rateLimiter) allow(key string, now time.Time) bool {
+func (l *rateLimiter) allow(key string, clock func() time.Time) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// Sample time in lock order so a delayed caller cannot rewind a bucket.
+	now := clock()
 	// Expiry order avoids scanning the full map on every denied request at
 	// capacity. Bound cleanup per request so an idle window cannot cause a pause.
 	for work := 0; work < maxRateExpiryWork && len(l.expiries) > 0 && !now.Before(l.expiries[0].reset); work++ {
@@ -92,34 +99,99 @@ func (l *rateLimiter) allow(key string, now time.Time) bool {
 	}
 	if entry == nil {
 		if len(l.entries) >= maxRateEntries {
-			return false
+			return false, l.expiries[0].reset.Sub(now)
 		}
-		entry = &rateEntry{key: key, reset: now.Add(l.window)}
+		entry = &rateEntry{key: key, reset: now.Add(l.window), tokens: float64(l.burst), updated: now}
 		l.entries[key] = entry
 		heap.Push(&l.expiries, entry)
 	}
+	if l.burst > 0 {
+		entry.tokens = math.Min(float64(l.burst), entry.tokens+now.Sub(entry.updated).Seconds()*float64(l.limit)/l.window.Seconds())
+		entry.updated = now
+		if entry.tokens < 1 {
+			return false, time.Duration(math.Ceil((1 - entry.tokens) * float64(l.window) / float64(l.limit)))
+		}
+		entry.tokens--
+		// Forget an idle bucket only after it has completely refilled. This also
+		// prevents a fixed-window boundary from granting a second auth burst.
+		entry.reset = now.Add(time.Duration(math.Ceil((float64(l.burst) - entry.tokens) * float64(l.window) / float64(l.limit))))
+		heap.Fix(&l.expiries, entry.index)
+		return true, 0
+	}
 	if entry.count >= l.limit {
-		return false
+		return false, entry.reset.Sub(now)
 	}
 	entry.count++
-	return true
+	return true, 0
 }
 
 // RateLimit uses the authenticated user, or the validated client IP for anonymous
 // requests, and bounds its own memory. Proxy CIDRs must be configured explicitly.
 func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
-	limiter := &rateLimiter{entries: make(map[string]*rateEntry), limit: limit, window: window}
+	return newRateLimit(limit, window, 0)
+}
+
+// RateLimitWithBurst refills limit requests per window, allowing at most burst
+// immediate requests after an idle period. Shared-IP auth clients can sign in
+// together without permitting the entire sustained budget in one CPU spike.
+func RateLimitWithBurst(limit int, window time.Duration, burst int) gin.HandlerFunc {
+	if burst <= 0 {
+		panic("rate limit burst must be positive")
+	}
+	return newRateLimit(limit, window, burst)
+}
+
+func newRateLimit(limit int, window time.Duration, burst int) gin.HandlerFunc {
+	if limit <= 0 || window <= 0 {
+		panic("rate limit and window must be positive")
+	}
+	limiter := &rateLimiter{entries: make(map[string]*rateEntry), limit: limit, window: window, burst: burst}
 	return func(c *gin.Context) {
-		now := time.Now()
 		key := c.GetString("user_id")
 		if key == "" {
 			key = c.ClientIP()
 		}
-		if !limiter.allow(key, now) {
-			c.Header("Retry-After", "60")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests. Please wait a minute and try again."})
+		if allowed, retry := limiter.allow(key, time.Now); !allowed {
+			c.Header("Retry-After", strconv.FormatInt(max(1, int64(math.Ceil(retry.Seconds()))), 10))
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests. Please wait and try again."})
 			return
 		}
+		c.Next()
+	}
+}
+
+// AccountConcurrencyLimit must follow Auth. It reserves no waiting goroutines or
+// persistent account entries; the global request cap also bounds this map's size.
+// Sequential sync batches have no additional quota, regardless of library size.
+func AccountConcurrencyLimit(limit int) gin.HandlerFunc {
+	if limit <= 0 {
+		panic("account concurrency limit must be positive")
+	}
+	var mu sync.Mutex
+	active := make(map[string]int)
+	return func(c *gin.Context) {
+		key := c.GetString("user_id")
+		if key == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Please sign in again."})
+			return
+		}
+		mu.Lock()
+		if active[key] >= limit {
+			mu.Unlock()
+			c.Header("Retry-After", "1")
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Your account is busy. Please try again shortly."})
+			return
+		}
+		active[key]++
+		mu.Unlock()
+		defer func() {
+			mu.Lock()
+			defer mu.Unlock()
+			active[key]--
+			if active[key] == 0 {
+				delete(active, key)
+			}
+		}()
 		c.Next()
 	}
 }
