@@ -19,6 +19,33 @@ Flashstep Microlearner is a full-stack flashcard learning platform with:
 
 The goal of the project is to make short, repeatable learning sessions feel smooth, fast, and reliable, even when connectivity is inconsistent.
 
+## App preview
+
+Screenshots from the Android app with sample study decks. Select an image to view it at a larger size.
+
+<table>
+  <tr>
+    <th>Home · Light</th>
+    <th>Home · Dark</th>
+    <th>Deck library</th>
+  </tr>
+  <tr>
+    <td><a href="docs/images/screenshots/home-light.png"><img src="docs/images/screenshots/home-light.png" alt="Flashstep Home in light mode with the next study deck and sync status" width="180" /></a></td>
+    <td><a href="docs/images/screenshots/home-dark.png"><img src="docs/images/screenshots/home-dark.png" alt="Flashstep Home in dark mode with the study summary and personal decks" width="180" /></a></td>
+    <td><a href="docs/images/screenshots/library-light.png"><img src="docs/images/screenshots/library-light.png" alt="Personal deck library with search, card counts and deck actions" width="180" /></a></td>
+  </tr>
+  <tr>
+    <th>Review</th>
+    <th>Analytics</th>
+    <th>Settings</th>
+  </tr>
+  <tr>
+    <td><a href="docs/images/screenshots/review-light.png"><img src="docs/images/screenshots/review-light.png" alt="Flashcard review showing the question, answer and review ratings" width="180" /></a></td>
+    <td><a href="docs/images/screenshots/analytics-light.png"><img src="docs/images/screenshots/analytics-light.png" alt="Study analytics with a date range, review activity and progress summaries" width="180" /></a></td>
+    <td><a href="docs/images/screenshots/settings-dark.png"><img src="docs/images/screenshots/settings-dark.png" alt="Settings in dark mode with account, appearance, help and sign-out controls" width="180" /></a></td>
+  </tr>
+</table>
+
 ## Documentation
 
 - [Installation Guide](INSTALL.md)
