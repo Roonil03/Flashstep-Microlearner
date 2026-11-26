@@ -87,10 +87,10 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
             _pageInset(context),
             8,
             _pageInset(context),
-            12,
+            12 + MediaQuery.viewInsetsOf(context).bottom,
           ),
-          child: SizedBox(
-            height: 52,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
             child: FilledButton(
               onPressed: _loading ? null : _saveDeck,
               style: ElevatedButton.styleFrom(
@@ -110,7 +110,7 @@ class _CreateDeckPageState extends ConsumerState<CreateDeckPage> {
                           color: Colors.white,
                         ),
                       )
-                      : const Text('Create deck'),
+                      : const Text('Create deck', textAlign: TextAlign.center),
             ),
           ),
         ),

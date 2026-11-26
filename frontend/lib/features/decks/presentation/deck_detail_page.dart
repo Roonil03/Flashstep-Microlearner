@@ -644,8 +644,10 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                       },
                                     ),
                                     const SizedBox(height: 16),
-                                    SizedBox(
-                                      height: 50,
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 50,
+                                      ),
                                       child: FilledButton(
                                         onPressed:
                                             (_loading || hasReachedLimit)
@@ -675,6 +677,7 @@ class _DeckDetailPageState extends ConsumerState<DeckDetailPage> {
                                                   hasReachedLimit
                                                       ? 'Card limit reached'
                                                       : 'Save card',
+                                                  textAlign: TextAlign.center,
                                                 ),
                                       ),
                                     ),
