@@ -188,10 +188,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              'These pages are information placeholders. Account creation does not accept future terms or data practices.',
-              style: theme.textTheme.bodySmall,
-            ),
             Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
