@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/theme/study_colors.dart';
 import '../../../core/network/providers.dart';
-import '../../settings/presentation/account_sections.dart';
 
 typedef _ReportDraft =
     ({
@@ -32,6 +32,7 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
     'https://github.com/Roonil03/Flashstep-Microlearner/issues/new',
   );
   final _form = GlobalKey<FormState>();
+  final _reproductionField = GlobalKey<FormFieldState<String>>();
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _reproduction = TextEditingController();
@@ -45,6 +46,7 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
   bool _uncertainDraftsOverflow = false;
   bool _openingGitHub = false;
   bool _browserFailed = false;
+  bool _showReproduction = false;
   String? _manualMessage;
   String? _accountId;
   String? _accountToken;
@@ -100,12 +102,26 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
   }
 
   Future<void> _submit() async {
-    if (_sending ||
-        _confirming ||
-        _loadingSession ||
-        !_form.currentState!.validate()) {
+    if (_sending || _confirming || _loadingSession) {
       return;
     }
+    if (!_showReproduction && _reproduction.text.trim().runes.length > 3000) {
+      setState(() => _showReproduction = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _form.currentState?.validate();
+        final fieldContext = _reproductionField.currentContext;
+        if (fieldContext != null) {
+          Scrollable.ensureVisible(
+            fieldContext,
+            alignment: 0.2,
+            duration: const Duration(milliseconds: 200),
+          );
+        }
+      });
+      return;
+    }
+    if (!_form.currentState!.validate()) return;
     setState(() => _confirming = true);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -350,58 +366,85 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
     }
   }
 
-  Widget _manualRecovery() => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _reportHeading('Submit directly on GitHub'),
-          const Text(
-            'You can submit this report yourself while the bot is unavailable. '
-            'First check existing GitHub Issues for earlier attempts, including '
-            'attempts before reopening the app. A previous attempt may already be queued. '
-            'Sign in to GitHub, paste the title and report body, review them for '
-            'private information, then submit the public issue under your GitHub account. '
-            'Opening GitHub does not submit anything. Your fields stay here. '
-            'Report text is copied to your clipboard only when you tap a copy button.',
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _copyReport(title: true),
-                icon: const Icon(Icons.copy_outlined),
-                label: const Text('Copy title'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _copyReport(title: false),
-                icon: const Icon(Icons.copy_outlined),
-                label: const Text('Copy report body'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _openingGitHub ? null : _openGitHub,
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Open GitHub issue form'),
-              ),
-            ],
-          ),
-          if (_manualMessage != null) ...[
-            const SizedBox(height: 12),
-            Semantics(liveRegion: true, child: Text(_manualMessage!)),
-          ],
-          if (_browserFailed) ...[
-            const SizedBox(height: 12),
-            const Text(
-              'Could not open your browser. Open this address manually:',
-            ),
-            SelectableText(_githubIssueUrl.toString()),
-          ],
-        ],
+  Widget _manualRecovery() {
+    final tone = context.studyTone(StudyArea.account);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: tone.fill,
+        borderRadius: BorderRadius.circular(16),
       ),
-    ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: tone.ink),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _reportHeading('Submit directly on GitHub'),
+            _recoveryStep('1. Check for an existing report'),
+            const Text(
+              'Check existing GitHub Issues, including attempts before reopening '
+              'the app. An earlier attempt may already be queued.',
+            ),
+            const SizedBox(height: 20),
+            _recoveryStep('2. Open GitHub and sign in'),
+            const Text('You will post the issue under your GitHub account.'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _openingGitHub ? null : _openGitHub,
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open GitHub issue form'),
+              style: OutlinedButton.styleFrom(foregroundColor: tone.ink),
+            ),
+            const SizedBox(height: 20),
+            _recoveryStep('3. Copy, paste, and review'),
+            const Text(
+              'Copy each part when you need it, then paste it into GitHub. '
+              'Remove private details before submitting the public issue.',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _copyReport(title: true),
+                  icon: const Icon(Icons.copy_outlined),
+                  label: const Text('Copy title'),
+                  style: OutlinedButton.styleFrom(foregroundColor: tone.ink),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _copyReport(title: false),
+                  icon: const Icon(Icons.copy_outlined),
+                  label: const Text('Copy report body'),
+                  style: OutlinedButton.styleFrom(foregroundColor: tone.ink),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Only the copy buttons use your clipboard. Opening GitHub does not '
+              'submit anything. Your draft stays here.',
+            ),
+            if (_manualMessage != null) ...[
+              const SizedBox(height: 12),
+              Semantics(liveRegion: true, child: Text(_manualMessage!)),
+            ],
+            if (_browserFailed) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Could not open your browser. Open this address manually:',
+              ),
+              SelectableText(_githubIssueUrl.toString()),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _recoveryStep(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
   );
 
   Widget _field(
@@ -409,18 +452,28 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
     TextEditingController controller,
     int minimum,
     int maximum, {
-    int lines = 4,
+    required String example,
+    int lines = 2,
+    Key? fieldKey,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
+        key: fieldKey,
         controller: controller,
         enabled: !_sending && !_confirming && _success == null,
         minLines: lines,
         maxLines: lines == 1 ? 1 : 8,
         maxLength: maximum,
         textCapitalization: TextCapitalization.sentences,
-        decoration: InputDecoration(labelText: label, alignLabelWithHint: true),
+        textInputAction:
+            lines == 1 ? TextInputAction.next : TextInputAction.newline,
+        decoration: InputDecoration(
+          labelText: label,
+          alignLabelWithHint: true,
+          helperText: example,
+          helperMaxLines: 4,
+        ),
         autovalidateMode: AutovalidateMode.onUserInteraction,
         onChanged: (_) {
           if (!_manualRecoveryAvailable) return;
@@ -442,7 +495,7 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
   }
 
   Widget _reportHeading(String title) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.only(bottom: 12),
     child: Semantics(
       header: true,
       child: Text(
@@ -456,10 +509,13 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tone = context.studyTone(StudyArea.account);
+    final fieldsEnabled = !_sending && !_confirming && _success == null;
     return PopScope(
       canPop: !_sending,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Report a Bug')),
+        appBar: AppBar(title: const Text('Report a bug')),
         body: SafeArea(
           child: Align(
             alignment: Alignment.topCenter,
@@ -468,36 +524,128 @@ class _BugReportPageState extends ConsumerState<BugReportPage> {
               child: Form(
                 key: _form,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const AccountSectionHeader(
-                        title: 'Before you post',
-                        icon: Icons.bug_report_outlined,
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: tone.fill,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                'Public GitHub report',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  color: tone.ink,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Leave out passwords and personal details. '
+                              'No diagnostics are attached automatically.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: tone.ink,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 28),
+                      _reportHeading('Where it happened'),
                       const Text(
-                        'Reports are posted publicly to GitHub. Include only information you want everyone to see. No personal or diagnostic data is attached automatically.',
+                        'All fields are required unless marked optional.',
                       ),
-                      const SizedBox(height: 20),
-                      _reportHeading('The issue'),
-                      _field('Title (required)', _title, 5, 120, lines: 1),
-                      _field('Description (required)', _description, 20, 4000),
-                      _reportHeading('What happened'),
+                      const SizedBox(height: 16),
                       _field(
-                        'Steps to reproduce (optional)',
-                        _reproduction,
-                        0,
-                        3000,
+                        'Short title',
+                        _title,
+                        5,
+                        120,
+                        lines: 1,
+                        example: 'Example: Start review does nothing.',
                       ),
                       _field(
-                        'Expected behavior (required)',
+                        'Screen and action',
+                        _description,
+                        20,
+                        4000,
+                        lines: 3,
+                        example: 'Example: On Home, I tapped Start review.',
+                      ),
+                      const Divider(height: 32),
+                      _reportHeading('What you saw'),
+                      _field(
+                        'What happened',
+                        _actual,
+                        5,
+                        2000,
+                        example:
+                            'Example: The loading spinner never goes away.',
+                      ),
+                      _field(
+                        'What you expected',
                         _expected,
                         5,
                         2000,
+                        example: 'Example: The review screen should open.',
                       ),
-                      _field('Actual behavior (required)', _actual, 5, 2000),
+                      MergeSemantics(
+                        child: Semantics(
+                          expanded: _showReproduction,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                fieldsEnabled
+                                    ? () => setState(
+                                      () =>
+                                          _showReproduction =
+                                              !_showReproduction,
+                                    )
+                                    : null,
+                            icon: Icon(
+                              _showReproduction ? Icons.remove : Icons.add,
+                            ),
+                            label: Text(
+                              _showReproduction
+                                  ? 'Hide steps (optional)'
+                                  : 'Add steps to repeat it (optional)',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              alignment: Alignment.centerLeft,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_showReproduction) ...[
+                        const SizedBox(height: 16),
+                        _field(
+                          'Steps to repeat it',
+                          _reproduction,
+                          0,
+                          3000,
+                          lines: 3,
+                          example:
+                              'List the taps or actions that lead to the problem.',
+                          fieldKey: _reproductionField,
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      Text(
+                        'You’ll confirm before anything is posted.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       if (_error != null || _success != null) ...[
                         Semantics(
                           liveRegion: true,
