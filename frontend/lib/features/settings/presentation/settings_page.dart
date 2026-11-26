@@ -90,7 +90,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-class _MainSettings extends ConsumerWidget {
+class _MainSettings extends ConsumerStatefulWidget {
   final VoidCallback onAccountTap;
   final VoidCallback onSystemTap;
   final VoidCallback onLogout;
@@ -104,98 +104,206 @@ class _MainSettings extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MainSettings> createState() => _MainSettingsState();
+}
+
+class _MainSettingsState extends ConsumerState<_MainSettings> {
+  late final _username = ref.read(sessionStorageProvider).readUsername();
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    Widget entry(
+      String title,
+      String subtitle,
+      IconData icon,
+      VoidCallback open,
+    ) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        leading: Icon(icon, color: colors.onSurfaceVariant),
+        title: Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+        onTap: open,
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
+            constraints: const BoxConstraints(maxWidth: 620),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               children: [
                 FutureBuilder<String?>(
-                  future: ref.read(sessionStorageProvider).readUsername(),
+                  future: _username,
                   builder:
-                      (context, snapshot) => AccountSectionHeader(
-                        title:
-                            snapshot.data?.isNotEmpty == true
-                                ? snapshot.data!
-                                : 'Your account',
-                        icon: Icons.person_outline_rounded,
+                      (context, snapshot) => _ProfileSettingsEntry(
+                        name: snapshot.data?.trim() ?? '',
+                        onTap: widget.onAccountTap,
                       ),
                 ),
-                const SizedBox(height: 20),
-                _sectionCard(
-                  context,
+                const SizedBox(height: 18),
+                entry(
+                  'System Settings',
+                  'Theme, font size and daily review limits',
+                  Icons.tune_rounded,
+                  widget.onSystemTap,
+                ),
+                const SizedBox(height: 18),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Help & information',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Divider(height: 1),
+                entry(
+                  'Relearn app navigation',
+                  'Replay the nine-step guide',
+                  Icons.route_outlined,
+                  widget.onReplayTour,
+                ),
+                const Divider(height: 1),
+                entry(
+                  'Legal',
+                  'Privacy, terms and licenses',
+                  Icons.gavel_outlined,
+                  () => Navigator.of(context).pushNamed(AppRoutes.legal),
+                ),
+                const Divider(height: 1),
+                entry(
+                  'Report a Bug',
+                  'Submit a public GitHub issue',
+                  Icons.bug_report_outlined,
+                  () => Navigator.of(context).pushNamed(AppRoutes.bugReport),
+                ),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
                   children: [
-                    AccountSettingsRow(
-                      title: 'Account Settings',
-                      subtitle: 'Username, password and account access',
-                      icon: Icons.person_outline,
-                      onTap: onAccountTap,
+                    TextButton.icon(
+                      onPressed: widget.onLogout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Sign Out'),
+                    ),
+                    Text(
+                      'Version ${AppVersion.name}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                _settingsHeading(context, 'Preferences'),
-                _sectionCard(
-                  context,
-                  children: [
-                    AccountSettingsRow(
-                      title: 'System Settings',
-                      subtitle: 'Appearance and daily review preferences',
-                      icon: Icons.tune_rounded,
-                      onTap: onSystemTap,
-                    ),
-                  ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSettingsEntry extends StatelessWidget {
+  final String name;
+  final VoidCallback onTap;
+
+  const _ProfileSettingsEntry({required this.name, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final sheet = dark ? const Color(0xFF603329) : const Color(0xFFFFC6A1);
+    final lettering = dark ? const Color(0xFFFFE9D7) : const Color(0xFF402419);
+    final avatar =
+        name.isEmpty
+            ? Icon(Icons.person_outline, color: sheet)
+            : Padding(
+              padding: const EdgeInsets.all(4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  name.characters.first.toUpperCase(),
+                  style: TextStyle(
+                    color: sheet,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                _settingsHeading(context, 'Help & information'),
-                _sectionCard(
-                  context,
-                  children: [
-                    AccountSettingsRow(
-                      title: 'Relearn app navigation',
-                      subtitle:
-                          'Replay the nine-step guide with safe examples.',
-                      icon: Icons.route_outlined,
-                      onTap: onReplayTour,
-                    ),
-                    const Divider(height: 1, indent: 70, endIndent: 16),
-                    AccountSettingsRow(
-                      title: 'Legal',
-                      subtitle: 'Privacy, terms, and open-source licenses',
-                      icon: Icons.gavel_outlined,
-                      onTap:
-                          () =>
-                              Navigator.of(context).pushNamed(AppRoutes.legal),
-                    ),
-                    const Divider(height: 1, indent: 70, endIndent: 16),
-                    AccountSettingsRow(
-                      title: 'Report a Bug',
-                      subtitle: 'Submit a public GitHub issue',
-                      icon: Icons.bug_report_outlined,
-                      onTap:
-                          () => Navigator.of(
-                            context,
-                          ).pushNamed(AppRoutes.bugReport),
-                    ),
-                  ],
+              ),
+            );
+
+    return Semantics(
+      button: true,
+      label: name.isEmpty ? 'Account Settings' : 'Account Settings, $name',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        color: sheet,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          excludeFromSemantics: true,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: lettering,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SizedBox(
+                    width: 48,
+                    height: 58,
+                    child: Center(child: avatar),
+                  ),
                 ),
-                const SizedBox(height: 20),
-                OutlinedButton.icon(
-                  onPressed: onLogout,
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign Out'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Account Settings',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: lettering,
+                        ),
+                      ),
+                      if (name.isNotEmpty)
+                        Text(
+                          name,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: lettering,
+                            height: 1.2,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Version ${AppVersion.name}',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                Icon(Icons.chevron_right_rounded, color: lettering),
               ],
             ),
           ),
@@ -1220,16 +1328,3 @@ String _fontSizeLabel(AppFontSize size) => switch (size) {
   AppFontSize.large => 'Large',
   AppFontSize.extraLarge => 'Extra large',
 };
-
-Widget _settingsHeading(BuildContext context, String title) => Padding(
-  padding: const EdgeInsets.only(left: 4, bottom: 10),
-  child: Semantics(
-    header: true,
-    child: Text(
-      title,
-      style: Theme.of(
-        context,
-      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-    ),
-  ),
-);
