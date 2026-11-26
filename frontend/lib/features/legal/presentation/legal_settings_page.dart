@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../../../app/app_version.dart';
 import '../../../app/router.dart';
 import '../../settings/presentation/account_sections.dart';
+import 'open_source_licenses_page.dart';
 
 class LegalSettingsPage extends StatelessWidget {
   const LegalSettingsPage({super.key});
@@ -92,10 +92,10 @@ class LegalSettingsPage extends StatelessWidget {
                   title: 'Open-source licenses',
                   onTap: () {
                     _registerProjectLicenses();
-                    showLicensePage(
-                      context: context,
-                      applicationName: 'Flashstep Microlearner',
-                      applicationVersion: AppVersion.name,
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const OpenSourceLicensesPage(),
+                      ),
                     );
                   },
                 ),
