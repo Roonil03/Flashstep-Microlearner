@@ -386,19 +386,13 @@ class _BrowseDecksPageState extends ConsumerState<BrowseDecksPage> {
                             vertical: 12,
                           ),
                           onTap: () => _openDeck(deck.id),
-                          leading: Text(
-                            index.toString().padLeft(2, '0'),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              color:
-                                  context.studyTone(StudyArea.library).accent,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
                           title: Text(
                             deck.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              color:
+                                  context.studyTone(StudyArea.library).accent,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 8),

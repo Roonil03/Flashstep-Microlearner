@@ -325,19 +325,13 @@ class _BrowsePublicDecksPageState extends ConsumerState<BrowsePublicDecksPage> {
                             horizontal: 4,
                             vertical: 16,
                           ),
-                          leading: Text(
-                            index.toString().padLeft(2, '0'),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              color:
-                                  context.studyTone(StudyArea.library).accent,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
                           title: Text(
                             deck.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              color:
+                                  context.studyTone(StudyArea.library).accent,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 8),

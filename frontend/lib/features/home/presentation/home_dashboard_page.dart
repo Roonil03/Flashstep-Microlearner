@@ -336,7 +336,6 @@ class _HomeDashboardPageState extends ConsumerState<HomeDashboardPage> {
                                       ),
                                       child: _DeckCard(
                                         deck: deck,
-                                        index: data.decks.indexOf(deck) + 1,
                                         onTap: () => _openDeckDetail(deck.id),
                                       ),
                                     ),
@@ -535,28 +534,19 @@ class _PlanStat extends StatelessWidget {
 
 class _DeckCard extends StatelessWidget {
   final DeckSummary deck;
-  final int index;
   final VoidCallback onTap;
-  const _DeckCard({
-    required this.deck,
-    required this.index,
-    required this.onTap,
-  });
+  const _DeckCard({required this.deck, required this.onTap});
   @override
   Widget build(BuildContext context) => Column(
     children: [
       ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-        leading: Text(
-          index.toString().padLeft(2, '0'),
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: context.studyTone(StudyArea.library).accent,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
         title: Text(
           deck.title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: context.studyTone(StudyArea.library).accent,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         subtitle: Text(
           '${deck.totalCards} ${deck.totalCards == 1 ? 'card' : 'cards'} · ${deck.dueCards} due',

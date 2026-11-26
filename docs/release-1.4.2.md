@@ -10,7 +10,7 @@ Flashstep Microlearner 1.4.2 gives each part of a study session a recognizable c
 
 ## Decks and review
 
-- Browse your personal decks in a numbered index on Home. Search the library by title, or open **Browse public decks** to find an editable copy for your account.
+- Open a personal deck by its title on Home. Each title has the card and due counts underneath. Search the library by title, or open **Browse public decks** to find an editable copy for your account.
 - Deck details put **Start review**, the card editor and **Import CSV** in the same workflow. You can see the remaining card capacity before confirming an import.
 - During review, the question stays on the page when you reveal the answer on a separate green sheet. Each rating has a symbol, a name and a short explanation. The brief ripple on **Show answer** respects reduced motion.
 - The nine-step guide previews the new controls. Replay it from **Settings → Relearn app navigation**.
