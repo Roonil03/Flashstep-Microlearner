@@ -61,28 +61,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     final email = emailController.text.trim();
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
-    final confirmPassword = confirmPasswordController.text.trim();
-
-    if (email.isEmpty ||
-        username.isEmpty ||
-        password.isEmpty ||
-        confirmPassword.isEmpty) {
-      showSnack("Please fill all fields");
-      return;
-    }
-
-    if (password.length < 8) {
-      setState(() {
-        passwordErrorText = 'Password must be at least 8 characters';
-      });
-      showSnack("Password must be at least 8 characters");
-      return;
-    }
-
-    if (password != confirmPassword) {
-      showSnack("Passwords do not match");
-      return;
-    }
 
     setState(() => isLoading = true);
 
@@ -246,6 +224,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       onFieldSubmitted: label == 'Confirm Password' ? (_) => register() : null,
       validator: (value) {
         final text = (value ?? '').trim();
+        if (label == 'Confirm Password') {
+          if (text.isEmpty) return 'Confirm your password';
+          return text == passwordController.text.trim()
+              ? null
+              : "Passwords don't match";
+        }
         if (text.isEmpty) return 'Enter ${label.toLowerCase()}';
         if (label == 'Email' &&
             !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text)) {
@@ -257,10 +241,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             return 'Use 3 to 50 characters';
           }
         }
-        if (obscure && text.length < 8) return 'Use at least 8 characters';
-        if (label == 'Confirm Password' &&
-            text != passwordController.text.trim()) {
-          return 'Passwords do not match';
+        if (label == 'Password' && text.length < 8) {
+          return 'Use at least 8 characters';
         }
         return null;
       },
