@@ -69,9 +69,7 @@ class DailyReviewLimitTile extends StatelessWidget {
     leading: const Icon(Icons.today_outlined),
     title: const Text('Daily review limit'),
     subtitle: Text(
-      '$limit cards per day. Review all cards overrides this limit.',
-      maxLines: 3,
-      overflow: TextOverflow.ellipsis,
+      '$limit cards per day with selective review on. Review all cards overrides this limit.',
     ),
     trailing: const Icon(Icons.edit_outlined),
     onTap: onTap,

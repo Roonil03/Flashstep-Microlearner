@@ -157,6 +157,14 @@ class _MainSettings extends ConsumerWidget {
                   context,
                   children: [
                     AccountSettingsRow(
+                      title: 'Relearn app navigation',
+                      subtitle:
+                          'Replay the nine-step guide with safe examples.',
+                      icon: Icons.route_outlined,
+                      onTap: onReplayTour,
+                    ),
+                    const Divider(height: 1, indent: 70, endIndent: 16),
+                    AccountSettingsRow(
                       title: 'Legal',
                       subtitle: 'Privacy, terms, and open-source licenses',
                       icon: Icons.gavel_outlined,
@@ -173,14 +181,6 @@ class _MainSettings extends ConsumerWidget {
                           () => Navigator.of(
                             context,
                           ).pushNamed(AppRoutes.bugReport),
-                    ),
-                    const Divider(height: 1, indent: 70, endIndent: 16),
-                    AccountSettingsRow(
-                      title: 'Relearn app navigation',
-                      subtitle:
-                          'Replay the nine-step guide with safe examples.',
-                      icon: Icons.route_outlined,
-                      onTap: onReplayTour,
                     ),
                   ],
                 ),
@@ -872,7 +872,7 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose how many cards you want available each day.',
+                      'Limits different cards reviewed each day (UTC) with selective review on. Review all cards overrides this limit.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -965,8 +965,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       SnackBar(
         content: Text(
           value
-              ? 'Start Review will use selective decks from the algorithm'
-              : 'Start Review will show all decks with due cards',
+              ? 'Selective review on. Daily limit applies unless Review all cards is on.'
+              : 'Selective review off. Daily limit does not apply.',
         ),
       ),
     );
@@ -985,8 +985,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
       SnackBar(
         content: Text(
           value
-              ? 'Review will ignore limits and due dates'
-              : 'Review will respect limits and due dates',
+              ? 'Review includes all cards, ignoring daily limits and due dates.'
+              : 'Review uses due dates; selective review controls the daily limit.',
         ),
       ),
     );
@@ -1156,8 +1156,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           title: const Text('Use selective review decks'),
                           subtitle: Text(
                             value
-                                ? 'Only show decks chosen by the review algorithm'
-                                : 'Show all decks with due cards',
+                                ? 'Applies your daily limit to due cards, starting with recently updated decks. Review all cards overrides this.'
+                                : 'Shows all due cards with no daily limit. Review all cards also includes cards not yet due.',
                           ),
                           value: value,
                           onChanged: _toggleSelectiveDecksOnly,
@@ -1178,8 +1178,8 @@ class _SystemSettingsState extends ConsumerState<_SystemSettings> {
                           title: const Text('Review all cards'),
                           subtitle: Text(
                             value
-                                ? 'Ignores daily limits and due dates.'
-                                : 'Respects daily limits and due dates.',
+                                ? 'Includes cards not yet due and ignores the daily limit and selective review.'
+                                : 'Uses due dates. The daily limit applies only when selective review is on.',
                           ),
                           value: value,
                           onChanged: _toggleBypassSrs,
